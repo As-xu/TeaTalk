@@ -3,6 +3,7 @@ package com.teatalk.xs.ui.characters
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -169,15 +170,19 @@ private fun CharacterCell(character: CharacterEntity, onDelete: () -> Unit) {
                     modifier = Modifier.fillMaxSize(),
                 )
             } else {
-                Text(
-                    text = character.name.take(1),
-                    style = MaterialTheme.typography.headlineLarge,
-                    color = MaterialTheme.colorScheme.primary,
+                // JSON/CHARX 暂无头像：首字占位（居中、带底色块，避免"字浮在空中"）
+                Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .clip(RoundedCornerShape(16.dp)),
-                    textAlign = TextAlign.Center,
-                )
+                        .background(MaterialTheme.colorScheme.surfaceContainerHigh),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        text = character.name.take(1),
+                        style = MaterialTheme.typography.headlineLarge,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                }
             }
         }
         Spacer(Modifier.height(6.dp))
