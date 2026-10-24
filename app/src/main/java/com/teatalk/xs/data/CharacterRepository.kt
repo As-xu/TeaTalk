@@ -7,6 +7,7 @@ import com.teatalk.core.card.CardParser
 import com.teatalk.core.card.PngTextReader
 import com.teatalk.xs.data.db.CharacterDao
 import com.teatalk.xs.data.db.CharacterEntity
+import com.teatalk.xs.data.db.CharacterWithLastMessage
 import com.teatalk.xs.data.db.MessageEntity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -39,6 +40,8 @@ class CharacterRepository(
     fun observeCharacter(id: Long): Flow<CharacterEntity?> = dao.observeById(id)
 
     fun observeMessages(characterId: Long): Flow<List<MessageEntity>> = dao.observeMessages(characterId)
+
+    fun observeChats(): Flow<List<CharacterWithLastMessage>> = dao.observeChats()
 
     suspend fun find(id: Long): CharacterEntity? = dao.find(id)
 

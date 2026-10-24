@@ -36,4 +36,17 @@ interface CharacterDao {
 
     @Query("DELETE FROM messages WHERE characterId = :characterId")
     suspend fun deleteMessages(characterId: Long)
+
+    /** 聊天列表：只列有过消息的角色，按最后一条消息时间倒序。 */
+    @Query(
+        """
+        SELECT c.*,
+            (SELECT m.content FROM messages m WHERE m.characterId = c.id ORDER BY m.createdAt DESC, m.id DESC LIMIT 1) AS lastContent,
+            (SELECT m.createdAt FROM messages m WHERE m.characterId = c.id ORDER BY m.createdAt DESC, m.id DESC LIMIT 1) AS lastAt
+        FROM characters c
+        WHERE EXISTS (SELECT 1 FROM messages m2 WHERE m2.characterId = c.id)
+        ORDER BY lastAt DESC
+        """,
+    )
+    fun observeChats(): Flow<List<CharacterWithLastMessage>>
 }

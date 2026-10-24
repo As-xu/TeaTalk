@@ -10,3 +10,6 @@ captures/
 
 # 本地 debug 签名（由 build.sh 用 keytool 生成，不进版本库）
 .keystore/
+
+# 打好的安装包不入库（体积大），只存 sha256
+dist/*.apk
