@@ -40,8 +40,9 @@ import java.util.Calendar
 
 class ChatListViewModel(repository: CharacterRepository) : ViewModel() {
 
-    val chats: StateFlow<List<CharacterWithLastMessage>> = repository.observeChats()
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+    /** null = 首批数据未到（不渲染空态，避免闪烁）。 */
+    val chats: StateFlow<List<CharacterWithLastMessage>?> = repository.observeChats()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     companion object {
         fun factory(app: TeaTalkApp): ViewModelProvider.Factory = viewModelFactory {
@@ -57,7 +58,8 @@ fun ChatListScreen(
     onOpenChat: (Long) -> Unit,
     onGoCharacters: () -> Unit,
 ) {
-    val chats by viewModel.chats.collectAsState()
+    val chatsState = viewModel.chats.collectAsState()
+    val chats: List<CharacterWithLastMessage>? = chatsState.value
 
     Column(modifier = Modifier.fillMaxSize()) {
         Text(
@@ -65,10 +67,11 @@ fun ChatListScreen(
             style = MaterialTheme.typography.headlineMedium,
             modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 4.dp),
         )
-        if (chats.isEmpty()) {
-            EmptyChats(onGoCharacters)
-        } else {
-            LazyColumn(modifier = Modifier.fillMaxSize()) {
+        when {
+            // 首批数据未到：留白，别闪空态文案
+            chats == null -> Unit
+            chats.isEmpty() -> EmptyChats(onGoCharacters)
+            else -> LazyColumn(modifier = Modifier.fillMaxSize()) {
                 items(chats, key = { it.character.id }) { chat ->
                     ChatRow(chat = chat, onClick = { onOpenChat(chat.character.id) })
                 }

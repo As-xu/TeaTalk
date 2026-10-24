@@ -45,6 +45,9 @@ class CharacterRepository(
 
     suspend fun find(id: Long): CharacterEntity? = dao.find(id)
 
+    /** 首屏决策：有过会话就直接进「聊天」Tab（否则进「角色」）。 */
+    suspend fun hasAnyChat(): Boolean = withContext(Dispatchers.IO) { dao.countChats() > 0 }
+
     suspend fun importCard(uri: Uri): ImportOutcome = withContext(Dispatchers.IO) {
         try {
             val bytes = appContext.contentResolver.openInputStream(uri)?.use(::readCardBytes)
@@ -63,7 +66,13 @@ class CharacterRepository(
                 firstMes = data.firstMes,
                 createdAt = System.currentTimeMillis(),
             )
-            val id = dao.insert(entity)
+            val id = try {
+                dao.insert(entity)
+            } catch (e: Exception) {
+                // 入库失败：别把刚写的头像变成孤儿文件
+                avatarPath?.let { runCatching { File(appContext.filesDir, it).delete() } }
+                throw e
+            }
             ImportOutcome.Success(id, entity.name, imported.warnings)
         } catch (e: CardImportException) {
             ImportOutcome.Failure(e.message ?: "角色卡解析失败")
@@ -79,17 +88,13 @@ class CharacterRepository(
         Unit
     }
 
-    /** 首次进聊天页：插入开场白（已存在任何消息则跳过，避免重复）。 */
+    /** 首次进聊天页：插入开场白（原子判空插入，重复进入不会插两条）。 */
     suspend fun ensureGreeting(characterId: Long) = withContext(Dispatchers.IO) {
         val character = dao.find(characterId) ?: return@withContext
-        if (dao.countMessages(characterId) > 0L) return@withContext
-        dao.insertMessage(
-            MessageEntity(
-                characterId = characterId,
-                role = ROLE_ASSISTANT,
-                content = character.firstMes.ifBlank { "……" },
-                createdAt = System.currentTimeMillis(),
-            ),
+        dao.insertGreetingIfEmpty(
+            characterId = characterId,
+            content = character.firstMes.ifBlank { "……" },
+            createdAt = System.currentTimeMillis(),
         )
     }
 

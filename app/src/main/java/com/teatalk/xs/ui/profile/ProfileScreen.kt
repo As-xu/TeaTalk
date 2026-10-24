@@ -15,6 +15,8 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -36,6 +38,7 @@ fun ProfileScreen(onOpenModelSettings: () -> Unit = {}) {
             title = "模型与接口",
             subtitle = "M1 接入：OpenAI 兼容地址 / API Key / 模型选择",
             onClick = onOpenModelSettings,
+            trailingLabel = "即将开放",
         )
         HorizontalDivider(
             modifier = Modifier.padding(horizontal = 20.dp),
@@ -65,6 +68,7 @@ private fun SettingRow(
     subtitle: String,
     onClick: () -> Unit,
     clickable: Boolean = true,
+    trailingLabel: String? = null,
 ) {
     Row(
         modifier = Modifier
@@ -86,6 +90,19 @@ private fun SettingRow(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+        }
+        if (trailingLabel != null) {
+            Spacer(Modifier.weight(1f))
+            Surface(
+                shape = RoundedCornerShape(50),
+                color = MaterialTheme.colorScheme.secondaryContainer,
+            ) {
+                Text(
+                    text = trailingLabel,
+                    style = MaterialTheme.typography.labelSmall,
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                )
+            }
         }
     }
 }

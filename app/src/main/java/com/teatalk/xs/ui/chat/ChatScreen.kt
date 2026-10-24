@@ -39,6 +39,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
@@ -70,11 +71,13 @@ class ChatViewModel(
         viewModelScope.launch { repository.ensureGreeting(characterId) }
     }
 
-    fun send(text: String) {
+    /** @param onSent 落库成功后才回调；UI 用它决定何时清空输入框。 */
+    fun send(text: String, onSent: () -> Unit = {}) {
         if (text.isBlank()) return
         viewModelScope.launch {
             val character = repository.find(characterId) ?: return@launch
             repository.sendMessage(character, text)
+            onSent()
         }
     }
 
@@ -118,15 +121,19 @@ fun ChatScreen(
                             corner = 17.dp,
                         )
                         Spacer(Modifier.width(10.dp))
-                        Column {
+                        Column(modifier = Modifier.weight(1f, fill = false)) {
                             Text(
                                 text = character?.name ?: "角色",
                                 style = MaterialTheme.typography.titleMedium,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
                             )
                             Text(
                                 text = "离线示例模式",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
                             )
                         }
                     }
@@ -138,8 +145,9 @@ fun ChatScreen(
                 value = input,
                 onValueChange = { input = it },
                 onSend = {
-                    viewModel.send(input)
-                    input = ""
+                    // 落库成功后才清空：失败时用户输入不丢
+                    val text = input
+                    viewModel.send(text) { if (input == text) input = "" }
                 },
             )
         },

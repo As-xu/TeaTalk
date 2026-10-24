@@ -4,7 +4,9 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -26,6 +28,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
@@ -46,6 +49,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
@@ -59,7 +63,8 @@ import java.io.File
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CharactersScreen(viewModel: CharactersViewModel, onOpen: (Long) -> Unit) {
-    val characters by viewModel.characters.collectAsState()
+    val charactersState = viewModel.characters.collectAsState()
+    val characters: List<CharacterEntity>? = charactersState.value
     val importing by viewModel.importing.collectAsState()
     val message by viewModel.message.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -79,7 +84,7 @@ fun CharactersScreen(viewModel: CharactersViewModel, onOpen: (Long) -> Unit) {
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         floatingActionButton = {
-            if (characters.isNotEmpty()) {
+            if (characters?.isNotEmpty() == true) {
                 FloatingActionButton(onClick = launchImport) {
                     Icon(Icons.Filled.Add, contentDescription = "导入角色卡")
                 }
@@ -110,6 +115,8 @@ fun CharactersScreen(viewModel: CharactersViewModel, onOpen: (Long) -> Unit) {
             }
 
             when {
+                // 首批数据未到：留白，别闪"还没有角色卡"
+                characters == null -> Unit
                 characters.isEmpty() -> EmptyCharacters(onImport = launchImport)
                 else -> LazyVerticalGrid(
                     columns = GridCells.Fixed(3),
@@ -130,10 +137,17 @@ fun CharactersScreen(viewModel: CharactersViewModel, onOpen: (Long) -> Unit) {
         }
 
         if (importing) {
+            // 压暗 + 吃点击：导入中不允许再点导入/卡片，避免重复触发
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(innerPadding),
+                    .padding(innerPadding)
+                    .background(Color.Black.copy(alpha = 0.55f))
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClick = {},
+                    ),
                 contentAlignment = Alignment.Center,
             ) {
                 CircularProgressIndicator()
@@ -202,10 +216,13 @@ private fun CharacterCell(character: CharacterEntity, onClick: () -> Unit, onDel
             title = { Text("删除角色卡") },
             text = { Text("确定删除「${character.name}」？聊天记录也会一并删除。") },
             confirmButton = {
-                TextButton(onClick = {
-                    confirmDelete = false
-                    onDelete()
-                }) { Text("删除") }
+                TextButton(
+                    onClick = {
+                        confirmDelete = false
+                        onDelete()
+                    },
+                    colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),
+                ) { Text("删除") }
             },
             dismissButton = {
                 TextButton(onClick = { confirmDelete = false }) { Text("取消") }

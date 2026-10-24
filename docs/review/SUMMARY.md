@@ -43,3 +43,27 @@
 ## 复核说明
 
 Lead 亲自核对过的事实：ST `convertCharacterBook` 的 extensions 映射、`WorldInfo.kt` 只读顶层字段、`HomeScreen` 的 `startDestination` 与缺失 `consumeWindowInsets`、空态闪烁与 1.3× 字体溢出两张截图；其余条目采纳审查员证据（含实测报错文本/截图编号），未逐条复现。
+
+## 修复状态（2026-10-25，方案 A 执行完毕）
+
+用户拍板方案 A（先修 12 条 P1，再用 29 张真实卡做 V6，暂不进 M1）。逐条状态：
+
+| # | 结论 | 落点（改动文件） | 验证 |
+|---|---|---|---|
+| 1 | ✅ | `core/.../card/CardParser.kt`（base64 宽松 + 未知 spec 容忍 + V1 creatorcomment + 数字兜底） | 新增单测 |
+| 2 | ✅ | 同上（PNG 只读 tEXt，不误读 zTXt/iTXt） | 单测 |
+| 3 | ✅ | `core/.../worldinfo/WorldInfo.kt`（extensions 优先、对象 entries uid 兜底、selectiveLogic 缺省） | 11 条单测 |
+| 4 | ✅ | `core/.../worldinfo/WorldInfo.kt`（order 降序）+ `core/.../card/PngTextReader.kt`（Long 长度）+ CHARX 16 MB 上限 | 单测 |
+| 5 | ✅ | `ui/characters/CharactersViewModel.kt`（loading 三态，首帧不渲染空态） | 模拟器 |
+| 6 | ✅ | `ui/character/CharacterDetailViewModel.kt`（`flowOn(Dispatchers.Default)`） | 代码 |
+| 7 | ✅ | `AndroidManifest.xml`（`allowBackup=false`） | 构建 |
+| 8 | ✅ | `CharacterDao.insertGreetingIfEmpty` `@Transaction` + `ChatScreen` 路由 `launchSingleTop`（chat 与外部导入回调） | 模拟器 |
+| 9 | ✅ | `CharactersScreen.kt`（长按菜单 + 导入 scrim + `error` 色删除） | 模拟器 |
+| 10 | ✅ | `HomeScreen.kt`（`startDestination` 按 `hasAnyChat()`） | 模拟器冷启动 |
+| 11 | ✅ | `CharacterDetailScreen.kt` / `ChatScreen.kt` 顶栏（`maxLines=1` + ellipsis） | 1.3× 字体截图 |
+| 12 | ✅ | `CharactersScreen.kt` / `ProfileScreen.kt`（删除入口双开 + “即将开放”标签 + Snackbar） | 模拟器 |
+| — | ✅ 额外 | `HomeScreen` 外部 `VIEW`/`SEND` intent 导入；内层 Scaffold `consumeWindowInsets`（修双重 insets） | 模拟器 + 构建 |
+
+**V6**：29 张真实卡 29/29 导入成功（10 V2 + 19 V3，19 张带世界书，计数正确）。
+**测试**：`:core:test` 28/28 绿；`:app:assembleDebug` 通过。
+**仍未做**：P2 清单（见各报告）与 `{{user}}` 宏、会话列表聚合冗余列、migration/混淆/横屏/撤销——按计划留 M1/M2。

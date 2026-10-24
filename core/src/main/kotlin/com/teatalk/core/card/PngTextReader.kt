@@ -28,15 +28,20 @@ object PngTextReader {
     fun readTexts(bytes: ByteArray): List<PngText> {
         if (!isPng(bytes)) return emptyList()
         val out = ArrayList<PngText>()
-        var pos = SIGNATURE.size
-        while (pos + 8 <= bytes.size) {
-            val length = readInt(bytes, pos)
-            val type = String(bytes, pos + 4, 4, Charsets.ISO_8859_1)
+        var pos = SIGNATURE.size.toLong()
+        val total = bytes.size.toLong()
+        while (pos + 8 <= total) {
+            // chunk 长度是无符号 32 位：用 Long 参与运算，避免 Int 溢出绕过越界检查
+            // （曾出现 length=0x7FFFFFF8 时 dataStart+length 回绕成负数，随后越界崩）。
+            val length = readUInt32(bytes, pos.toInt())
+            val type = String(bytes, pos.toInt() + 4, 4, Charsets.ISO_8859_1)
             val dataStart = pos + 8
             val dataEnd = dataStart + length
             // 长度非法 / 越界 → 文件截断或损坏，停止扫描
-            if (length < 0 || dataEnd + 4 > bytes.size) break
-            if (type == "tEXt") parseTextChunk(bytes, dataStart, length)?.let(out::add)
+            if (dataEnd + 4 > total) break
+            if (type == "tEXt") {
+                parseTextChunk(bytes, dataStart.toInt(), length.toInt())?.let(out::add)
+            }
             if (type == "IEND") break
             pos = dataEnd + 4 // 跳过 4 字节 CRC（不校验）
         }
@@ -77,9 +82,9 @@ object PngTextReader {
         return PngText(keyword, text)
     }
 
-    private fun readInt(bytes: ByteArray, at: Int): Int =
-        ((bytes[at].toInt() and 0xFF) shl 24) or
-            ((bytes[at + 1].toInt() and 0xFF) shl 16) or
-            ((bytes[at + 2].toInt() and 0xFF) shl 8) or
-            (bytes[at + 3].toInt() and 0xFF)
+    private fun readUInt32(bytes: ByteArray, at: Int): Long =
+        ((bytes[at].toLong() and 0xFF) shl 24) or
+            ((bytes[at + 1].toLong() and 0xFF) shl 16) or
+            ((bytes[at + 2].toLong() and 0xFF) shl 8) or
+            (bytes[at + 3].toLong() and 0xFF)
 }

@@ -7,6 +7,7 @@ import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import java.io.ByteArrayInputStream
+import java.io.ByteArrayOutputStream
 import java.util.zip.ZipInputStream
 
 /**
@@ -20,6 +21,9 @@ object CardParser {
 
     private val json = Json { ignoreUnknownKeys = true; isLenient = true }
 
+    /** CHARX 内 card.json 的解压上限（防压缩炸弹）。 */
+    private const val MAX_CHARX_JSON_BYTES = 16 * 1024 * 1024
+
     /** V2 规范要求 data 下的字段；缺失只告警不失败。 */
     private val V2_REQUIRED_IN_DATA = listOf(
         "name", "description", "personality", "scenario", "first_mes", "mes_example",
@@ -30,6 +34,13 @@ object CardParser {
     /** V1 平铺卡 → V2 data 的字段映射（同名字段）。 */
     private val V1_FLAT_FIELDS = listOf(
         "name", "description", "personality", "scenario", "first_mes", "mes_example",
+    )
+
+    /** V1 独有字段 → V2 字段名（ST `characters.js` 的 V1 兼容映射）。 */
+    private val V1_TO_V2_FIELDS = mapOf(
+        "creatorcomment" to "creator_notes",
+        "creator" to "creator",
+        "character_version" to "character_version",
     )
 
     fun parse(bytes: ByteArray): ImportedCard = when {
@@ -54,8 +65,23 @@ object CardParser {
             var entry = zip.nextEntry
             while (entry != null) {
                 if (!entry.isDirectory && entry.name.substringAfterLast('/').equals("card.json", ignoreCase = true)) {
-                    val text = zip.readBytes().toString(Charsets.UTF_8)
-                    val imported = parseJsonText(text, preferredSource = CardSource.CHARX)
+                    // 压缩炸弹防护：先看声明尺寸，再按上限边读边计数（ZIP 头部尺寸不可信）
+                    if (entry.size > MAX_CHARX_JSON_BYTES) {
+                        throw CardImportException("CHARX 内 card.json 过大（声明 ${entry.size} 字节）")
+                    }
+                    val out = ByteArrayOutputStream()
+                    val chunk = ByteArray(8 * 1024)
+                    var total = 0
+                    while (true) {
+                        val n = zip.read(chunk)
+                        if (n < 0) break
+                        total += n
+                        if (total > MAX_CHARX_JSON_BYTES) {
+                            throw CardImportException("CHARX 内 card.json 解压后超过 ${MAX_CHARX_JSON_BYTES / 1024 / 1024} MB，已拒绝")
+                        }
+                        out.write(chunk, 0, n)
+                    }
+                    val imported = parseJsonText(out.toString(Charsets.UTF_8), preferredSource = CardSource.CHARX)
                     return imported.copy(
                         warnings = imported.warnings + "CHARX 内的 avatar/assets 资源 M0 暂不导入",
                     )
@@ -98,6 +124,20 @@ object CardParser {
                 dataObj = (root["data"] as? JsonObject)
                     ?: throw CardImportException("V2 卡缺少 data 对象")
                 derivedSource = preferredSource ?: CardSource.JSON_V2
+            }
+
+            spec != null -> {
+                // 未来版本 / 拼写错误的 spec：不拒绝，按 data 结构与 V1 平铺兜底
+                warnings += "未知 spec「$spec」，按兼容模式解析"
+                val dataOrNull = root["data"] as? JsonObject
+                if (dataOrNull != null) {
+                    dataObj = dataOrNull
+                    derivedSource = preferredSource ?: CardSource.JSON_V2
+                } else {
+                    dataObj = legacyFlatToData(root, warnings)
+                    derivedSource = preferredSource ?: CardSource.LEGACY_JSON
+                    isLegacy = true
+                }
             }
 
             root["data"] is JsonObject -> {
@@ -148,6 +188,9 @@ object CardParser {
         return JsonObject(
             buildMap {
                 V1_FLAT_FIELDS.forEach { key -> root.strOrNull(key)?.let { put(key, JsonPrimitive(it)) } }
+                V1_TO_V2_FIELDS.forEach { (v1, v2) -> root.strOrNull(v1)?.let { put(v2, JsonPrimitive(it)) } }
+                // V1 的 tags 可能在根节点且非数组
+                if (root["tags"] is JsonArray) put("tags", root["tags"] as JsonArray)
                 val alt = root["alternate_greetings"]
                 if (alt is JsonArray) put("alternate_greetings", alt)
                 if (extra is JsonObject) put("extensions", extra)

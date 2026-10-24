@@ -20,8 +20,10 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -41,6 +43,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
@@ -54,7 +57,10 @@ import com.teatalk.xs.data.CardViewParser
 import com.teatalk.xs.data.CharacterRepository
 import com.teatalk.xs.data.db.CharacterEntity
 import com.teatalk.xs.ui.components.CharacterAvatar
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 
@@ -64,8 +70,8 @@ data class CharacterDetailState(
 )
 
 class CharacterDetailViewModel(
-    repository: CharacterRepository,
-    characterId: Long,
+    private val repository: CharacterRepository,
+    private val characterId: Long,
 ) : ViewModel() {
 
     val state = repository.observeCharacter(characterId)
@@ -75,7 +81,17 @@ class CharacterDetailViewModel(
                 view = character?.let { CardViewParser.parse(it.cardJson) } ?: CardView(),
             )
         }
+        .flowOn(Dispatchers.Default) // 大卡 JSON 解析别占用主线程
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), CharacterDetailState())
+
+    /** 删除角色（连同聊天记录），成功后回调让页面退出。 */
+    fun delete(onDeleted: () -> Unit) {
+        val character = state.value.character ?: return
+        viewModelScope.launch {
+            repository.delete(character)
+            onDeleted()
+        }
+    }
 
     companion object {
         fun factory(app: TeaTalkApp, characterId: Long): ViewModelProvider.Factory = viewModelFactory {
@@ -94,6 +110,7 @@ fun CharacterDetailScreen(
 ) {
     val state by viewModel.state.collectAsState()
     var showWorldBook by remember { mutableStateOf(false) }
+    var confirmDelete by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -102,6 +119,11 @@ fun CharacterDetailScreen(
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.Filled.ArrowBack, contentDescription = "返回")
+                    }
+                },
+                actions = {
+                    IconButton(onClick = { confirmDelete = true }) {
+                        Icon(Icons.Filled.Delete, contentDescription = "删除角色")
                     }
                 },
             )
@@ -144,10 +166,12 @@ fun CharacterDetailScreen(
                         corner = 24.dp,
                     )
                     Spacer(Modifier.width(16.dp))
-                    Column {
+                    Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = view.name.ifBlank { character.name },
                             style = MaterialTheme.typography.headlineSmall,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
                         )
                         val byline = listOfNotNull(
                             view.creator.takeIf { it.isNotBlank() }?.let { "作者 $it" },
@@ -158,6 +182,8 @@ fun CharacterDetailScreen(
                             text = byline,
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
                         )
                     }
                 }
@@ -217,6 +243,26 @@ fun CharacterDetailScreen(
 
     if (showWorldBook) {
         WorldBookDialog(entries = state.view.worldBook, onDismiss = { showWorldBook = false })
+    }
+
+    if (confirmDelete) {
+        AlertDialog(
+            onDismissRequest = { confirmDelete = false },
+            title = { Text("删除角色卡") },
+            text = { Text("确定删除「${state.character?.name ?: ""}」？聊天记录也会一并删除。") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        confirmDelete = false
+                        viewModel.delete { onBack() }
+                    },
+                    colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),
+                ) { Text("删除") }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmDelete = false }) { Text("取消") }
+            },
+        )
     }
 }
 

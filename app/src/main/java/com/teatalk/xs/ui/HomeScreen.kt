@@ -1,13 +1,20 @@
 package com.teatalk.xs.ui
 
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -35,14 +42,35 @@ import com.teatalk.xs.ui.profile.ProfileScreen
  * 导航骨架：底部三 Tab（聊天/角色/我的）+ 两级全屏页面（角色详情 / 聊天）。
  *
  * 详情页与聊天页不显示底部栏（对齐 QQ/微信的"进入对话即全屏"手感）。
+ *
+ * 首屏目的地是动态的：有过会话直接进「聊天」，新用户进「角色」（对齐方案 §3.1 的骨架转向）；
+ * 在查询完成前只画空背景，避免空态文案闪一下。
  */
 @Composable
-fun HomeScreen() {
-    val navController = rememberNavController()
+fun HomeScreen(
+    externalMessage: String? = null,
+    onExternalMessageShown: () -> Unit = {},
+) {
     val app = LocalContext.current.applicationContext as TeaTalkApp
+    val repository = app.container.characterRepository
+
+    var startRoute by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(Unit) {
+        startRoute = if (repository.hasAnyChat()) Routes.CHATS else Routes.CHARACTERS
+    }
+
+    val start = startRoute ?: return
+    val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route
     val showBottomBar = currentRoute == null || currentRoute in TAB_ROUTES
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    LaunchedEffect(externalMessage) {
+        val text = externalMessage ?: return@LaunchedEffect
+        snackbarHostState.showSnackbar(text)
+        onExternalMessageShown()
+    }
 
     fun switchTab(route: String) {
         navController.navigate(route) {
@@ -53,6 +81,7 @@ fun HomeScreen() {
     }
 
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         bottomBar = {
             if (showBottomBar) {
                 NavigationBar {
@@ -75,13 +104,16 @@ fun HomeScreen() {
     ) { innerPadding ->
         NavHost(
             navController = navController,
-            startDestination = Routes.CHARACTERS,
-            modifier = Modifier.padding(innerPadding),
+            startDestination = start,
+            // 外层已处理窗口内边距：消费掉，内层 Scaffold 不再重复加一次
+            modifier = Modifier
+                .padding(innerPadding)
+                .consumeWindowInsets(innerPadding),
         ) {
             composable(Routes.CHATS) {
                 ChatListScreen(
                     viewModel = viewModel(factory = ChatListViewModel.factory(app)),
-                    onOpenChat = { id -> navController.navigate("chat/$id") },
+                    onOpenChat = { id -> navController.navigate("chat/$id") { launchSingleTop = true } },
                     onGoCharacters = { switchTab(Routes.CHARACTERS) },
                 )
             }
@@ -106,7 +138,7 @@ fun HomeScreen() {
                         factory = CharacterDetailViewModel.factory(app, id),
                     ),
                     onBack = { navController.popBackStack() },
-                    onStartChat = { navController.navigate("chat/$id") },
+                    onStartChat = { navController.navigate("chat/$id") { launchSingleTop = true } },
                 )
             }
             composable(

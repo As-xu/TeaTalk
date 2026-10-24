@@ -21,8 +21,9 @@ class CharactersViewModel(
     private val repository: CharacterRepository,
 ) : ViewModel() {
 
-    val characters: StateFlow<List<CharacterEntity>> = repository.observeCharacters()
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+    /** null = 还在从磁盘读第一批数据（不渲染空态，避免"还没有角色卡"闪一下）。 */
+    val characters: StateFlow<List<CharacterEntity>?> = repository.observeCharacters()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     private val _importing = MutableStateFlow(false)
     val importing: StateFlow<Boolean> = _importing.asStateFlow()

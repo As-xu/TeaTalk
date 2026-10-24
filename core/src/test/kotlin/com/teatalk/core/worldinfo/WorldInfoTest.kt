@@ -152,17 +152,18 @@ class WorldInfoTest {
     }
 
     @Test
-    fun `按 order 升序拼接，且尊重字符预算`() {
+    fun `按 order 降序拼接（对齐 ST sortFn），且尊重字符预算`() {
         val entries = listOf(
             WorldInfoEntry(uid = 1, constant = true, order = 50, content = "A".repeat(10)),
             WorldInfoEntry(uid = 2, constant = true, order = 10, content = "B".repeat(10)),
             WorldInfoEntry(uid = 3, constant = true, order = 30, content = "C".repeat(10)),
         )
+        // 降序：1(50) → 3(30) → 2(10)
         val engine = WorldInfoEngine(entries, charBudget = 34)
-        assertEquals(listOf(2, 3), engine.activated("").map { it.uid })
+        assertEquals(listOf(1, 3), engine.activated("").map { it.uid })
 
         val noBudget = WorldInfoEngine(entries, charBudget = 1_000)
-        assertEquals(listOf(2, 3, 1), noBudget.activated("").map { it.uid })
+        assertEquals(listOf(1, 3, 2), noBudget.activated("").map { it.uid })
     }
 
     @Test
@@ -175,5 +176,85 @@ class WorldInfoTest {
             ),
         )
         assertEquals(listOf(3), engine.activated("a").map { it.uid })
+    }
+
+    // ---------- 兼容性回归（对应 M0 审阅 P1）----------
+
+    @Test
+    fun `V2 卡 extensions 优先于顶层字段（对齐 ST convertCharacterBook）`() {
+        val card = obj(
+            """
+            {
+              "spec": "chara_card_v3",
+              "spec_version": "3.0",
+              "data": {
+                "name": "x",
+                "character_book": {
+                  "entries": [
+                    {
+                      "keys": ["王城"],
+                      "content": "王城。",
+                      "position": "before_char",
+                      "depth": 9,
+                      "role": 2,
+                      "probability": 33,
+                      "group": "顶层组",
+                      "use_regex": true,
+                      "selective": false,
+                      "extensions": {
+                        "position": 4,
+                        "depth": 2,
+                        "role": 1,
+                        "probability": 50,
+                        "group": "扩展组",
+                        "case_sensitive": true,
+                        "match_whole_words": true,
+                        "selectiveLogic": 1
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+            """.trimIndent(),
+        )
+        val e = WorldInfoParser.fromCard(card.toString()).single()
+        assertEquals(4, e.position) // extensions.position 优先，而不是顶层 "before_char"(0)
+        assertEquals(2, e.depth)
+        assertEquals(1, e.role)
+        assertEquals(50, e.probability)
+        assertEquals("扩展组", e.group)
+        assertTrue(e.caseSensitive)
+        assertTrue(e.matchWholeWords)
+        assertEquals(1, e.selectiveLogic)
+        assertFalse(e.useRegex) // 卡面 use_regex 不可信：ST 导出无条件写 true
+        assertFalse(e.selective) // V2 卡 selective 缺省 false（ST convertCharacterBook）
+    }
+
+    @Test
+    fun `对象形态 entries 的 key 兜底为 uid`() {
+        val file = obj(
+            """
+            { "entries": { "7": { "key": ["码头"], "content": "码头。" } } }
+            """.trimIndent(),
+        )
+        val e = WorldInfoParser.parseWorldInfoFile(file).single()
+        assertEquals(7, e.uid)
+        assertTrue(e.selective) // ST 世界书文件模板默认 selective=true
+    }
+
+    @Test
+    fun `selectiveLogic AND_ALL 需要全部次要关键词命中`() {
+        val entry = WorldInfoEntry(
+            uid = 1,
+            keys = listOf("码头"),
+            secondaryKeys = listOf("夜晚", "有雾"),
+            selective = true,
+            selectiveLogic = 1,
+            content = "夜雾码头。",
+        )
+        val engine = WorldInfoEngine(listOf(entry))
+        assertEquals(0, engine.activated("夜晚的码头").size)
+        assertEquals(1, engine.activated("夜晚有雾的码头").size)
     }
 }
