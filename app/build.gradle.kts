@@ -23,6 +23,17 @@ android {
         }
     }
 
+    // 沙箱禁止写 C:\Users\<user>\.android（默认 debug keystore 位置），
+    // 改用仓库内 .keystore/debug.keystore（由 build.sh 首次构建时用 keytool 生成）
+    signingConfigs {
+        getByName("debug") {
+            storeFile = rootProject.file(".keystore/debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17

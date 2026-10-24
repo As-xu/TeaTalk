@@ -16,5 +16,7 @@ kotlin {
 
 dependencies {
     implementation(libs.kotlinx.serialization.json)
+
     testImplementation(libs.kotlin.test)
+    testImplementation("junit:junit:4.13.2")
 }
