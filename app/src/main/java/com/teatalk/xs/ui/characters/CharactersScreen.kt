@@ -55,10 +55,10 @@ import coil.compose.AsyncImage
 import com.teatalk.xs.data.db.CharacterEntity
 import java.io.File
 
-/** 角色列表页（M0：导入 + 网格 + 长按删除）。QQ/微信式三列头像网格。 */
+/** 角色列表页（M0：导入 + 网格 + 长按删除；D4 起点：点击进详情）。QQ/微信式三列头像网格。 */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun CharactersScreen(viewModel: CharactersViewModel) {
+fun CharactersScreen(viewModel: CharactersViewModel, onOpen: (Long) -> Unit) {
     val characters by viewModel.characters.collectAsState()
     val importing by viewModel.importing.collectAsState()
     val message by viewModel.message.collectAsState()
@@ -121,6 +121,7 @@ fun CharactersScreen(viewModel: CharactersViewModel) {
                     items(characters, key = { it.id }) { character ->
                         CharacterCell(
                             character = character,
+                            onClick = { onOpen(character.id) },
                             onDelete = { viewModel.delete(character) },
                         )
                     }
@@ -143,14 +144,14 @@ fun CharactersScreen(viewModel: CharactersViewModel) {
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun CharacterCell(character: CharacterEntity, onDelete: () -> Unit) {
+private fun CharacterCell(character: CharacterEntity, onClick: () -> Unit, onDelete: () -> Unit) {
     val context = LocalContext.current
     var confirmDelete by remember { mutableStateOf(false) }
     val avatar = character.avatarPath?.let { File(context.filesDir, it) }
 
     Column(
         modifier = Modifier.combinedClickable(
-            onClick = { /* D4：进入聊天 */ },
+            onClick = onClick,
             onLongClick = { confirmDelete = true },
         ),
         horizontalAlignment = Alignment.CenterHorizontally,

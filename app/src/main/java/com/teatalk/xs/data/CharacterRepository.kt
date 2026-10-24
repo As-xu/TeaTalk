@@ -7,6 +7,7 @@ import com.teatalk.core.card.CardParser
 import com.teatalk.core.card.PngTextReader
 import com.teatalk.xs.data.db.CharacterDao
 import com.teatalk.xs.data.db.CharacterEntity
+import com.teatalk.xs.data.db.MessageEntity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.withContext
@@ -34,6 +35,10 @@ class CharacterRepository(
 ) {
 
     fun observeCharacters(): Flow<List<CharacterEntity>> = dao.observeAll()
+
+    fun observeCharacter(id: Long): Flow<CharacterEntity?> = dao.observeById(id)
+
+    fun observeMessages(characterId: Long): Flow<List<MessageEntity>> = dao.observeMessages(characterId)
 
     suspend fun find(id: Long): CharacterEntity? = dao.find(id)
 
@@ -65,9 +70,40 @@ class CharacterRepository(
     }
 
     suspend fun delete(character: CharacterEntity) = withContext(Dispatchers.IO) {
+        dao.deleteMessages(character.id)
         dao.delete(character)
         character.avatarPath?.let { runCatching { File(appContext.filesDir, it).delete() } }
         Unit
+    }
+
+    /** 首次进聊天页：插入开场白（已存在任何消息则跳过，避免重复）。 */
+    suspend fun ensureGreeting(characterId: Long) = withContext(Dispatchers.IO) {
+        val character = dao.find(characterId) ?: return@withContext
+        if (dao.countMessages(characterId) > 0L) return@withContext
+        dao.insertMessage(
+            MessageEntity(
+                characterId = characterId,
+                role = ROLE_ASSISTANT,
+                content = character.firstMes.ifBlank { "……" },
+                createdAt = System.currentTimeMillis(),
+            ),
+        )
+    }
+
+    /**
+     * 发送一条用户消息并落一条**离线示例回复**。
+     *
+     * D4 只为把聊天页的数据链路跑通；D5/M2 接上模型后，这里换成 Prompt 管线 + 流式 SSE。
+     */
+    suspend fun sendMessage(character: CharacterEntity, text: String) = withContext(Dispatchers.IO) {
+        val content = text.trim()
+        if (content.isEmpty()) return@withContext
+        val now = System.currentTimeMillis()
+        dao.insertMessage(MessageEntity(characterId = character.id, role = ROLE_USER, content = content, createdAt = now))
+        val reply = "（离线示例回复）我听见你说「$content」。接上模型后，这里会是「${character.name}」的真实回应。"
+        dao.insertMessage(
+            MessageEntity(characterId = character.id, role = ROLE_ASSISTANT, content = reply, createdAt = now + 1),
+        )
     }
 
     private fun saveAvatar(bytes: ByteArray): String {
@@ -95,5 +131,7 @@ class CharacterRepository(
     private companion object {
         const val AVATAR_DIR = "avatars"
         const val MAX_CARD_BYTES = 64L * 1024 * 1024
+        const val ROLE_USER = "user"
+        const val ROLE_ASSISTANT = "assistant"
     }
 }
