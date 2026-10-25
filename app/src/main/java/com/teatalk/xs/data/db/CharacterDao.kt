@@ -52,6 +52,17 @@ interface CharacterDao {
     @Query("SELECT * FROM messages WHERE characterId = :characterId ORDER BY createdAt ASC, id ASC")
     fun observeMessages(characterId: Long): Flow<List<MessageEntity>>
 
+    /** 一次性取最近 N 条（组装 prompt 用），按时间正序返回。 */
+    @Query(
+        """
+        SELECT * FROM (
+            SELECT * FROM messages WHERE characterId = :characterId
+            ORDER BY createdAt DESC, id DESC LIMIT :limit
+        ) ORDER BY createdAt ASC, id ASC
+        """,
+    )
+    suspend fun recentMessages(characterId: Long, limit: Int): List<MessageEntity>
+
     @Query("SELECT COUNT(*) FROM messages WHERE characterId = :characterId")
     suspend fun countMessages(characterId: Long): Long
 

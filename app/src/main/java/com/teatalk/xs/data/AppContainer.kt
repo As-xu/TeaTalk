@@ -70,4 +70,10 @@ class AppContainer(context: Context) {
     }
 
     val modelListClient: ModelListClient by lazy { ModelListClient() }
+
+    val chatClient: com.teatalk.xs.data.net.ChatClient by lazy { com.teatalk.xs.data.net.ChatClient() }
+
+    val chatEngine: ChatEngine by lazy {
+        ChatEngine(characterRepository, providerRepository, chatClient)
+    }
 }

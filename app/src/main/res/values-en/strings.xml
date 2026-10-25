@@ -201,4 +201,17 @@
     <string name="toast_provider_saved">Saved “%1$s”</string>
     <string name="toast_provider_deleted">Deleted “%1$s”</string>
     <string name="toast_provider_activated">Active: %1$s</string>
+    <!-- M1 streaming chat -->
+    <string name="chat_error_no_provider">No model configured. Add one in Me → Model &amp; API</string>
+    <string name="chat_error_unauthorized">API key is invalid or expired (401)</string>
+    <string name="chat_error_rate_limited">Too many requests or quota exhausted (429)</string>
+    <string name="chat_error_timeout">Request timed out. Try again</string>
+    <string name="chat_error_network">Network unavailable. Check your connection</string>
+    <string name="chat_error_http">Server returned an error. Try again later</string>
+    <string name="chat_error_bad_response">The model returned no content. Try again</string>
+    <string name="chat_stop">Stop</string>
+    <string name="chat_stopped">Generation stopped</string>
+    <string name="chat_retry">Retry</string>
+    <string name="chat_thinking">Typing…</string>
 </resources>
+

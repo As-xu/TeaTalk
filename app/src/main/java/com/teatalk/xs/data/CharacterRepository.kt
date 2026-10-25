@@ -189,22 +189,26 @@ class CharacterRepository(
     }
 
     /**
-     * 发送一条用户消息并落一条**离线示例回复**。
-     *
-     * D4 只为把聊天页的数据链路跑通；D5/M2 接上模型后，这里换成 Prompt 管线 + 流式 SSE。
+     * 落一条消息。M1 起由 [ChatEngine] 在流式前后分别写 user / assistant 两条，
+     * 老的「离线假回复」已移除。
      */
-    suspend fun sendMessage(character: CharacterEntity, text: String) = withContext(Dispatchers.IO) {
-        val content = text.trim()
-        if (content.isEmpty()) return@withContext
-        TeaTalkLog.i("Chat", "send.start", "characterId" to character.id, "chars" to content.length)
-        val now = System.currentTimeMillis()
-        dao.insertMessage(MessageEntity(characterId = character.id, role = ROLE_USER, content = content, createdAt = now))
-        val reply = appContext.getString(R.string.offline_reply, content, character.name)
-        dao.insertMessage(
-            MessageEntity(characterId = character.id, role = ROLE_ASSISTANT, content = reply, createdAt = now + 1),
-        )
-        TeaTalkLog.i("Chat", "send.fake_reply", "characterId" to character.id, "chars" to reply.length)
-    }
+    suspend fun addMessage(characterId: Long, role: String, content: String): Long =
+        withContext(Dispatchers.IO) {
+            val body = content.trim()
+            if (body.isEmpty()) return@withContext -1L
+            dao.insertMessage(
+                MessageEntity(
+                    characterId = characterId,
+                    role = role,
+                    content = body,
+                    createdAt = System.currentTimeMillis(),
+                ),
+            )
+        }
+
+    /** 组装 prompt 用：最近 [limit] 条，按时间正序。 */
+    suspend fun recentMessages(characterId: Long, limit: Int): List<MessageEntity> =
+        withContext(Dispatchers.IO) { dao.recentMessages(characterId, limit) }
 
     private fun saveAvatar(bytes: ByteArray): String {
         val dir = File(appContext.filesDir, AVATAR_DIR).apply { mkdirs() }

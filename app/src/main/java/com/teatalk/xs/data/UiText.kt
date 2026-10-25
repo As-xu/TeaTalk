@@ -60,5 +60,20 @@ data class UiText(
         fun providerTestOk(modelCount: Int): UiText = of(R.string.providers_test_ok, modelCount)
 
         fun providerTestFail(reason: String): UiText = of(R.string.providers_test_fail, reason)
+
+        /** 聊天错误：把网络错误枚举翻成可读文案。 */
+        fun chatError(error: com.teatalk.xs.data.net.ChatError): UiText = of(
+            when (error) {
+                com.teatalk.xs.data.net.ChatError.NO_PROVIDER -> R.string.chat_error_no_provider
+                com.teatalk.xs.data.net.ChatError.UNAUTHORIZED -> R.string.chat_error_unauthorized
+                com.teatalk.xs.data.net.ChatError.RATE_LIMITED -> R.string.chat_error_rate_limited
+                com.teatalk.xs.data.net.ChatError.TIMEOUT -> R.string.chat_error_timeout
+                com.teatalk.xs.data.net.ChatError.NETWORK -> R.string.chat_error_network
+                com.teatalk.xs.data.net.ChatError.HTTP -> R.string.chat_error_http
+                com.teatalk.xs.data.net.ChatError.BAD_RESPONSE -> R.string.chat_error_bad_response
+            },
+        )
+
+        fun chatStopped(): UiText = of(R.string.chat_stopped)
     }
 }

@@ -79,4 +79,29 @@ class ProviderRepository(
     suspend fun touch(providerId: String) {
         dao.touch(providerId, System.currentTimeMillis())
     }
+
+    /** 当前生效 Provider + 解密后的 key（聊天引擎用；绝不写日志）。 */
+    suspend fun active(): ActiveProvider? {
+        val id = prefs.activeProviderId ?: return null
+        val row = dao.find(id) ?: return null
+        val key = secrets.get(id) ?: return null
+        return ActiveProvider(
+            id = row.id,
+            name = row.name,
+            baseUrl = row.baseUrl,
+            model = row.defaultModel,
+            apiKey = key,
+            temperature = 0.8,
+        )
+    }
 }
+
+/** 聊天引擎需要的「当前生效配置」，key 只在内存里出现。 */
+data class ActiveProvider(
+    val id: String,
+    val name: String,
+    val baseUrl: String,
+    val model: String,
+    val apiKey: String,
+    val temperature: Double,
+)
