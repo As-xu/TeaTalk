@@ -6,6 +6,8 @@ import com.teatalk.core.card.CardImportException
 import com.teatalk.xs.R
 import com.teatalk.core.card.CardParser
 import com.teatalk.core.card.PngTextReader
+import com.teatalk.core.log.Redact
+import com.teatalk.core.log.TeaTalkLog
 import com.teatalk.xs.data.db.CharacterDao
 import com.teatalk.xs.data.db.CharacterEntity
 import com.teatalk.xs.data.db.CharacterWithLastMessage
@@ -52,6 +54,8 @@ class CharacterRepository(
     suspend fun hasAnyChat(): Boolean = withContext(Dispatchers.IO) { dao.countChats() > 0 }
 
     suspend fun importCard(uri: Uri): ImportOutcome = withContext(Dispatchers.IO) {
+        val started = System.currentTimeMillis()
+        TeaTalkLog.i("Card", "import.start", "uri" to Redact.url(uri.toString()))
         try {
             val bytes = appContext.contentResolver.openInputStream(uri)?.use(::readCardBytes)
                 ?: return@withContext ImportOutcome.Failure(UiText.of(R.string.import_open_failed))
@@ -70,6 +74,14 @@ class CharacterRepository(
                 createdAt = System.currentTimeMillis(),
                 updatedAt = System.currentTimeMillis(),
             )
+            TeaTalkLog.i(
+                "Card",
+                "import.ok",
+                "source" to imported.source.name,
+                "bytes" to bytes.size,
+                "warnings" to imported.warnings.size,
+                "ms" to (System.currentTimeMillis() - started),
+            )
             val id = try {
                 dao.insert(entity)
             } catch (e: Exception) {
@@ -79,11 +91,14 @@ class CharacterRepository(
             }
             ImportOutcome.Success(id, entity.name, imported.warnings)
         } catch (e: CardTooLargeException) {
+            TeaTalkLog.w("Card", "import.too_large", "maxMb" to e.maxMb)
             ImportOutcome.Failure(UiText.of(R.string.import_card_too_large, e.maxMb))
         } catch (e: CardImportException) {
             // :core 的异常文案是开发期诊断用的（中文），对用户统一显示本地化的“解析失败”
+            TeaTalkLog.w("Card", "import.fail", "type" to "CardImportException", "ms" to (System.currentTimeMillis() - started))
             ImportOutcome.Failure(UiText.of(R.string.import_parse_failed))
         } catch (e: Exception) {
+            TeaTalkLog.e("Card", "import.fail", e, "ms" to (System.currentTimeMillis() - started))
             ImportOutcome.Failure(UiText.of(R.string.import_failed_detail, e.message ?: e.javaClass.simpleName))
         }
     }
@@ -92,6 +107,7 @@ class CharacterRepository(
         dao.deleteMessages(character.id)
         dao.delete(character)
         character.avatarPath?.let { runCatching { File(appContext.filesDir, it).delete() } }
+        TeaTalkLog.i("Card", "delete.ok", "id" to character.id)
         Unit
     }
 
@@ -164,11 +180,12 @@ class CharacterRepository(
     /** 首次进聊天页：插入开场白（原子判空插入，重复进入不会插两条）。 */
     suspend fun ensureGreeting(characterId: Long) = withContext(Dispatchers.IO) {
         val character = dao.find(characterId) ?: return@withContext
-        dao.insertGreetingIfEmpty(
+        val inserted = dao.insertGreetingIfEmpty(
             characterId = characterId,
             content = character.firstMes.ifBlank { appContext.getString(R.string.greeting_fallback) },
             createdAt = System.currentTimeMillis(),
         )
+        TeaTalkLog.i("Chat", "greeting.ensure", "characterId" to characterId, "inserted" to inserted)
     }
 
     /**
@@ -179,12 +196,14 @@ class CharacterRepository(
     suspend fun sendMessage(character: CharacterEntity, text: String) = withContext(Dispatchers.IO) {
         val content = text.trim()
         if (content.isEmpty()) return@withContext
+        TeaTalkLog.i("Chat", "send.start", "characterId" to character.id, "chars" to content.length)
         val now = System.currentTimeMillis()
         dao.insertMessage(MessageEntity(characterId = character.id, role = ROLE_USER, content = content, createdAt = now))
         val reply = appContext.getString(R.string.offline_reply, content, character.name)
         dao.insertMessage(
             MessageEntity(characterId = character.id, role = ROLE_ASSISTANT, content = reply, createdAt = now + 1),
         )
+        TeaTalkLog.i("Chat", "send.fake_reply", "characterId" to character.id, "chars" to reply.length)
     }
 
     private fun saveAvatar(bytes: ByteArray): String {

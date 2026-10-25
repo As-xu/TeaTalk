@@ -3,6 +3,8 @@ package com.teatalk.xs.data
 import android.content.Context
 import android.net.Uri
 import android.provider.OpenableColumns
+import com.teatalk.core.log.Redact
+import com.teatalk.core.log.TeaTalkLog
 import com.teatalk.core.worldinfo.WorldInfoEntry
 import com.teatalk.core.worldinfo.WorldInfoParser
 import com.teatalk.xs.R
@@ -35,6 +37,8 @@ class WorldBookRepository(
     fun entriesOf(book: WorldBookEntity): List<WorldInfoEntry> = WorldInfoParser.fromCard(book.entriesJson)
 
     suspend fun import(uri: Uri): WorldBookImportOutcome = withContext(Dispatchers.IO) {
+        val started = System.currentTimeMillis()
+        TeaTalkLog.i("Card", "worldbook.import.start", "uri" to Redact.url(uri.toString()))
         val text = try {
             appContext.contentResolver.openInputStream(uri)?.use { readLimited(it) }
         } catch (e: Exception) {
@@ -43,6 +47,7 @@ class WorldBookRepository(
 
         val entries = WorldInfoParser.fromCard(text)
         if (entries.isEmpty()) {
+            TeaTalkLog.w("Card", "worldbook.import.empty", "bytes" to text.length)
             return@withContext WorldBookImportOutcome.Failure(UiText.of(R.string.worldbook_empty))
         }
 
@@ -58,10 +63,20 @@ class WorldBookRepository(
                 updatedAt = now,
             ),
         )
+        TeaTalkLog.i(
+            "Card",
+            "worldbook.import.ok",
+            "entries" to entries.size,
+            "bytes" to text.length,
+            "ms" to (System.currentTimeMillis() - started),
+        )
         WorldBookImportOutcome.Success(name, entries.size)
     }
 
-    suspend fun delete(book: WorldBookEntity) = withContext(Dispatchers.IO) { dao.deleteById(book.id) }
+    suspend fun delete(book: WorldBookEntity) = withContext(Dispatchers.IO) {
+        dao.deleteById(book.id)
+        TeaTalkLog.i("Card", "worldbook.delete", "id" to book.id)
+    }
 
     /** 从 SAF 的 DISPLAY_NAME 取名字，去掉 .json 后缀。 */
     private fun displayName(uri: Uri): String? = runCatching {

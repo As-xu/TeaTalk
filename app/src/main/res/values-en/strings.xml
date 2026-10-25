@@ -159,4 +159,19 @@
     <string name="worldbook_entry_keys">Keys: %1$s</string>
     <string name="worldbook_entry_no_keys">(always-on entry)</string>
     <string name="worldbook_entry_disabled">Disabled</string>
+    <string name="about_version">Version</string>
+    <string name="about_package">Package</string>
+    <string name="about_device">Device</string>
+    <string name="about_android">Android</string>
+    <string name="about_db">Database version</string>
+    <string name="logs_debug">Debug logs</string>
+    <string name="logs_debug_sub">Record diagnostics (no keys or card/chat content)</string>
+    <string name="logs_export">Export diagnostics</string>
+    <string name="logs_export_sub">Writes a txt file and opens the share sheet</string>
+    <string name="logs_clear">Clear recent logs</string>
+    <string name="logs_clear_sub">Clears memory buffer only; files are kept 3 days</string>
+    <string name="logs_recent">Recent logs</string>
+    <string name="logs_empty">No logs yet</string>
+    <string name="logs_export_chooser">Share diagnostics</string>
+    <string name="logs_cleared">Memory logs cleared</string>
 </resources>

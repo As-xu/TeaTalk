@@ -168,4 +168,19 @@
     <string name="worldbook_entry_keys">关键词：%1$s</string>
     <string name="worldbook_entry_no_keys">（无条件条目）</string>
     <string name="worldbook_entry_disabled">已禁用</string>
+    <string name="about_version">版本</string>
+    <string name="about_package">包名</string>
+    <string name="about_device">设备</string>
+    <string name="about_android">系统</string>
+    <string name="about_db">数据库版本</string>
+    <string name="logs_debug">调试日志</string>
+    <string name="logs_debug_sub">记录诊断信息（不含密钥与正文）</string>
+    <string name="logs_export">导出诊断日志</string>
+    <string name="logs_export_sub">生成 txt 并分享，便于反馈问题</string>
+    <string name="logs_clear">清空最近日志</string>
+    <string name="logs_clear_sub">只清内存缓冲，已落盘文件保留 3 天</string>
+    <string name="logs_recent">最近日志</string>
+    <string name="logs_empty">暂无日志</string>
+    <string name="logs_export_chooser">分享诊断日志</string>
+    <string name="logs_cleared">已清空内存日志</string>
 </resources>

@@ -4,6 +4,7 @@ import androidx.room.Database
 import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
+import com.teatalk.core.log.TeaTalkLog
 
 @Database(
     entities = [CharacterEntity::class, MessageEntity::class, WorldBookEntity::class],
@@ -15,6 +16,8 @@ abstract class TeaTalkDatabase : RoomDatabase() {
     abstract fun worldBookDao(): WorldBookDao
 
     companion object {
+        const val VERSION = 2
+
         /**
          * v1（M0）→ v2（D6 卡库）：
          * - `characters` 增加 favorite / pinned / updatedAt（存量数据 `updatedAt=0`，排序回退到 createdAt）
@@ -24,6 +27,7 @@ abstract class TeaTalkDatabase : RoomDatabase() {
          */
         val MIGRATION_1_2 = object : Migration(1, 2) {
             override fun migrate(db: SupportSQLiteDatabase) {
+                val started = System.currentTimeMillis()
                 db.execSQL("ALTER TABLE characters ADD COLUMN favorite INTEGER NOT NULL DEFAULT 0")
                 db.execSQL("ALTER TABLE characters ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0")
                 db.execSQL("ALTER TABLE characters ADD COLUMN updatedAt INTEGER NOT NULL DEFAULT 0")
@@ -39,6 +43,13 @@ abstract class TeaTalkDatabase : RoomDatabase() {
                         `updatedAt` INTEGER NOT NULL
                     )
                     """.trimIndent(),
+                )
+                TeaTalkLog.i(
+                    "Db",
+                    "db.migrate",
+                    "from" to 1,
+                    "to" to 2,
+                    "ms" to (System.currentTimeMillis() - started),
                 )
             }
         }
