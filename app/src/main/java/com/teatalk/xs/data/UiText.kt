@@ -34,5 +34,20 @@ data class UiText(
             }
 
         fun deleted(name: String): UiText = of(R.string.import_deleted, name)
+
+        /** 卡库：收藏/置顶等轻提示。 */
+        fun favorited(name: String, on: Boolean): UiText =
+            of(if (on) R.string.toast_favorited else R.string.toast_unfavorited, name)
+
+        fun pinned(name: String, on: Boolean): UiText =
+            of(if (on) R.string.toast_pinned else R.string.toast_unpinned, name)
+
+        fun cardSaved(name: String): UiText = of(R.string.toast_card_saved, name)
+
+        /** 世界书：导入/删除提示。 */
+        fun worldBookImported(name: String, entryCount: Int): UiText =
+            of(R.string.worldbook_imported, name, entryCount)
+
+        fun worldBookDeleted(name: String): UiText = of(R.string.worldbook_deleted, name)
     }
 }

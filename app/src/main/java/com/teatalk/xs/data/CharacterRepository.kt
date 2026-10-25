@@ -13,7 +13,9 @@ import com.teatalk.xs.data.db.MessageEntity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import java.io.ByteArrayOutputStream
 import java.io.File
@@ -66,6 +68,7 @@ class CharacterRepository(
                 tagsJson = JsonArray(data.tags.map(::JsonPrimitive)).toString(),
                 firstMes = data.firstMes,
                 createdAt = System.currentTimeMillis(),
+                updatedAt = System.currentTimeMillis(),
             )
             val id = try {
                 dao.insert(entity)
@@ -90,6 +93,72 @@ class CharacterRepository(
         dao.delete(character)
         character.avatarPath?.let { runCatching { File(appContext.filesDir, it).delete() } }
         Unit
+    }
+
+    // —— D6 卡库：收藏 / 置顶 / 编辑 ——
+
+    suspend fun setFavorite(character: CharacterEntity, on: Boolean) = withContext(Dispatchers.IO) {
+        dao.setFavorite(character.id, on, System.currentTimeMillis())
+    }
+
+    suspend fun setPinned(character: CharacterEntity, on: Boolean) = withContext(Dispatchers.IO) {
+        dao.setPinned(character.id, on, System.currentTimeMillis())
+    }
+
+    /**
+     * 保存卡片编辑结果。
+     *
+     * 只改「元信息 + 设定类字段」，保持 V1/V2 结构不变：
+     * - V2/V3：写回 `data.*`（`first_mes` / `creator_notes` 用标准 snake_case）
+     * - V1 平铺：写回根对象
+     * 三个索引列（name / tagsJson / firstMes）同步更新，避免列表搜索与聊天开场白读到旧值。
+     */
+    suspend fun updateCard(character: CharacterEntity, edit: CardEdit) = withContext(Dispatchers.IO) {
+        val root = runCatching { Json.parseToJsonElement(character.cardJson) as? JsonObject }.getOrNull()
+        val dataObject = root?.get("data") as? JsonObject
+        val target = dataObject ?: root ?: JsonObject(emptyMap())
+        val updated = target.toMutableMap().apply {
+            put("name", JsonPrimitive(edit.name))
+            put("description", JsonPrimitive(edit.description))
+            put("personality", JsonPrimitive(edit.personality))
+            put("scenario", JsonPrimitive(edit.scenario))
+            put("first_mes", JsonPrimitive(edit.firstMes))
+            put("creator_notes", JsonPrimitive(edit.creatorNotes))
+            put("tags", JsonArray(edit.tags.map(::JsonPrimitive)))
+        }
+        val newCardJson = when {
+            dataObject != null -> JsonObject(root!!.toMutableMap().apply { put("data", JsonObject(updated)) })
+            root != null -> JsonObject(updated)
+            else -> return@withContext
+        }.toString()
+        dao.updateCard(
+            id = character.id,
+            name = edit.name,
+            tagsJson = JsonArray(edit.tags.map(::JsonPrimitive)).toString(),
+            firstMes = edit.firstMes,
+            cardJson = newCardJson,
+            updatedAt = System.currentTimeMillis(),
+        )
+    }
+
+    /**
+     * v1→v2 迁移后的标签回填：老数据的 `tagsJson` 是空数组，
+     * 从 `cardJson` 重新抽一次（只写 tags，不动其他列）。
+     */
+    suspend fun backfillTags() = withContext(Dispatchers.IO) {
+        dao.charactersWithoutTags().forEach { character ->
+            val tags = CardViewParser.parse(character.cardJson).tags
+            if (tags.isNotEmpty()) {
+                dao.updateCard(
+                    id = character.id,
+                    name = character.name,
+                    tagsJson = JsonArray(tags.map(::JsonPrimitive)).toString(),
+                    firstMes = character.firstMes,
+                    cardJson = character.cardJson,
+                    updatedAt = character.updatedAt,
+                )
+            }
+        }
     }
 
     /** 首次进聊天页：插入开场白（原子判空插入，重复进入不会插两条）。 */
@@ -147,6 +216,17 @@ class CharacterRepository(
         const val ROLE_ASSISTANT = "assistant"
     }
 }
+
+/** 卡片编辑表单（D6）。`tags` 已拆分好，写库时序列化回 JSON 数组。 */
+data class CardEdit(
+    val name: String,
+    val tags: List<String>,
+    val description: String,
+    val personality: String,
+    val scenario: String,
+    val firstMes: String,
+    val creatorNotes: String,
+)
 
 /** 单卡超过上限时抛这个，好让上层给出本地化提示（:core 里的异常文案是中文诊断信息）。 */
 class CardTooLargeException(val maxMb: Long) : Exception("card exceeds $maxMb MB")

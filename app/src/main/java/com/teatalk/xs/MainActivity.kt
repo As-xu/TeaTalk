@@ -6,7 +6,6 @@ import android.content.res.Configuration
 import android.graphics.Color
 import android.net.Uri
 import android.os.Bundle
-import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
@@ -91,7 +90,6 @@ class MainActivity : ComponentActivity() {
                 is ImportOutcome.Success -> UiText.imported(outcome.name, outcome.warnings.size)
                 is ImportOutcome.Failure -> outcome.message
             }
-            externalMessage?.let { Toast.makeText(this@MainActivity, it.resolve(this@MainActivity), Toast.LENGTH_LONG).show() }
         }
     }
 }

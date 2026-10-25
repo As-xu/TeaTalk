@@ -40,6 +40,8 @@ import com.teatalk.xs.ui.chats.ChatListViewModel
 import com.teatalk.xs.ui.components.AppBottomBar
 import com.teatalk.xs.ui.components.TabItem
 import com.teatalk.xs.ui.profile.ProfileScreen
+import com.teatalk.xs.ui.worldbook.WorldBooksScreen
+import com.teatalk.xs.ui.worldbook.WorldBooksViewModel
 
 /**
  * 导航骨架：底部三 Tab（聊天/角色/我的）+ 两级全屏页面（角色详情 / 聊天）。
@@ -71,8 +73,9 @@ fun HomeScreen(
 
     // UiText 在 UI 层解析成当前语言的字符串
     val externalText = externalMessage?.let { msg ->
-        if (msg.args.isEmpty()) stringResource(msg.res)
+        val raw = if (msg.args.isEmpty()) stringResource(msg.res)
         else stringResource(msg.res, *msg.args.toTypedArray())
+        if (raw.length > 60) raw.take(57) + "…" else raw
     }
     LaunchedEffect(externalText) {
         val text = externalText ?: return@LaunchedEffect
@@ -126,6 +129,13 @@ fun HomeScreen(
                     ProfileScreen(
                         currentLanguageTag = languageTag,
                         onLanguageChange = onChangeLanguage,
+                        onOpenWorldBooks = { navController.navigate(Routes.WORLD_BOOKS) },
+                    )
+                }
+                composable(Routes.WORLD_BOOKS) {
+                    WorldBooksScreen(
+                        viewModel = viewModel(factory = WorldBooksViewModel.factory(app)),
+                        onBack = { navController.popBackStack() },
                     )
                 }
 
@@ -167,6 +177,7 @@ private object Routes {
     const val PROFILE = "profile"
     const val CHARACTER_DETAIL = "character/{id}"
     const val CHAT = "chat/{id}"
+    const val WORLD_BOOKS = "worldbooks"
 }
 
 private const val ARG_ID = "id"

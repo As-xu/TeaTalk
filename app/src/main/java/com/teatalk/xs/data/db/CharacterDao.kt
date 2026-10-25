@@ -10,7 +10,7 @@ import kotlinx.coroutines.flow.Flow
 @Dao
 interface CharacterDao {
 
-    @Query("SELECT * FROM characters ORDER BY createdAt DESC")
+    @Query("SELECT * FROM characters ORDER BY pinned DESC, updatedAt DESC, createdAt DESC")
     fun observeAll(): Flow<List<CharacterEntity>>
 
     @Query("SELECT * FROM characters WHERE id = :id LIMIT 1")
@@ -25,6 +25,29 @@ interface CharacterDao {
 
     @Delete
     suspend fun delete(character: CharacterEntity)
+
+    // —— D6 卡库：收藏 / 置顶 / 卡片编辑 ——
+
+    @Query("UPDATE characters SET favorite = :favorite, updatedAt = :updatedAt WHERE id = :id")
+    suspend fun setFavorite(id: Long, favorite: Boolean, updatedAt: Long)
+
+    @Query("UPDATE characters SET pinned = :pinned, updatedAt = :updatedAt WHERE id = :id")
+    suspend fun setPinned(id: Long, pinned: Boolean, updatedAt: Long)
+
+    /** 编辑保存：只覆盖 name/tags/firstMes/cardJson 四个列，头像与来源不变。 */
+    @Query(
+        """
+        UPDATE characters
+        SET name = :name, tagsJson = :tagsJson, firstMes = :firstMes,
+            cardJson = :cardJson, updatedAt = :updatedAt
+        WHERE id = :id
+        """,
+    )
+    suspend fun updateCard(id: Long, name: String, tagsJson: String, firstMes: String, cardJson: String, updatedAt: Long)
+
+    /** 迁移后的标签回填：v1 存量卡的 tagsJson 可能是空数组，用 cardJson 重新抽。 */
+    @Query("SELECT * FROM characters WHERE tagsJson = '[]' OR tagsJson = ''")
+    suspend fun charactersWithoutTags(): List<CharacterEntity>
 
     @Query("SELECT * FROM messages WHERE characterId = :characterId ORDER BY createdAt ASC, id ASC")
     fun observeMessages(characterId: Long): Flow<List<MessageEntity>>

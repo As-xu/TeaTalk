@@ -21,6 +21,7 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Language
+import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.SystemUpdateAlt
@@ -61,6 +62,7 @@ private val LANGUAGE_OPTIONS = listOf(
 @Composable
 fun ProfileScreen(
     onOpenModelSettings: () -> Unit = {},
+    onOpenWorldBooks: () -> Unit = {},
     currentLanguageTag: String? = null,
     onLanguageChange: (String?) -> Unit = {},
 ) {
@@ -122,6 +124,7 @@ fun ProfileScreen(
             SettingRow(Icons.Filled.Palette, R.string.profile_theme, R.string.profile_theme_sub, {})
             SettingRow(Icons.Filled.Language, R.string.profile_language, null, { showLanguageDialog = true }, trailing = currentLabel)
             SettingRow(Icons.Filled.UploadFile, R.string.profile_import, R.string.profile_import_sub, {})
+            SettingRow(Icons.Filled.MenuBook, R.string.profile_worldbook, R.string.profile_worldbook_sub, onOpenWorldBooks)
         }
         Spacer(Modifier.height(12.dp))
         SettingsGroup {

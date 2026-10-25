@@ -10,10 +10,16 @@ class AppContainer(context: Context) {
     private val appContext = context.applicationContext
 
     private val database: TeaTalkDatabase by lazy {
-        Room.databaseBuilder(appContext, TeaTalkDatabase::class.java, "teatalk.db").build()
+        Room.databaseBuilder(appContext, TeaTalkDatabase::class.java, "teatalk.db")
+            .addMigrations(TeaTalkDatabase.MIGRATION_1_2)
+            .build()
     }
 
     val characterRepository: CharacterRepository by lazy {
         CharacterRepository(appContext, database.characterDao())
+    }
+
+    val worldBookRepository: WorldBookRepository by lazy {
+        WorldBookRepository(appContext, database.worldBookDao())
     }
 }

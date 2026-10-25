@@ -5,12 +5,13 @@ import androidx.room.Index
 import androidx.room.PrimaryKey
 
 /**
- * 角色卡（M0 只做导入与列表；聊天在 D4 起用）。
+ * 角色卡。
  *
  * 设计要点（对应方案 §4.6）：
  * - `cardJson` 存**原始 JSON 全文**（ImportedCard.card.raw），导出/重解析不丢字段。
  * - `avatarPath` 相对 `filesDir`：PNG 卡直接把原图拷一份当头像；JSON/CHARX 暂为 null。
  * - `tagsJson` 为 JSON 数组字符串（不引入额外序列化插件）。
+ * - `favorite` / `pinned` / `updatedAt` 为 D6 卡库新增（迁移 1→2）。
  */
 @Entity(tableName = "characters")
 data class CharacterEntity(
@@ -22,9 +23,15 @@ data class CharacterEntity(
     val tagsJson: String = "[]",
     val firstMes: String = "",
     val createdAt: Long = 0L,
+    /** 收藏（卡库「收藏」筛选）。 */
+    val favorite: Boolean = false,
+    /** 置顶（列表最前，与聊天列表一致）。 */
+    val pinned: Boolean = false,
+    /** 最近改动时间（编辑、收藏、置顶都会刷新，用于「最近」排序）。 */
+    val updatedAt: Long = 0L,
 )
 
-/** 消息表：D4 聊天开始使用，先建表占位（version 1 内建，后续迁移不慌）。 */
+/** 消息表：按角色归档，`createdAt` 升序即对话顺序。 */
 @Entity(tableName = "messages", indices = [Index("characterId")])
 data class MessageEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0L,
@@ -33,4 +40,24 @@ data class MessageEntity(
     val role: String,
     val content: String,
     val createdAt: Long = 0L,
+)
+
+/**
+ * 独立世界书（D6）：从 ST 世界书 JSON 或角色卡内嵌世界书导入，存原始条目 JSON。
+ *
+ * M0/M6 阶段只做「导入 + 查看 + 删除」；绑定到会话与注入管线在 M2 做。
+ */
+@Entity(tableName = "world_books")
+data class WorldBookEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0L,
+    /** 世界书名（ST 文件名或卡名）。 */
+    val name: String,
+    /** 来源标记：`st_json` / `card` / `manual`。 */
+    val source: String,
+    /** 原始 JSON 全文（不丢字段，后续 M2 管线按需重解析）。 */
+    val entriesJson: String,
+    /** 条目数（列表展示用，避免每次解析全文）。 */
+    val entryCount: Int,
+    val createdAt: Long = 0L,
+    val updatedAt: Long = 0L,
 )

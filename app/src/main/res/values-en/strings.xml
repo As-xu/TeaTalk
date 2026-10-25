@@ -87,7 +87,7 @@
     <string name="profile_backup">Backup &amp; export</string>
     <string name="profile_backup_sub">Characters &amp; chats</string>
     <string name="profile_about">About TeaTalk</string>
-    <string name="profile_about_sub">0.1.0 · AGPL-3.0 · Stored on device</string>
+    <string name="profile_about_sub">0.2.0 · AGPL-3.0 · Stored on device</string>
     <string name="profile_footnote">Uninstalling removes all local data. Export arrives in M1.</string>
     <string name="profile_language">Language</string>
     <string name="profile_language_dialog_title">Choose language</string>
@@ -109,4 +109,54 @@
     <string name="tab_chats">Chats</string>
     <string name="tab_characters">Characters</string>
     <string name="tab_profile">Me</string>
+
+    <!-- D6 card library -->
+    <string name="characters_menu_favorite">Favorite</string>
+    <string name="characters_menu_unfavorite">Unfavorite</string>
+    <string name="characters_menu_pin">Pin to top</string>
+    <string name="characters_menu_unpin">Unpin</string>
+    <string name="characters_menu_edit">Edit card</string>
+    <string name="characters_filter_all_tags">All</string>
+    <string name="characters_no_match_title">No matching characters</string>
+    <string name="characters_no_match_body">Try another keyword, or clear the filters</string>
+    <string name="characters_pinned_badge">Pinned</string>
+    <string name="characters_search_clear">Clear</string>
+    <string name="toast_favorited">Favorited “%1$s”</string>
+    <string name="toast_unfavorited">Unfavorited “%1$s”</string>
+    <string name="toast_pinned">Pinned “%1$s”</string>
+    <string name="toast_unpinned">Unpinned “%1$s”</string>
+    <string name="toast_card_saved">Saved “%1$s”</string>
+    <string name="warnings_action">Details</string>
+    <string name="warnings_title">Import notes</string>
+    <string name="warnings_hint">These parts were imported on a best-effort basis and may differ slightly.</string>
+
+    <!-- D6 card editing -->
+    <string name="edit_card_title">Edit card</string>
+    <string name="edit_field_name">Name</string>
+    <string name="edit_field_tags">Tags (comma separated)</string>
+    <string name="edit_field_description">Description</string>
+    <string name="edit_field_personality">Personality</string>
+    <string name="edit_field_scenario">Scenario</string>
+    <string name="edit_field_first_mes">First message</string>
+    <string name="edit_field_creator_notes">Creator notes</string>
+    <string name="edit_save">Save</string>
+
+    <!-- D6 world books -->
+    <string name="profile_worldbook">World books</string>
+    <string name="profile_worldbook_sub">Import, view and delete</string>
+    <string name="worldbook_title">World books</string>
+    <string name="worldbook_import">Import</string>
+    <string name="worldbook_empty_title">No world books yet</string>
+    <string name="worldbook_empty_body">SillyTavern world book JSON is supported</string>
+    <string name="worldbook_import_cta">Import world book</string>
+    <string name="worldbook_default_name">Untitled world book</string>
+    <string name="worldbook_empty">No valid entries found</string>
+    <string name="worldbook_entry_count">%1$d entries</string>
+    <string name="worldbook_imported">Imported “%1$s” (%2$d entries)</string>
+    <string name="worldbook_deleted">Deleted “%1$s”</string>
+    <string name="worldbook_delete_title">Delete world book</string>
+    <string name="worldbook_delete_confirm">Delete “%1$s”?</string>
+    <string name="worldbook_entry_keys">Keys: %1$s</string>
+    <string name="worldbook_entry_no_keys">(always-on entry)</string>
+    <string name="worldbook_entry_disabled">Disabled</string>
 </resources>

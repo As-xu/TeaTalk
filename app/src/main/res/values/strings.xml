@@ -95,7 +95,7 @@
     <string name="profile_backup">备份与导出</string>
     <string name="profile_backup_sub">角色卡与聊天记录</string>
     <string name="profile_about">关于 TeaTalk</string>
-    <string name="profile_about_sub">0.1.0 · AGPL-3.0 · 数据只存本机</string>
+    <string name="profile_about_sub">0.2.0 · AGPL-3.0 · 数据只存本机</string>
     <string name="profile_footnote">卸载 App 会删除全部本机数据，导出功能在 M1 提供。</string>
     <string name="profile_language">语言</string>
     <string name="profile_language_dialog_title">选择语言</string>
@@ -118,4 +118,54 @@
     <string name="tab_chats">聊天</string>
     <string name="tab_characters">角色</string>
     <string name="tab_profile">我的</string>
+
+    <!-- D6 卡库：搜索 / 筛选 / 收藏 / 置顶 / 编辑 / 导入提示 -->
+    <string name="characters_menu_favorite">收藏</string>
+    <string name="characters_menu_unfavorite">取消收藏</string>
+    <string name="characters_menu_pin">置顶</string>
+    <string name="characters_menu_unpin">取消置顶</string>
+    <string name="characters_menu_edit">编辑卡片</string>
+    <string name="characters_filter_all_tags">全部</string>
+    <string name="characters_no_match_title">没有匹配的角色</string>
+    <string name="characters_no_match_body">换个关键词，或清空筛选再试</string>
+    <string name="characters_pinned_badge">置顶</string>
+    <string name="characters_search_clear">清空</string>
+    <string name="toast_favorited">已收藏「%1$s」</string>
+    <string name="toast_unfavorited">已取消收藏「%1$s」</string>
+    <string name="toast_pinned">已置顶「%1$s」</string>
+    <string name="toast_unpinned">已取消置顶「%1$s」</string>
+    <string name="toast_card_saved">已保存「%1$s」</string>
+    <string name="warnings_action">明细</string>
+    <string name="warnings_title">导入提示</string>
+    <string name="warnings_hint">以下内容已尽量兼容，但可能与原卡有细微差异。</string>
+
+    <!-- D6 卡片编辑 -->
+    <string name="edit_card_title">编辑卡片</string>
+    <string name="edit_field_name">名称</string>
+    <string name="edit_field_tags">标签（用逗号分隔）</string>
+    <string name="edit_field_description">简介</string>
+    <string name="edit_field_personality">性格</string>
+    <string name="edit_field_scenario">场景</string>
+    <string name="edit_field_first_mes">开场白</string>
+    <string name="edit_field_creator_notes">创作者注释</string>
+    <string name="edit_save">保存</string>
+
+    <!-- D6 世界书 -->
+    <string name="profile_worldbook">世界书</string>
+    <string name="profile_worldbook_sub">导入、查看与删除</string>
+    <string name="worldbook_title">世界书</string>
+    <string name="worldbook_import">导入</string>
+    <string name="worldbook_empty_title">还没有世界书</string>
+    <string name="worldbook_empty_body">支持 SillyTavern 的世界书 JSON 文件</string>
+    <string name="worldbook_import_cta">导入世界书</string>
+    <string name="worldbook_default_name">未命名世界书</string>
+    <string name="worldbook_empty">没有找到有效条目</string>
+    <string name="worldbook_entry_count">%1$d 条</string>
+    <string name="worldbook_imported">已导入「%1$s」（%2$d 条）</string>
+    <string name="worldbook_deleted">已删除「%1$s」</string>
+    <string name="worldbook_delete_title">删除世界书</string>
+    <string name="worldbook_delete_confirm">确定删除「%1$s」？</string>
+    <string name="worldbook_entry_keys">关键词：%1$s</string>
+    <string name="worldbook_entry_no_keys">（无条件条目）</string>
+    <string name="worldbook_entry_disabled">已禁用</string>
 </resources>
