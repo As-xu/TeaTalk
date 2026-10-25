@@ -57,11 +57,17 @@ D:\Project\TeaTalkApp\build.sh
 
 | 项 | 为什么需要 | 现在是否阻塞 |
 | --- | --- | --- |
-| GitHub 仓库地址（+ 用 HTTPS 还是 SSH key） | 社区开源，首次推送 / CI | 不阻塞开发，阻塞「开源发布」 |
-| M1 模型接口：OpenAI 兼容 `base_url` + `api_key`（或本地 ollama / llama.cpp 地址） | 联调流式聊天与真实回复 | **阻塞 M1 验收**；M1 编码可先用 MockProvider |
+| GitHub 仓库 `https://github.com/As-xu/TeaTalk` | 社区开源；已配置 `origin` 并与远程同步 | ✅ 已就绪 |
+| M1 模型接口：`TeaTalk/key.json`（`base_url` / `model_name` / `api_key`） | 联调流式聊天与真实回复 | ✅ 已提供（本地文件，已 gitignore） |
 | Release keystore 的口令与放置位置 | 出正式包 / 自更新 | 不阻塞 M0/M1 开发，阻塞首次发布 |
 | （可选）第二台设备或平板 | 适配 minSdk 28 的窄屏/大屏 | 不阻塞 |
 | （可选）10 张「边界卡」：超长名字、超大世界书、CHARX、带表情的 V3 卡 | 导入鲁棒性回归 | 不阻塞（已有 29 张真实卡） |
+
+## 5.1 密钥管理
+
+- 真实的 `key.json` 只放本地，`.gitignore` 已忽略；仓库里只提交 `key.example.json` 模板。
+- 读取方：App 运行时不读这个文件；M1 联调时由构建脚本/命令行注入（或本地 debug 配置读取后不写日志）。
+- 若曾误提交：立刻轮换 key，再用 `git filter-repo` 清理历史。
 
 ## 6. 已知坑（本机踩过，已规避）
 
