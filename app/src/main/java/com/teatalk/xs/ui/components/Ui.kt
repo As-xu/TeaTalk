@@ -24,7 +24,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.annotation.DrawableRes
+import androidx.annotation.StringRes
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -32,7 +34,7 @@ import androidx.compose.ui.unit.sp
 /** 底部 Tab 的数据：图标 + 文案 + 路由 key。 */
 data class TabItem(
     val key: String,
-    val label: String,
+    @StringRes val labelRes: Int,
     val iconRes: Int,
 )
 
@@ -63,10 +65,10 @@ fun AppBottomBar(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center,
                 ) {
-                    Icon(painterResource(tab.iconRes), contentDescription = tab.label, tint = tint, modifier = Modifier.size(23.dp))
+                    Icon(painterResource(tab.iconRes), contentDescription = stringResource(tab.labelRes), tint = tint, modifier = Modifier.size(23.dp))
                     Spacer(Modifier.height(2.dp))
                     Text(
-                        tab.label,
+                        stringResource(tab.labelRes),
                         fontSize = 10.sp,
                         color = tint,
                         fontWeight = if (active) FontWeight.Medium else FontWeight.Normal,

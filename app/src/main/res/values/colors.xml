@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <color name="ic_launcher_background">#0F1714</color>
-    <color name="splash_background">#101413</color>
+    <!-- 启动画面底色：跟随明暗（默认奶油茶，night 为奶油茶夜），避免冷启动白/黑闪一下 -->
+    <color name="splash_background">#FBF7F0</color>
 </resources>

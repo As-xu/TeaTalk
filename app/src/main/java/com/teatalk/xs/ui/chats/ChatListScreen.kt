@@ -1,5 +1,7 @@
 package com.teatalk.xs.ui.chats
 
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -40,6 +42,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
+import com.teatalk.xs.R
 import com.teatalk.xs.TeaTalkApp
 import com.teatalk.xs.data.CharacterRepository
 import com.teatalk.xs.data.db.CharacterWithLastMessage
@@ -91,18 +94,18 @@ fun ChatListScreen(
             }
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
-                Text("茶话", fontSize = 19.sp, fontWeight = FontWeight.SemiBold, color = cs.onBackground)
+                Text(stringResource(R.string.chatlist_title), fontSize = 19.sp, fontWeight = FontWeight.SemiBold, color = cs.onBackground)
                 Spacer(Modifier.height(2.dp))
-                Text("本地模式 · 无服务端", fontSize = 11.5.sp, color = cs.onSurfaceVariant)
+                Text(stringResource(R.string.chatlist_subtitle), fontSize = 11.5.sp, color = cs.onSurfaceVariant)
             }
             IconButton(onClick = {}) {
-                Icon(Icons.Filled.Search, contentDescription = "搜索", tint = cs.onSurfaceVariant, modifier = Modifier.size(21.dp))
+                Icon(Icons.Filled.Search, contentDescription = stringResource(R.string.search), tint = cs.onSurfaceVariant, modifier = Modifier.size(21.dp))
             }
             IconButton(onClick = onGoCharacters) {
-                Icon(Icons.Filled.Add, contentDescription = "导入角色卡", tint = cs.onSurfaceVariant, modifier = Modifier.size(23.dp))
+                Icon(Icons.Filled.Add, contentDescription = stringResource(R.string.characters_import_cta), tint = cs.onSurfaceVariant, modifier = Modifier.size(23.dp))
             }
         }
-        SearchPill("搜索角色 / 会话", Modifier.padding(horizontal = 20.dp))
+        SearchPill(stringResource(R.string.chatlist_search_hint), Modifier.padding(horizontal = 20.dp))
         Spacer(Modifier.height(6.dp))
 
         val list = chats
@@ -114,9 +117,9 @@ fun ChatListScreen(
                     Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 14.dp, bottom = 6.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text("会话", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = cs.onSurfaceVariant)
+                    Text(stringResource(R.string.chatlist_section_title), fontSize = 13.sp, fontWeight = FontWeight.Medium, color = cs.onSurfaceVariant)
                     Spacer(Modifier.weight(1f))
-                    Text("${list.size} 位角色在等你", fontSize = 12.sp, color = cs.onSurfaceVariant)
+                    Text(pluralStringResource(R.plurals.chatlist_waiting, list.size, list.size), fontSize = 12.sp, color = cs.onSurfaceVariant)
                 }
                 LazyColumn(Modifier.fillMaxSize()) {
                     items(list, key = { it.character.id }) { chat ->
@@ -163,7 +166,7 @@ private fun ChatRow(chat: CharacterWithLastMessage, onClick: () -> Unit) {
                 }
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    chat.lastContent ?: "还没有消息，点开聊一句吧",
+                    chat.lastContent ?: stringResource(R.string.chatlist_last_placeholder),
                     fontSize = 12.5.sp,
                     color = cs.onSurfaceVariant,
                     maxLines = 1,
@@ -190,10 +193,10 @@ private fun EmptyChats(onGoCharacters: () -> Unit) {
             Text("茶", fontSize = 28.sp, color = cs.onSurfaceVariant, fontWeight = FontWeight.Medium)
         }
         Spacer(Modifier.height(18.dp))
-        Text("还没有会话", fontSize = 17.sp, fontWeight = FontWeight.Medium, color = cs.onBackground)
+        Text(stringResource(R.string.chatlist_empty_title), fontSize = 17.sp, fontWeight = FontWeight.Medium, color = cs.onBackground)
         Spacer(Modifier.height(6.dp))
         Text(
-            "去「角色」里挑一张卡，点「开始聊天」",
+            stringResource(R.string.chatlist_empty_body),
             fontSize = 13.sp,
             color = cs.onSurfaceVariant,
         )
@@ -205,19 +208,20 @@ private fun EmptyChats(onGoCharacters: () -> Unit) {
                 .clickable(onClick = onGoCharacters)
                 .padding(horizontal = 22.dp, vertical = 11.dp),
         ) {
-            Text("去挑角色", fontSize = 14.sp, color = cs.onPrimary, fontWeight = FontWeight.Medium)
+            Text(stringResource(R.string.chatlist_empty_cta), fontSize = 14.sp, color = cs.onPrimary, fontWeight = FontWeight.Medium)
         }
     }
 }
 
 /** 今天显示 HH:mm，昨天显示「昨天」，更早显示 MM-dd。 */
+@Composable
 private fun formatChatTime(millis: Long): String {
     val zone = ZoneId.systemDefault()
     val t = Instant.ofEpochMilli(millis).atZone(zone)
     val now = Instant.now().atZone(zone)
     return when {
         t.toLocalDate() == now.toLocalDate() -> t.format(DateTimeFormatter.ofPattern("HH:mm"))
-        t.toLocalDate() == now.toLocalDate().minusDays(1) -> "昨天"
+        t.toLocalDate() == now.toLocalDate().minusDays(1) -> stringResource(R.string.time_yesterday)
         else -> t.format(DateTimeFormatter.ofPattern("MM-dd"))
     }
 }

@@ -1,5 +1,8 @@
 package com.teatalk.xs.ui.characters
 
+import com.teatalk.xs.R
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -81,8 +84,12 @@ fun CharactersScreen(
         if (uri != null) viewModel.importCard(uri)
     }
 
-    LaunchedEffect(message) {
-        val text = message ?: return@LaunchedEffect
+    // UiText → 当前语言字符串再弹 snackbar（切语言后文案会跟着变）
+    val snackbarText = message?.let { msg ->
+        if (msg.args.isEmpty()) stringResource(msg.res) else stringResource(msg.res, *msg.args.toTypedArray())
+    }
+    LaunchedEffect(snackbarText) {
+        val text = snackbarText ?: return@LaunchedEffect
         snackbarHostState.showSnackbar(text)
         viewModel.consumeMessage()
     }
@@ -98,15 +105,15 @@ fun CharactersScreen(
                     .padding(start = 20.dp, end = 8.dp, top = 10.dp, bottom = 6.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text("角色", fontSize = 21.sp, fontWeight = FontWeight.SemiBold, color = cs.onBackground)
+                Text(stringResource(R.string.characters_title), fontSize = 21.sp, fontWeight = FontWeight.SemiBold, color = cs.onBackground)
                 Spacer(Modifier.weight(1f))
                 TextButton(onClick = { picker.launch(CARD_MIME_TYPES) }, enabled = !importing) {
                     Icon(Icons.Filled.Add, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(Modifier.width(2.dp))
-                    Text(if (importing) "导入中…" else "导入", fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                    Text(stringResource(if (importing) R.string.characters_importing else R.string.characters_import), fontSize = 14.sp, fontWeight = FontWeight.Medium)
                 }
             }
-            SearchPill("搜索角色 / 标签", Modifier.padding(horizontal = 20.dp))
+            SearchPill(stringResource(R.string.characters_search_hint), Modifier.padding(horizontal = 20.dp))
 
             // 分段筛选
             Row(
@@ -114,7 +121,11 @@ fun CharactersScreen(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                listOf("最近", "全部", "收藏").forEachIndexed { index, label ->
+                listOf(
+                    R.string.characters_filter_recent,
+                    R.string.characters_filter_all,
+                    R.string.characters_filter_favorites,
+                ).forEachIndexed { index, label ->
                     val selected = index == filter
                     Box(
                         Modifier
@@ -123,7 +134,7 @@ fun CharactersScreen(
                             .padding(horizontal = 14.dp, vertical = 6.dp),
                     ) {
                         Text(
-                            label,
+                            stringResource(label),
                             fontSize = 12.5.sp,
                             color = if (selected) cs.onPrimaryContainer else cs.onSurfaceVariant,
                             fontWeight = if (selected) FontWeight.Medium else FontWeight.Normal,
@@ -131,7 +142,7 @@ fun CharactersScreen(
                     }
                 }
                 Spacer(Modifier.weight(1f))
-                Text("${characters?.size ?: 0} 张", fontSize = 12.sp, color = cs.onSurfaceVariant)
+                Text(pluralStringResource(R.plurals.characters_count, characters?.size ?: 0, characters?.size ?: 0), fontSize = 12.sp, color = cs.onSurfaceVariant)
             }
 
             val list = characters
@@ -163,18 +174,18 @@ fun CharactersScreen(
     pendingDelete?.let { target ->
         AlertDialog(
             onDismissRequest = { pendingDelete = null },
-            title = { Text("删除角色卡") },
-            text = { Text("确定删除「${target.name}」？聊天记录也会一并删除。") },
+            title = { Text(stringResource(R.string.characters_delete_title)) },
+            text = { Text(stringResource(R.string.characters_delete_confirm, target.name)) },
             confirmButton = {
                 TextButton(onClick = {
                     pendingDelete = null
                     scope.launch {
                         viewModel.delete(target)
                     }
-                }) { Text("删除") }
+                }) { Text(stringResource(R.string.delete)) }
             },
             dismissButton = {
-                TextButton(onClick = { pendingDelete = null }) { Text("取消") }
+                TextButton(onClick = { pendingDelete = null }) { Text(stringResource(R.string.cancel)) }
             },
         )
     }
@@ -236,7 +247,7 @@ private fun CharacterCard(
                 modifier = Modifier.align(Alignment.BottomStart).padding(12.dp),
             )
             PillTag(
-                text = "角色",
+                text = stringResource(R.string.tag_character),
                 modifier = Modifier.align(Alignment.TopEnd).padding(10.dp),
             )
         }
@@ -269,13 +280,13 @@ private fun EmptyCharacters(onImport: () -> Unit) {
             Modifier.size(72.dp).clip(RoundedCornerShape(20.dp)).background(cs.surfaceContainerHigh),
             contentAlignment = Alignment.Center,
         ) {
-            Text("卡", fontSize = 28.sp, color = cs.onSurfaceVariant, fontWeight = FontWeight.Medium)
+            Text(stringResource(R.string.characters_placeholder_letter), fontSize = 28.sp, color = cs.onSurfaceVariant, fontWeight = FontWeight.Medium)
         }
         Spacer(Modifier.height(18.dp))
-        Text("还没有角色卡", fontSize = 17.sp, fontWeight = FontWeight.Medium, color = cs.onBackground)
+        Text(stringResource(R.string.characters_empty_title), fontSize = 17.sp, fontWeight = FontWeight.Medium, color = cs.onBackground)
         Spacer(Modifier.height(6.dp))
         Text(
-            "支持 SillyTavern 的 PNG / JSON / CHARX 角色卡",
+            stringResource(R.string.characters_empty_body),
             fontSize = 13.sp,
             color = cs.onSurfaceVariant,
         )
@@ -288,15 +299,16 @@ private fun EmptyCharacters(onImport: () -> Unit) {
                 .padding(horizontal = 22.dp, vertical = 11.dp),
             contentAlignment = Alignment.Center,
         ) {
-            Text("导入角色卡", fontSize = 14.sp, color = cs.onPrimary, fontWeight = FontWeight.Medium)
+            Text(stringResource(R.string.characters_import_cta), fontSize = 14.sp, color = cs.onPrimary, fontWeight = FontWeight.Medium)
         }
     }
 }
 
+@Composable
 private fun sourceLabel(source: String): String = when (source) {
-    "PNG_V2" -> "PNG 卡 · V2"
-    "PNG_V3" -> "PNG 卡 · V3"
-    "JSON_V2", "JSON_V3" -> "JSON 卡"
-    "CHARX" -> "CHARX 卡"
-    else -> "本地导入"
+    "PNG_V2" -> stringResource(R.string.source_png_v2)
+    "PNG_V3" -> stringResource(R.string.source_png_v3)
+    "JSON_V2", "JSON_V3" -> stringResource(R.string.source_json)
+    "CHARX" -> stringResource(R.string.source_charx)
+    else -> stringResource(R.string.source_local)
 }

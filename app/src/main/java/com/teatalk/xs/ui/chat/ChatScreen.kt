@@ -1,5 +1,7 @@
 package com.teatalk.xs.ui.chat
 
+import com.teatalk.xs.R
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -130,7 +132,8 @@ fun ChatScreen(
             item {
                 Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                     Text(
-                        messages.firstOrNull()?.let { "今天 " + timeOf(it.createdAt) } ?: "开始一段角色扮演",
+                        messages.firstOrNull()?.let { stringResource(R.string.chat_today_header, timeOf(it.createdAt)) }
+                            ?: stringResource(R.string.chat_intro_default),
                         fontSize = 11.sp,
                         color = cs.onSurfaceVariant,
                     )
@@ -156,7 +159,7 @@ fun ChatScreen(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 IconButton(onClick = {}) {
-                    Icon(Icons.Filled.Add, contentDescription = "更多", tint = cs.onSurfaceVariant, modifier = Modifier.size(22.dp))
+                    Icon(Icons.Filled.Add, contentDescription = stringResource(R.string.more), tint = cs.onSurfaceVariant, modifier = Modifier.size(22.dp))
                 }
                 Row(
                     Modifier
@@ -176,14 +179,14 @@ fun ChatScreen(
                         maxLines = 4,
                         decorationBox = { inner ->
                             if (input.isEmpty()) {
-                                Text("说点什么…", fontSize = 14.5.sp, color = cs.onSurfaceVariant)
+                                Text(stringResource(R.string.chat_input_hint), fontSize = 14.5.sp, color = cs.onSurfaceVariant)
                             }
                             inner()
                         },
                     )
                     Icon(
                         Icons.Outlined.SentimentSatisfied,
-                        contentDescription = "表情",
+                        contentDescription = stringResource(R.string.emoji),
                         tint = cs.onSurfaceVariant,
                         modifier = Modifier.size(20.dp),
                     )
@@ -204,7 +207,7 @@ fun ChatScreen(
                 ) {
                     Icon(
                         Icons.AutoMirrored.Filled.Send,
-                        contentDescription = "发送",
+                        contentDescription = stringResource(R.string.send),
                         tint = if (canSend) cs.onPrimary else cs.onSurfaceVariant,
                         modifier = Modifier.size(20.dp),
                     )
@@ -222,22 +225,22 @@ private fun ChatHeader(character: CharacterEntity?, onBack: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         IconButton(onClick = onBack) {
-            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回", tint = cs.onBackground)
+            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.back), tint = cs.onBackground)
         }
         CharacterAvatar(avatarPath = character?.avatarPath, name = character?.name ?: "", size = 36.dp, corner = 12.dp)
         Spacer(Modifier.width(10.dp))
         Column(Modifier.weight(1f)) {
             Text(
-                character?.name ?: "角色",
+                character?.name ?: stringResource(R.string.character_fallback),
                 fontSize = 15.5.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = cs.onBackground,
                 maxLines = 1,
             )
-            Text("在线 · 角色扮演模式", fontSize = 11.sp, color = cs.onSurfaceVariant)
+            Text(stringResource(R.string.chat_online_status), fontSize = 11.sp, color = cs.onSurfaceVariant)
         }
         IconButton(onClick = {}) {
-            Icon(Icons.Filled.MoreVert, contentDescription = "更多", tint = cs.onSurfaceVariant)
+            Icon(Icons.Filled.MoreVert, contentDescription = stringResource(R.string.more), tint = cs.onSurfaceVariant)
         }
     }
 }

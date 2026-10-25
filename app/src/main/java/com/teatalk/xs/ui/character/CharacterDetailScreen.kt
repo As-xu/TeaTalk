@@ -1,5 +1,7 @@
 package com.teatalk.xs.ui.character
 
+import com.teatalk.xs.R
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -156,16 +158,16 @@ fun CharacterDetailScreen(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     HeroIconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回", tint = Color.White)
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.back), tint = Color.White)
                     }
                     Spacer(Modifier.weight(1f))
                     HeroIconButton(onClick = { confirmDelete = true }) {
-                        Icon(Icons.Filled.Delete, contentDescription = "删除角色", tint = Color.White)
+                        Icon(Icons.Filled.Delete, contentDescription = stringResource(R.string.detail_delete_character), tint = Color.White)
                     }
                 }
                 Column(Modifier.align(Alignment.BottomStart).padding(start = 20.dp, end = 20.dp, bottom = 18.dp)) {
                     Text(
-                        character?.name ?: view.name.ifBlank { "角色" },
+                        character?.name ?: view.name.ifBlank { stringResource(R.string.character_fallback) },
                         fontSize = 26.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color.White,
@@ -173,7 +175,7 @@ fun CharacterDetailScreen(
                     Spacer(Modifier.height(6.dp))
                     Text(
                         buildString {
-                            if (view.creator.isNotBlank()) append("作者 ${view.creator} · ")
+                            if (view.creator.isNotBlank()) append(stringResource(R.string.detail_by_author, view.creator))
                             if (view.version.isNotBlank()) append("v${view.version} · ")
                             append(character?.cardSource ?: "")
                         }.trimEnd(' ', '·'),
@@ -214,14 +216,14 @@ fun CharacterDetailScreen(
                     contentAlignment = Alignment.Center,
                 ) {
                     Text(
-                        "开始聊天",
+                        stringResource(R.string.detail_start_chat),
                         fontSize = 15.sp,
                         fontWeight = FontWeight.Medium,
                         color = cs.onPrimary,
                     )
                 }
                 OutlinedPill(
-                    text = "世界书 ${view.worldBook.size}",
+                    text = stringResource(R.string.detail_world_book, view.worldBook.size),
                     enabled = view.worldBook.isNotEmpty(),
                     onClick = { showWorldBook = true },
                 )
@@ -231,23 +233,23 @@ fun CharacterDetailScreen(
         item {
             Column(Modifier.padding(horizontal = 20.dp).padding(top = 6.dp)) {
                 if (view.description.isNotBlank()) {
-                    SectionCard("简介") { BodyText(view.description) }
+                    SectionCard(stringResource(R.string.detail_section_desc)) { BodyText(view.description) }
                 }
                 if (view.firstMes.isNotBlank()) {
-                    SectionCard("开场白") { BodyText(view.firstMes) }
+                    SectionCard(stringResource(R.string.detail_section_first_mes)) { BodyText(view.firstMes) }
                 }
                 if (view.personality.isNotBlank() || view.scenario.isNotBlank()) {
-                    SectionCard("设定") {
+                    SectionCard(stringResource(R.string.detail_section_details)) {
                         if (view.personality.isNotBlank()) {
-                            FieldLine("性格", view.personality)
+                            FieldLine(stringResource(R.string.detail_field_personality), view.personality)
                         }
                         if (view.scenario.isNotBlank()) {
-                            FieldLine("场景", view.scenario)
+                            FieldLine(stringResource(R.string.detail_field_scenario), view.scenario)
                         }
                     }
                 }
                 if (view.creatorNotes.isNotBlank()) {
-                    SectionCard("创作者注释") { BodyText(view.creatorNotes) }
+                    SectionCard(stringResource(R.string.detail_section_notes)) { BodyText(view.creatorNotes) }
                 }
                 Spacer(Modifier.height(28.dp))
             }
@@ -257,7 +259,7 @@ fun CharacterDetailScreen(
     if (showWorldBook) {
         AlertDialog(
             onDismissRequest = { showWorldBook = false },
-            title = { Text("世界书（${view.worldBook.size} 条）") },
+            title = { Text(stringResource(R.string.detail_world_book_dialog, view.worldBook.size)) },
             text = {
                 LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     itemsIndexed(view.worldBook) { _, entry ->
@@ -284,22 +286,22 @@ fun CharacterDetailScreen(
                     }
                 }
             },
-            confirmButton = { TextButton(onClick = { showWorldBook = false }) { Text("关闭") } },
+            confirmButton = { TextButton(onClick = { showWorldBook = false }) { Text(stringResource(R.string.close)) } },
         )
     }
 
     if (confirmDelete) {
         AlertDialog(
             onDismissRequest = { confirmDelete = false },
-            title = { Text("删除角色卡") },
-            text = { Text("确定删除「${character?.name}」？聊天记录也会一并删除。") },
+            title = { Text(stringResource(R.string.characters_delete_title)) },
+            text = { Text(stringResource(R.string.characters_delete_confirm, character?.name.orEmpty())) },
             confirmButton = {
                 TextButton(onClick = {
                     confirmDelete = false
                     viewModel.delete(onDeleted = onBack)
-                }) { Text("删除") }
+                }) { Text(stringResource(R.string.delete)) }
             },
-            dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("取消") } },
+            dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text(stringResource(R.string.cancel)) } },
         )
     }
 }

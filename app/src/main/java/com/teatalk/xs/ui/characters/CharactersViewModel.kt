@@ -9,6 +9,7 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import com.teatalk.xs.TeaTalkApp
 import com.teatalk.xs.data.CharacterRepository
 import com.teatalk.xs.data.ImportOutcome
+import com.teatalk.xs.data.UiText
 import com.teatalk.xs.data.db.CharacterEntity
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -29,20 +30,15 @@ class CharactersViewModel(
     val importing: StateFlow<Boolean> = _importing.asStateFlow()
 
     /** 一次性提示（snackbar）。消费后置空。 */
-    private val _message = MutableStateFlow<String?>(null)
-    val message: StateFlow<String?> = _message.asStateFlow()
+    private val _message = MutableStateFlow<UiText?>(null)
+    val message: StateFlow<UiText?> = _message.asStateFlow()
 
     fun importCard(uri: Uri) {
         viewModelScope.launch {
             _importing.value = true
             try {
                 _message.value = when (val outcome = repository.importCard(uri)) {
-                    is ImportOutcome.Success -> buildString {
-                        append("已导入「${outcome.name}」")
-                        if (outcome.warnings.isNotEmpty()) {
-                            append("（${outcome.warnings.size} 条兼容提示）")
-                        }
-                    }
+                    is ImportOutcome.Success -> UiText.imported(outcome.name, outcome.warnings.size)
                     is ImportOutcome.Failure -> outcome.message
                 }
             } finally {
@@ -54,7 +50,7 @@ class CharactersViewModel(
     fun delete(character: CharacterEntity) {
         viewModelScope.launch {
             repository.delete(character)
-            _message.value = "已删除「${character.name}」"
+            _message.value = UiText.deleted(character.name)
         }
     }
 

@@ -17,6 +17,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavType
@@ -27,6 +28,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.teatalk.xs.R
 import com.teatalk.xs.TeaTalkApp
+import com.teatalk.xs.data.UiText
 import com.teatalk.xs.ui.character.CharacterDetailScreen
 import com.teatalk.xs.ui.character.CharacterDetailViewModel
 import com.teatalk.xs.ui.characters.CharactersScreen
@@ -47,8 +49,10 @@ import com.teatalk.xs.ui.profile.ProfileScreen
  */
 @Composable
 fun HomeScreen(
-    externalMessage: String? = null,
+    externalMessage: UiText? = null,
     onExternalMessageShown: () -> Unit = {},
+    languageTag: String? = null,
+    onChangeLanguage: (String?) -> Unit = {},
 ) {
     val app = LocalContext.current.applicationContext as TeaTalkApp
     val repository = app.container.characterRepository
@@ -65,8 +69,13 @@ fun HomeScreen(
     val showBottomBar = currentRoute == null || currentRoute in TAB_ROUTES
     val snackbarHostState = remember { SnackbarHostState() }
 
-    LaunchedEffect(externalMessage) {
-        val text = externalMessage ?: return@LaunchedEffect
+    // UiText 在 UI 层解析成当前语言的字符串
+    val externalText = externalMessage?.let { msg ->
+        if (msg.args.isEmpty()) stringResource(msg.res)
+        else stringResource(msg.res, *msg.args.toTypedArray())
+    }
+    LaunchedEffect(externalText) {
+        val text = externalText ?: return@LaunchedEffect
         snackbarHostState.showSnackbar(text)
         onExternalMessageShown()
     }
@@ -114,7 +123,10 @@ fun HomeScreen(
                     )
                 }
                 composable(Routes.PROFILE) {
-                    ProfileScreen()
+                    ProfileScreen(
+                        currentLanguageTag = languageTag,
+                        onLanguageChange = onChangeLanguage,
+                    )
                 }
 
                 composable(
@@ -162,7 +174,7 @@ private const val ARG_ID = "id"
 private val TAB_ROUTES = setOf(Routes.CHATS, Routes.CHARACTERS, Routes.PROFILE)
 
 private val TABS = listOf(
-    TabItem(Routes.CHATS, "聊天", R.drawable.ic_chat_bubble),
-    TabItem(Routes.CHARACTERS, "角色", R.drawable.ic_people),
-    TabItem(Routes.PROFILE, "我的", R.drawable.ic_person),
+    TabItem(Routes.CHATS, R.string.tab_chats, R.drawable.ic_chat_bubble),
+    TabItem(Routes.CHARACTERS, R.string.tab_characters, R.drawable.ic_people),
+    TabItem(Routes.PROFILE, R.string.tab_profile, R.drawable.ic_person),
 )

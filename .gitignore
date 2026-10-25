@@ -12,4 +12,4 @@ captures/
 .keystore/
 
 # 打好的安装包不入库（体积大），只存 sha256
-dist/*.apk
+dist/
