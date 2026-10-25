@@ -49,5 +49,16 @@ data class UiText(
             of(R.string.worldbook_imported, name, entryCount)
 
         fun worldBookDeleted(name: String): UiText = of(R.string.worldbook_deleted, name)
+
+        /** 模型 Provider。 */
+        fun providerSaved(name: String): UiText = of(R.string.toast_provider_saved, name)
+
+        fun providerDeleted(name: String): UiText = of(R.string.toast_provider_deleted, name)
+
+        fun providerActivated(name: String): UiText = of(R.string.toast_provider_activated, name)
+
+        fun providerTestOk(modelCount: Int): UiText = of(R.string.providers_test_ok, modelCount)
+
+        fun providerTestFail(reason: String): UiText = of(R.string.providers_test_fail, reason)
     }
 }

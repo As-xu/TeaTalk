@@ -40,6 +40,8 @@ import com.teatalk.xs.ui.chats.ChatListViewModel
 import com.teatalk.xs.ui.components.AppBottomBar
 import com.teatalk.xs.ui.components.TabItem
 import com.teatalk.xs.ui.profile.ProfileScreen
+import com.teatalk.xs.ui.providers.ProvidersScreen
+import com.teatalk.xs.ui.providers.ProvidersViewModel
 import com.teatalk.xs.ui.about.AboutScreen
 import com.teatalk.xs.ui.worldbook.WorldBooksScreen
 import com.teatalk.xs.ui.worldbook.WorldBooksViewModel
@@ -130,12 +132,19 @@ fun HomeScreen(
                     ProfileScreen(
                         currentLanguageTag = languageTag,
                         onLanguageChange = onChangeLanguage,
+                        onOpenModelSettings = { navController.navigate(Routes.PROVIDERS) },
                         onOpenWorldBooks = { navController.navigate(Routes.WORLD_BOOKS) },
                         onOpenAbout = { navController.navigate(Routes.ABOUT) },
                     )
                 }
                 composable(Routes.ABOUT) {
                     AboutScreen(onBack = { navController.popBackStack() })
+                }
+                composable(Routes.PROVIDERS) {
+                    ProvidersScreen(
+                        viewModel = viewModel(factory = ProvidersViewModel.factory(app)),
+                        onBack = { navController.popBackStack() },
+                    )
                 }
                 composable(Routes.WORLD_BOOKS) {
                     WorldBooksScreen(
@@ -183,6 +192,7 @@ private object Routes {
     const val CHARACTER_DETAIL = "character/{id}"
     const val CHAT = "chat/{id}"
     const val WORLD_BOOKS = "worldbooks"
+    const val PROVIDERS = "providers"
         const val ABOUT = "about"
 }
 

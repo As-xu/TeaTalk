@@ -6,6 +6,10 @@ import com.teatalk.core.log.RingBufferSink
 import com.teatalk.core.log.TeaTalkLog
 import com.teatalk.xs.BuildConfig
 import com.teatalk.xs.data.db.TeaTalkDatabase
+import com.teatalk.xs.data.model.AppPrefs
+import com.teatalk.xs.data.model.ProviderRepository
+import com.teatalk.xs.data.model.SecretStore
+import com.teatalk.xs.data.net.ModelListClient
 import com.teatalk.xs.log.AndroidLogSink
 import com.teatalk.xs.log.FileLogSink
 import com.teatalk.xs.log.LogSettings
@@ -42,7 +46,7 @@ class AppContainer(context: Context) {
         val started = System.currentTimeMillis()
         TeaTalkLog.i("Db", "db.open", "name" to "teatalk.db", "version" to TeaTalkDatabase.VERSION)
         Room.databaseBuilder(appContext, TeaTalkDatabase::class.java, "teatalk.db")
-            .addMigrations(TeaTalkDatabase.MIGRATION_1_2)
+            .addMigrations(TeaTalkDatabase.MIGRATION_1_2, TeaTalkDatabase.MIGRATION_2_3)
             .build()
             .also {
                 TeaTalkLog.i("Db", "db.ready", "ms" to (System.currentTimeMillis() - started))
@@ -56,4 +60,14 @@ class AppContainer(context: Context) {
     val worldBookRepository: WorldBookRepository by lazy {
         WorldBookRepository(appContext, database.worldBookDao())
     }
+
+    val appPrefs: AppPrefs by lazy { AppPrefs(appContext) }
+
+    val secretStore: SecretStore by lazy { SecretStore(appContext) }
+
+    val providerRepository: ProviderRepository by lazy {
+        ProviderRepository(database.modelProviderDao(), secretStore, appPrefs)
+    }
+
+    val modelListClient: ModelListClient by lazy { ModelListClient() }
 }

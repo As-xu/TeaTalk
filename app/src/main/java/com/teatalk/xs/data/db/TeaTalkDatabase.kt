@@ -7,16 +7,22 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 import com.teatalk.core.log.TeaTalkLog
 
 @Database(
-    entities = [CharacterEntity::class, MessageEntity::class, WorldBookEntity::class],
-    version = 2,
+    entities = [
+        CharacterEntity::class,
+        MessageEntity::class,
+        WorldBookEntity::class,
+        ModelProviderEntity::class,
+    ],
+    version = 3,
     exportSchema = false,
 )
 abstract class TeaTalkDatabase : RoomDatabase() {
     abstract fun characterDao(): CharacterDao
     abstract fun worldBookDao(): WorldBookDao
+    abstract fun modelProviderDao(): ModelProviderDao
 
     companion object {
-        const val VERSION = 2
+        const val VERSION = 3
 
         /**
          * v1（M0）→ v2（D6 卡库）：
@@ -51,6 +57,33 @@ abstract class TeaTalkDatabase : RoomDatabase() {
                     "to" to 2,
                     "ms" to (System.currentTimeMillis() - started),
                 )
+            }
+        }
+
+        /**
+         * v2（D6）→ v3（M1 多 Provider）：
+         * - 新建 `model_providers`（key 不在库里，存 EncryptedSharedPreferences）
+         * - 纯增量，不触碰既有表
+         */
+        val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                val started = System.currentTimeMillis()
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `model_providers` (
+                        `id` TEXT NOT NULL,
+                        `name` TEXT NOT NULL,
+                        `apiFormat` TEXT NOT NULL,
+                        `baseUrl` TEXT NOT NULL,
+                        `defaultModel` TEXT NOT NULL,
+                        `modelsJson` TEXT NOT NULL,
+                        `createdAt` INTEGER NOT NULL,
+                        `lastUsedAt` INTEGER NOT NULL,
+                        PRIMARY KEY(`id`)
+                    )
+                    """.trimIndent(),
+                )
+                TeaTalkLog.i("Db", "db.migrate", "from" to 2, "to" to 3, "ms" to (System.currentTimeMillis() - started))
             }
         }
     }
