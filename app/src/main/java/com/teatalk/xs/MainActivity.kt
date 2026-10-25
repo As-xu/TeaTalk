@@ -15,6 +15,7 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.lifecycleScope
 import com.teatalk.xs.data.ImportOutcome
 import com.teatalk.xs.ui.HomeScreen
+import com.teatalk.xs.ui.theme.SystemBarsAppearance
 import com.teatalk.xs.ui.theme.TeaTalkTheme
 import kotlinx.coroutines.launch
 
@@ -25,13 +26,15 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // M0 固定暗色主题：状态栏/导航栏图标用浅色，透明 scrim 才能透出 App 背景
+        // 跟随系统深浅色：透明 scrim 让 App 背景透到状态栏，图标明暗由 Compose 侧
+        // （TeaTalkTheme 里的 WindowStyleEffect）随主题切换。
         enableEdgeToEdge(
-            statusBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
-            navigationBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
+            statusBarStyle = SystemBarStyle.auto(Color.TRANSPARENT, Color.TRANSPARENT),
+            navigationBarStyle = SystemBarStyle.auto(Color.TRANSPARENT, Color.TRANSPARENT),
         )
         setContent {
             TeaTalkTheme {
+                SystemBarsAppearance(androidx.compose.foundation.isSystemInDarkTheme())
                 HomeScreen(
                     externalMessage = externalMessage,
                     onExternalMessageShown = { externalMessage = null },

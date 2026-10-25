@@ -70,3 +70,12 @@ adb -s emulator-5554 install -r design/design-debug.apk
 - 未做：键盘弹出、长文滚动截断、深色切换按钮（通过 adb 参数或切换面板演示）
 - App 图标仍是占位（「对话气泡+茶」的正式图标待做，M1 前处理）
 - 样张里的素材来自本地真实角色卡，仅本地使用，未入库（`design/src/main/res/drawable-nodpi/` 已入库 6 张，体积约 550KB）
+
+## 7. 定稿记录（2026-10-25，第 2 轮）
+
+用户在第 2 轮检视后拍板（m02249）：
+
+- **配色定稿 A「奶油茶」**（浅色 + 配套暗色）；B/C 两列作废，保留在 `samples/01-3palettes-5screens.png` 里作历史。
+- **QQ 感**、**详情页版式**（封面+渐变+双按钮）、**聊天页版式**（气泡 max 268dp / 14.5sp / 每条消息旁头像）均确认通过。
+- 已按定稿把 `app/` 五屏对齐（不再是 `design/` 里孤立的样张），令牌写成表：`docs/design/tokens.md`。
+- 验收截图：`docs/screenshots/ui-v1/01-chatlist.png` … `06-dark-profile.png`（浅色五屏 + 暗色我的页），设备 AVD `teatalk34`。

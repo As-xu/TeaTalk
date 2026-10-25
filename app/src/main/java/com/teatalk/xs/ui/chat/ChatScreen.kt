@@ -1,46 +1,54 @@
 package com.teatalk.xs.ui.chat
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.Send
-import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.outlined.SentimentSatisfied
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -51,10 +59,14 @@ import com.teatalk.xs.data.CharacterRepository
 import com.teatalk.xs.data.db.CharacterEntity
 import com.teatalk.xs.data.db.MessageEntity
 import com.teatalk.xs.ui.components.CharacterAvatar
+import com.teatalk.xs.ui.components.Hairline
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 
 class ChatViewModel(
     private val repository: CharacterRepository,
@@ -88,8 +100,7 @@ class ChatViewModel(
     }
 }
 
-/** 聊天页骨架：顶栏（返回 + 头像 + 角色名）/ 消息列表 / 输入框。回复仍是本地占位。 */
-@OptIn(ExperimentalMaterial3Api::class)
+/** 聊天页：QQ 风（头像行头 + 左右气泡 + 底部输入条）。回复仍是本地占位。 */
 @Composable
 fun ChatScreen(
     viewModel: ChatViewModel,
@@ -99,145 +110,172 @@ fun ChatScreen(
     val messages by viewModel.messages.collectAsState()
     var input by rememberSaveable { mutableStateOf("") }
     val listState = rememberLazyListState()
+    val cs = MaterialTheme.colorScheme
 
     LaunchedEffect(messages.size) {
         if (messages.isNotEmpty()) listState.scrollToItem(messages.lastIndex)
     }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.Filled.ArrowBack, contentDescription = "返回")
-                    }
-                },
-                title = {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        CharacterAvatar(
-                            avatarPath = character?.avatarPath,
-                            name = character?.name ?: "",
-                            size = 34.dp,
-                            corner = 17.dp,
-                        )
-                        Spacer(Modifier.width(10.dp))
-                        Column(modifier = Modifier.weight(1f, fill = false)) {
-                            Text(
-                                text = character?.name ?: "角色",
-                                style = MaterialTheme.typography.titleMedium,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                            Text(
-                                text = "离线示例模式",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                        }
-                    }
-                },
-            )
-        },
-        bottomBar = {
-            ChatInputBar(
-                value = input,
-                onValueChange = { input = it },
-                onSend = {
-                    // 落库成功后才清空：失败时用户输入不丢
-                    val text = input
-                    viewModel.send(text) { if (input == text) input = "" }
-                },
-            )
-        },
-    ) { padding ->
+    Column(Modifier.fillMaxSize().background(cs.background).statusBarsPadding()) {
+        ChatHeader(character, onBack)
+        Hairline()
         LazyColumn(
             state = listState,
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding),
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
+            modifier = Modifier.weight(1f).fillMaxWidth(),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(
+                start = 14.dp, end = 14.dp, top = 14.dp, bottom = 12.dp,
+            ),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
+            item {
+                Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                    Text(
+                        messages.firstOrNull()?.let { "今天 " + timeOf(it.createdAt) } ?: "开始一段角色扮演",
+                        fontSize = 11.sp,
+                        color = cs.onSurfaceVariant,
+                    )
+                }
+            }
             items(messages, key = { it.id }) { message ->
-                MessageBubble(message)
+                if (message.role == "user") {
+                    UserBubble(message.content)
+                } else {
+                    AssistantBubble(message.content, character)
+                }
+            }
+        }
+
+        // 输入条：+ / 输入框 / 表情 / 发送
+        Column(Modifier.fillMaxWidth().imePadding()) {
+            Hairline()
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .navigationBarsPadding()
+                    .padding(horizontal = 10.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                IconButton(onClick = {}) {
+                    Icon(Icons.Filled.Add, contentDescription = "更多", tint = cs.onSurfaceVariant, modifier = Modifier.size(22.dp))
+                }
+                Row(
+                    Modifier
+                        .weight(1f)
+                        .height(40.dp)
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(cs.surfaceContainerHigh)
+                        .padding(horizontal = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    BasicTextField(
+                        value = input,
+                        onValueChange = { input = it },
+                        modifier = Modifier.weight(1f),
+                        textStyle = TextStyle(fontSize = 14.5.sp, color = cs.onSurface),
+                        cursorBrush = SolidColor(cs.primary),
+                        maxLines = 4,
+                        decorationBox = { inner ->
+                            if (input.isEmpty()) {
+                                Text("说点什么…", fontSize = 14.5.sp, color = cs.onSurfaceVariant)
+                            }
+                            inner()
+                        },
+                    )
+                    Icon(
+                        Icons.Outlined.SentimentSatisfied,
+                        contentDescription = "表情",
+                        tint = cs.onSurfaceVariant,
+                        modifier = Modifier.size(20.dp),
+                    )
+                }
+                Spacer(Modifier.width(8.dp))
+                val canSend = input.isNotBlank()
+                Box(
+                    Modifier
+                        .size(40.dp)
+                        .clip(CircleShape)
+                        .background(if (canSend) cs.primary else cs.surfaceContainerHigh)
+                        .clickable(enabled = canSend) {
+                            val text = input
+                            input = ""
+                            viewModel.send(text)
+                        },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        Icons.AutoMirrored.Filled.Send,
+                        contentDescription = "发送",
+                        tint = if (canSend) cs.onPrimary else cs.onSurfaceVariant,
+                        modifier = Modifier.size(20.dp),
+                    )
+                }
             }
         }
     }
 }
 
 @Composable
-private fun MessageBubble(message: MessageEntity) {
-    val isUser = message.role == "user"
-    val bubbleColor = if (isUser) {
-        MaterialTheme.colorScheme.primaryContainer
-    } else {
-        MaterialTheme.colorScheme.surfaceContainerHigh
-    }
-    Box(
-        modifier = Modifier.fillMaxWidth(),
-        contentAlignment = if (isUser) Alignment.CenterEnd else Alignment.CenterStart,
+private fun ChatHeader(character: CharacterEntity?, onBack: () -> Unit) {
+    val cs = MaterialTheme.colorScheme
+    Row(
+        Modifier.fillMaxWidth().padding(start = 4.dp, end = 4.dp, top = 6.dp, bottom = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        BoxWithConstraints {
-            Surface(
-                color = bubbleColor,
-                shape = RoundedCornerShape(
-                    topStart = 18.dp,
-                    topEnd = 18.dp,
-                    bottomStart = if (isUser) 18.dp else 4.dp,
-                    bottomEnd = if (isUser) 4.dp else 18.dp,
-                ),
-                modifier = Modifier.widthIn(max = maxWidth * 0.82f),
-            ) {
-                Text(
-                    text = message.content,
-                    style = MaterialTheme.typography.bodyMedium,
-                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-                )
-            }
+        IconButton(onClick = onBack) {
+            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回", tint = cs.onBackground)
+        }
+        CharacterAvatar(avatarPath = character?.avatarPath, name = character?.name ?: "", size = 36.dp, corner = 12.dp)
+        Spacer(Modifier.width(10.dp))
+        Column(Modifier.weight(1f)) {
+            Text(
+                character?.name ?: "角色",
+                fontSize = 15.5.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = cs.onBackground,
+                maxLines = 1,
+            )
+            Text("在线 · 角色扮演模式", fontSize = 11.sp, color = cs.onSurfaceVariant)
+        }
+        IconButton(onClick = {}) {
+            Icon(Icons.Filled.MoreVert, contentDescription = "更多", tint = cs.onSurfaceVariant)
         }
     }
 }
 
 @Composable
-private fun ChatInputBar(
-    value: String,
-    onValueChange: (String) -> Unit,
-    onSend: () -> Unit,
-) {
-    Surface(color = MaterialTheme.colorScheme.surfaceContainer) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .navigationBarsPadding()
-                .imePadding()
-                .padding(horizontal = 12.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.Bottom,
+private fun AssistantBubble(text: String, character: CharacterEntity?) {
+    val cs = MaterialTheme.colorScheme
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Start, verticalAlignment = Alignment.Top) {
+        CharacterAvatar(avatarPath = character?.avatarPath, name = character?.name ?: "", size = 32.dp, corner = 10.dp)
+        Spacer(Modifier.width(8.dp))
+        Box(
+            Modifier
+                .widthIn(max = 268.dp)
+                .clip(RoundedCornerShape(16.dp, 16.dp, 16.dp, 6.dp))
+                .background(cs.surfaceContainerHigh)
+                .padding(horizontal = 13.dp, vertical = 10.dp),
         ) {
-            OutlinedTextField(
-                value = value,
-                onValueChange = onValueChange,
-                modifier = Modifier.weight(1f),
-                placeholder = { Text("说点什么…") },
-                maxLines = 4,
-                shape = RoundedCornerShape(22.dp),
-            )
-            Spacer(Modifier.width(6.dp))
-            IconButton(
-                onClick = onSend,
-                enabled = value.isNotBlank(),
-            ) {
-                Icon(
-                    Icons.Filled.Send,
-                    contentDescription = "发送",
-                    tint = if (value.isNotBlank()) {
-                        MaterialTheme.colorScheme.primary
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    },
-                )
-            }
+            Text(text, fontSize = 14.5.sp, lineHeight = 22.sp, color = cs.onSurface)
         }
     }
 }
+
+@Composable
+private fun UserBubble(text: String) {
+    val cs = MaterialTheme.colorScheme
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+        Box(
+            Modifier
+                .widthIn(max = 268.dp)
+                .clip(RoundedCornerShape(16.dp, 16.dp, 6.dp, 16.dp))
+                .background(cs.primary)
+                .padding(horizontal = 13.dp, vertical = 10.dp),
+        ) {
+            Text(text, fontSize = 14.5.sp, lineHeight = 22.sp, color = cs.onPrimary)
+        }
+    }
+}
+
+private fun timeOf(millis: Long): String =
+    Instant.ofEpochMilli(millis).atZone(ZoneId.systemDefault())
+        .format(DateTimeFormatter.ofPattern("HH:mm"))

@@ -1,14 +1,14 @@
 package com.teatalk.xs.ui
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.consumeWindowInsets
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Icon
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -17,7 +17,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.painterResource
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavType
@@ -36,15 +35,15 @@ import com.teatalk.xs.ui.chat.ChatScreen
 import com.teatalk.xs.ui.chat.ChatViewModel
 import com.teatalk.xs.ui.chats.ChatListScreen
 import com.teatalk.xs.ui.chats.ChatListViewModel
+import com.teatalk.xs.ui.components.AppBottomBar
+import com.teatalk.xs.ui.components.TabItem
 import com.teatalk.xs.ui.profile.ProfileScreen
 
 /**
  * 导航骨架：底部三 Tab（聊天/角色/我的）+ 两级全屏页面（角色详情 / 聊天）。
  *
  * 详情页与聊天页不显示底部栏（对齐 QQ/微信的"进入对话即全屏"手感）。
- *
- * 首屏目的地是动态的：有过会话直接进「聊天」，新用户进「角色」（对齐方案 §3.1 的骨架转向）；
- * 在查询完成前只画空背景，避免空态文案闪一下。
+ * 首屏目的地动态：有过会话直接进「聊天」，新用户进「角色」。
  */
 @Composable
 fun HomeScreen(
@@ -81,78 +80,70 @@ fun HomeScreen(
     }
 
     Scaffold(
+        containerColor = MaterialTheme.colorScheme.background,
         snackbarHost = { SnackbarHost(snackbarHostState) },
         bottomBar = {
             if (showBottomBar) {
-                NavigationBar {
-                    TABS.forEach { tab ->
-                        NavigationBarItem(
-                            selected = currentRoute == tab.route,
-                            onClick = { switchTab(tab.route) },
-                            icon = {
-                                Icon(
-                                    painter = painterResource(tab.iconRes),
-                                    contentDescription = tab.label,
-                                )
-                            },
-                            label = { Text(tab.label) },
-                        )
-                    }
-                }
+                AppBottomBar(
+                    tabs = TABS,
+                    currentKey = currentRoute ?: start,
+                    onSelect = { key -> if (key != currentRoute) switchTab(key) },
+                )
             }
         },
     ) { innerPadding ->
-        NavHost(
-            navController = navController,
-            startDestination = start,
-            // 外层已处理窗口内边距：消费掉，内层 Scaffold 不再重复加一次
-            modifier = Modifier
+        Box(
+            Modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background)
                 .padding(innerPadding)
                 .consumeWindowInsets(innerPadding),
         ) {
-            composable(Routes.CHATS) {
-                ChatListScreen(
-                    viewModel = viewModel(factory = ChatListViewModel.factory(app)),
-                    onOpenChat = { id -> navController.navigate("chat/$id") { launchSingleTop = true } },
-                    onGoCharacters = { switchTab(Routes.CHARACTERS) },
-                )
-            }
-            composable(Routes.CHARACTERS) {
-                CharactersScreen(
-                    viewModel = viewModel(factory = CharactersViewModel.factory(app)),
-                    onOpen = { id -> navController.navigate("character/$id") },
-                )
-            }
-            composable(Routes.PROFILE) {
-                ProfileScreen()
-            }
+            NavHost(navController = navController, startDestination = start) {
+                composable(Routes.CHATS) {
+                    ChatListScreen(
+                        viewModel = viewModel(factory = ChatListViewModel.factory(app)),
+                        onOpenChat = { id -> navController.navigate("chat/$id") { launchSingleTop = true } },
+                        onGoCharacters = { switchTab(Routes.CHARACTERS) },
+                    )
+                }
+                composable(Routes.CHARACTERS) {
+                    CharactersScreen(
+                        viewModel = viewModel(factory = CharactersViewModel.factory(app)),
+                        onOpen = { id -> navController.navigate("character/$id") },
+                    )
+                }
+                composable(Routes.PROFILE) {
+                    ProfileScreen()
+                }
 
-            composable(
-                route = Routes.CHARACTER_DETAIL,
-                arguments = listOf(navArgument(ARG_ID) { type = NavType.LongType }),
-            ) { entry ->
-                val id = entry.arguments?.getLong(ARG_ID) ?: 0L
-                CharacterDetailScreen(
-                    viewModel = viewModel(
-                        key = "detail-$id",
-                        factory = CharacterDetailViewModel.factory(app, id),
-                    ),
-                    onBack = { navController.popBackStack() },
-                    onStartChat = { navController.navigate("chat/$id") { launchSingleTop = true } },
-                )
-            }
-            composable(
-                route = Routes.CHAT,
-                arguments = listOf(navArgument(ARG_ID) { type = NavType.LongType }),
-            ) { entry ->
-                val id = entry.arguments?.getLong(ARG_ID) ?: 0L
-                ChatScreen(
-                    viewModel = viewModel(
-                        key = "chat-$id",
-                        factory = ChatViewModel.factory(app, id),
-                    ),
-                    onBack = { navController.popBackStack() },
-                )
+                composable(
+                    route = Routes.CHARACTER_DETAIL,
+                    arguments = listOf(navArgument(ARG_ID) { type = NavType.LongType }),
+                ) { entry ->
+                    val id = entry.arguments?.getLong(ARG_ID) ?: 0L
+                    CharacterDetailScreen(
+                        viewModel = viewModel(
+                            key = "detail-$id",
+                            factory = CharacterDetailViewModel.factory(app, id),
+                        ),
+                        onBack = { navController.popBackStack() },
+                        onStartChat = { navController.navigate("chat/$id") { launchSingleTop = true } },
+                    )
+                }
+                composable(
+                    route = Routes.CHAT,
+                    arguments = listOf(navArgument(ARG_ID) { type = NavType.LongType }),
+                ) { entry ->
+                    val id = entry.arguments?.getLong(ARG_ID) ?: 0L
+                    ChatScreen(
+                        viewModel = viewModel(
+                            key = "chat-$id",
+                            factory = ChatViewModel.factory(app, id),
+                        ),
+                        onBack = { navController.popBackStack() },
+                    )
+                }
             }
         }
     }
@@ -170,10 +161,8 @@ private const val ARG_ID = "id"
 
 private val TAB_ROUTES = setOf(Routes.CHATS, Routes.CHARACTERS, Routes.PROFILE)
 
-private data class Tab(val route: String, val label: String, val iconRes: Int)
-
 private val TABS = listOf(
-    Tab(Routes.CHATS, "聊天", R.drawable.ic_chat_bubble),
-    Tab(Routes.CHARACTERS, "角色", R.drawable.ic_people),
-    Tab(Routes.PROFILE, "我的", R.drawable.ic_person),
+    TabItem(Routes.CHATS, "聊天", R.drawable.ic_chat_bubble),
+    TabItem(Routes.CHARACTERS, "角色", R.drawable.ic_people),
+    TabItem(Routes.PROFILE, "我的", R.drawable.ic_person),
 )

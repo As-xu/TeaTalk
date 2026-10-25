@@ -1,40 +1,34 @@
 package com.teatalk.xs.ui.character
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -43,26 +37,33 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.ViewModelProvider
-import androidx.lifecycle.viewModelScope
-import androidx.lifecycle.viewmodel.initializer
-import androidx.lifecycle.viewmodel.viewModelFactory
-import com.teatalk.core.worldinfo.WorldInfoEntry
+import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
 import com.teatalk.xs.TeaTalkApp
 import com.teatalk.xs.data.CardView
 import com.teatalk.xs.data.CardViewParser
 import com.teatalk.xs.data.CharacterRepository
 import com.teatalk.xs.data.db.CharacterEntity
-import com.teatalk.xs.ui.components.CharacterAvatar
+import com.teatalk.xs.ui.components.PillTag
+import java.io.File
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.viewModelScope
+import androidx.lifecycle.viewmodel.initializer
+import androidx.lifecycle.viewmodel.viewModelFactory
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.SharingStarted
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 
 data class CharacterDetailState(
     val character: CharacterEntity? = null,
@@ -100,8 +101,8 @@ class CharacterDetailViewModel(
     }
 }
 
-/** 角色详情页：头像 + 基本信息 + 卡片正文分段 + 世界书概览。 */
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+/** 角色详情：大封面 + 简介/开场白/设定分区（QQ 资料卡风格）。 */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CharacterDetailScreen(
     viewModel: CharacterDetailViewModel,
@@ -111,186 +112,268 @@ fun CharacterDetailScreen(
     val state by viewModel.state.collectAsState()
     var showWorldBook by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
+    val character = state.character
+    val view = state.view
+    val cs = MaterialTheme.colorScheme
+    val context = LocalContext.current
+    val avatarFile = character?.avatarPath?.let { File(context.filesDir, it) }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("角色详情") },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.Filled.ArrowBack, contentDescription = "返回")
-                    }
-                },
-                actions = {
-                    IconButton(onClick = { confirmDelete = true }) {
-                        Icon(Icons.Filled.Delete, contentDescription = "删除角色")
-                    }
-                },
-            )
-        },
-    ) { padding ->
-        val character = state.character
-        if (character == null) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding),
-                contentAlignment = Alignment.Center,
-            ) { Text("角色不存在或已删除") }
-            return@Scaffold
-        }
-        val view = state.view
-        val sections = listOf(
-            "设定" to view.description,
-            "人设" to view.personality,
-            "场景" to view.scenario,
-            "开场白" to view.firstMes,
-            "示例对话" to view.mesExample,
-            "系统提示" to view.systemPrompt,
-            "创作者注释" to view.creatorNotes,
-        ).filter { it.second.isNotBlank() }
-
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding),
-            contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 40.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
-        ) {
-            item {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    CharacterAvatar(
-                        avatarPath = character.avatarPath,
-                        name = view.name.ifBlank { character.name },
-                        size = 84.dp,
-                        corner = 24.dp,
+    LazyColumn(Modifier.fillMaxSize().background(cs.background)) {
+        item {
+            Box(Modifier.fillMaxWidth().height(380.dp).background(cs.surfaceContainerHigh)) {
+                if (avatarFile != null && avatarFile.exists()) {
+                    AsyncImage(
+                        model = avatarFile,
+                        contentDescription = character?.name,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize(),
                     )
-                    Spacer(Modifier.width(16.dp))
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = view.name.ifBlank { character.name },
-                            style = MaterialTheme.typography.headlineSmall,
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                        val byline = listOfNotNull(
-                            view.creator.takeIf { it.isNotBlank() }?.let { "作者 $it" },
-                            view.version.takeIf { it.isNotBlank() }?.let { "v$it" },
-                            character.cardSource,
-                        ).joinToString(" · ")
-                        Text(
-                            text = byline,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
+                }
+                // 底部渐变压暗，保证名字/标签可读
+                Box(
+                    Modifier.fillMaxSize().background(
+                        Brush.verticalGradient(
+                            0.45f to Color.Transparent,
+                            1f to Color(0xE614100C),
+                        ),
+                    ),
+                )
+                // 顶部压暗一层，保证状态栏图标在亮色封面上也看得清
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .height(110.dp)
+                        .align(Alignment.TopCenter)
+                        .background(
+                            Brush.verticalGradient(
+                                0f to Color.Black.copy(alpha = 0.42f),
+                                1f to Color.Transparent,
+                            ),
+                        ),
+                )
+                Row(
+                    Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 6.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    HeroIconButton(onClick = onBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回", tint = Color.White)
+                    }
+                    Spacer(Modifier.weight(1f))
+                    HeroIconButton(onClick = { confirmDelete = true }) {
+                        Icon(Icons.Filled.Delete, contentDescription = "删除角色", tint = Color.White)
                     }
                 }
-            }
-
-            if (view.tags.isNotEmpty()) {
-                item {
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        view.tags.take(12).forEach { tag ->
-                            Surface(
-                                shape = RoundedCornerShape(50),
-                                color = MaterialTheme.colorScheme.secondaryContainer,
-                            ) {
-                                Text(
-                                    text = tag,
-                                    style = MaterialTheme.typography.labelMedium,
-                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                                )
+                Column(Modifier.align(Alignment.BottomStart).padding(start = 20.dp, end = 20.dp, bottom = 18.dp)) {
+                    Text(
+                        character?.name ?: view.name.ifBlank { "角色" },
+                        fontSize = 26.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White,
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        buildString {
+                            if (view.creator.isNotBlank()) append("作者 ${view.creator} · ")
+                            if (view.version.isNotBlank()) append("v${view.version} · ")
+                            append(character?.cardSource ?: "")
+                        }.trimEnd(' ', '·'),
+                        fontSize = 12.sp,
+                        color = Color.White.copy(alpha = 0.82f),
+                    )
+                    if (view.tags.isNotEmpty()) {
+                        Spacer(Modifier.height(8.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            view.tags.take(4).forEach { tag ->
+                                Box(
+                                    Modifier
+                                        .clip(RoundedCornerShape(6.dp))
+                                        .background(Color.White.copy(alpha = 0.16f))
+                                        .padding(horizontal = 8.dp, vertical = 3.dp),
+                                ) {
+                                    Text(tag, fontSize = 11.sp, color = Color.White)
+                                }
                             }
                         }
                     }
                 }
             }
+        }
 
-            item {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+        item {
+            Row(
+                Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(top = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Box(
+                    Modifier
+                        .weight(1f)
+                        .height(46.dp)
+                        .clip(RoundedCornerShape(23.dp))
+                        .background(cs.primary)
+                        .clickable(onClick = onStartChat),
+                    contentAlignment = Alignment.Center,
                 ) {
-                    Button(onClick = onStartChat, modifier = Modifier.weight(1f)) {
-                        Text("开始聊天")
-                    }
-                    OutlinedButton(
-                        onClick = { showWorldBook = true },
-                        enabled = view.worldBook.isNotEmpty(),
-                    ) {
-                        Text("世界书 ${view.worldBook.size}")
-                    }
-                }
-            }
-
-            items(sections, key = { it.first }) { (title, body) ->
-                Column {
                     Text(
-                        text = title,
-                        style = MaterialTheme.typography.titleSmall,
-                        color = MaterialTheme.colorScheme.primary,
+                        "开始聊天",
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = cs.onPrimary,
                     )
-                    Spacer(Modifier.height(4.dp))
-                    Text(text = body, style = MaterialTheme.typography.bodyMedium)
-                    Spacer(Modifier.height(10.dp))
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                 }
+                OutlinedPill(
+                    text = "世界书 ${view.worldBook.size}",
+                    enabled = view.worldBook.isNotEmpty(),
+                    onClick = { showWorldBook = true },
+                )
+            }
+        }
+
+        item {
+            Column(Modifier.padding(horizontal = 20.dp).padding(top = 6.dp)) {
+                if (view.description.isNotBlank()) {
+                    SectionCard("简介") { BodyText(view.description) }
+                }
+                if (view.firstMes.isNotBlank()) {
+                    SectionCard("开场白") { BodyText(view.firstMes) }
+                }
+                if (view.personality.isNotBlank() || view.scenario.isNotBlank()) {
+                    SectionCard("设定") {
+                        if (view.personality.isNotBlank()) {
+                            FieldLine("性格", view.personality)
+                        }
+                        if (view.scenario.isNotBlank()) {
+                            FieldLine("场景", view.scenario)
+                        }
+                    }
+                }
+                if (view.creatorNotes.isNotBlank()) {
+                    SectionCard("创作者注释") { BodyText(view.creatorNotes) }
+                }
+                Spacer(Modifier.height(28.dp))
             }
         }
     }
 
     if (showWorldBook) {
-        WorldBookDialog(entries = state.view.worldBook, onDismiss = { showWorldBook = false })
+        AlertDialog(
+            onDismissRequest = { showWorldBook = false },
+            title = { Text("世界书（${view.worldBook.size} 条）") },
+            text = {
+                LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    itemsIndexed(view.worldBook) { _, entry ->
+                        Column {
+                            Text(
+                                entry.comment.ifBlank { entry.keys.joinToString("、") },
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = cs.onSurface,
+                            )
+                            if (entry.keys.isNotEmpty()) {
+                                Text(
+                                    entry.keys.joinToString("、"),
+                                    fontSize = 11.sp,
+                                    color = cs.onSurfaceVariant,
+                                )
+                            }
+                            Text(
+                                entry.content.take(120),
+                                fontSize = 12.sp,
+                                color = cs.onSurfaceVariant.copy(alpha = 0.9f),
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = { TextButton(onClick = { showWorldBook = false }) { Text("关闭") } },
+        )
     }
 
     if (confirmDelete) {
         AlertDialog(
             onDismissRequest = { confirmDelete = false },
             title = { Text("删除角色卡") },
-            text = { Text("确定删除「${state.character?.name ?: ""}」？聊天记录也会一并删除。") },
+            text = { Text("确定删除「${character?.name}」？聊天记录也会一并删除。") },
             confirmButton = {
-                TextButton(
-                    onClick = {
-                        confirmDelete = false
-                        viewModel.delete { onBack() }
-                    },
-                    colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),
-                ) { Text("删除") }
+                TextButton(onClick = {
+                    confirmDelete = false
+                    viewModel.delete(onDeleted = onBack)
+                }) { Text("删除") }
             },
-            dismissButton = {
-                TextButton(onClick = { confirmDelete = false }) { Text("取消") }
-            },
+            dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("取消") } },
         )
     }
 }
 
 @Composable
-private fun WorldBookDialog(entries: List<WorldInfoEntry>, onDismiss: () -> Unit) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("世界书（${entries.size} 条）") },
-        text = {
-            LazyColumn(modifier = Modifier.heightIn(max = 420.dp)) {
-                items(entries, key = { it.uid }) { entry ->
-                    Column(modifier = Modifier.padding(vertical = 6.dp)) {
-                        Text(
-                            text = entry.comment.ifBlank { entry.keys.joinToString("、").ifBlank { "（常量）" } },
-                            style = MaterialTheme.typography.titleSmall,
-                        )
-                        Text(
-                            text = entry.content,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 3,
-                        )
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = onDismiss) { Text("关闭") }
-        },
+private fun HeroIconButton(onClick: () -> Unit, content: @Composable () -> Unit) {
+    Box(
+        Modifier
+            .size(36.dp)
+            .clip(CircleShape)
+            .background(Color.Black.copy(alpha = 0.28f)),
+        contentAlignment = Alignment.Center,
+    ) {
+        IconButton(onClick = onClick) { content() }
+    }
+}
+
+@Composable
+private fun OutlinedPill(text: String, enabled: Boolean, onClick: () -> Unit) {
+    val cs = MaterialTheme.colorScheme
+    Box(
+        Modifier
+            .height(46.dp)
+            .clip(RoundedCornerShape(23.dp))
+            .border(1.dp, cs.outlineVariant, RoundedCornerShape(23.dp))
+            .clickable(enabled = enabled, onClick = onClick)
+            .padding(horizontal = 18.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text,
+            fontSize = 14.sp,
+            color = if (enabled) cs.onSurfaceVariant else cs.onSurfaceVariant.copy(alpha = 0.45f),
+        )
+    }
+}
+
+@Composable
+private fun SectionCard(title: String, content: @Composable () -> Unit) {
+    val cs = MaterialTheme.colorScheme
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .padding(top = 12.dp)
+            .clip(RoundedCornerShape(16.dp))
+            .background(cs.surface)
+            .padding(16.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.width(3.dp).height(13.dp).clip(RoundedCornerShape(2.dp)).background(cs.primary))
+            Spacer(Modifier.width(8.dp))
+            Text(title, fontSize = 13.5.sp, fontWeight = FontWeight.SemiBold, color = cs.onBackground)
+        }
+        Spacer(Modifier.height(8.dp))
+        content()
+    }
+}
+
+@Composable
+private fun BodyText(text: String) {
+    Text(
+        text,
+        fontSize = 13.5.sp,
+        lineHeight = 21.sp,
+        color = MaterialTheme.colorScheme.onSurface,
     )
 }
+
+@Composable
+private fun FieldLine(label: String, value: String) {
+    val cs = MaterialTheme.colorScheme
+    Row(Modifier.padding(top = 2.dp)) {
+        Text("$label：", fontSize = 13.sp, color = cs.onSurfaceVariant)
+        Text(value, fontSize = 13.5.sp, color = cs.onSurface, modifier = Modifier.weight(1f))
+    }
+}
+
