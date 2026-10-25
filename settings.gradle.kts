@@ -21,3 +21,5 @@ dependencyResolutionManagement {
 rootProject.name = "TeaTalk"
 include(":app")
 include(":core")
+// UX 设计样张（独立可安装 App，仅用于评审配色与版式，不参与正式包）
+include(":design")
