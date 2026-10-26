@@ -76,3 +76,8 @@ D:\Project\TeaTalkApp\build.sh
 3. **KDoc 注释里不能出现 `*/`**（例如写 `*/*` 的 MIME 通配），会提前闭合注释导致编译失败。
 4. **沙箱/杀软**：本机 DSH 早期在 `workspace-write` 下会拦 aapt2 写文件；现在 `danger-full-access`。AS 里若出现 "Access is denied" 写 build 目录，先排除杀软对 `%TEMP%` 的拦截。
 5. **`img` 下载/截图**：测试卡、截图放在 `.tools/`（不入库）；仓库里的截图在 `docs/screenshots/`。
+
+6. **阿里云镜像 502 会拖垮整次构建**：`maven.aliyun.com/repository/public` 偶发对个别构件（本次是 `com.google.devtools.ksp.gradle.plugin`）返回 502，Gradle 会因此禁用整个仓库并直接 BUILD FAILED（症状是 `:design` 一堆任务同时失败、根因只有一条 `Received status code 502`）。
+   - 已修：`settings.gradle.kts` 改为**官方源优先**（google / mavenCentral / gradlePluginPortal），阿里云镜像只做兜底并加 `content` 过滤；
+   - 同时把 `ksp` 插件从不必要的根工程 `plugins {}` 移除（只在 `:app` 声明），单独构建 `:design` 不再解析 KSP。
+7. **Android Studio 构建请用 Gradle wrapper**：`gradle/wrapper/gradle-wrapper.properties` 指向腾讯镜像 8.9；AS 里 `Settings → Build Tools → Gradle` 选 “Use Gradle from: gradle-wrapper.properties”，Gradle JDK 选 17+（本机用 21）。
