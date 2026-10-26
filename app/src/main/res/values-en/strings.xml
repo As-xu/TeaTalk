@@ -79,7 +79,7 @@
     <string name="profile_persona_name">Traveler</string>
     <string name="profile_persona_bio">A cup of tea for late-night reading</string>
     <string name="profile_model">Model &amp; API</string>
-    <string name="profile_model_sub">Not configured · M1</string>
+    <string name="profile_model_sub">Multiple OpenAI-compatible sources</string>
     <string name="profile_theme">Theme</string>
     <string name="profile_theme_sub">System · Cream</string>
     <string name="profile_import">Import character card</string>

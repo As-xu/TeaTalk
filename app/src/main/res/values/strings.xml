@@ -87,7 +87,7 @@
     <string name="profile_persona_name">旅人</string>
     <string name="profile_persona_bio">在深夜读会客一样一杯茶</string>
     <string name="profile_model">模型与接口</string>
-    <string name="profile_model_sub">未配置 · M1 接入</string>
+    <string name="profile_model_sub">多家 OpenAI 兼容服务 · 随时切换</string>
     <string name="profile_theme">主题与明暗</string>
     <string name="profile_theme_sub">跟随系统 · 奶油茶</string>
     <string name="profile_import">导入角色卡</string>
