@@ -87,7 +87,7 @@
     <string name="profile_backup">Backup &amp; export</string>
     <string name="profile_backup_sub">Characters &amp; chats</string>
     <string name="profile_about">About TeaTalk</string>
-    <string name="profile_about_sub">0.2.0 · AGPL-3.0 · Stored on device</string>
+    <string name="profile_about_sub">v%1$s · AGPL-3.0 · Stored on device</string>
     <string name="profile_footnote">Uninstalling removes all local data. Export arrives in M1.</string>
     <string name="profile_language">Language</string>
     <string name="profile_language_dialog_title">Choose language</string>
@@ -207,7 +207,7 @@
     <string name="chat_error_rate_limited">Too many requests or quota exhausted (429)</string>
     <string name="chat_error_timeout">Request timed out. Try again</string>
     <string name="chat_error_network">Network unavailable. Check your connection</string>
-    <string name="chat_error_http">Server returned an error. Try again later</string>
+    <string name="chat_error_http">Server returned an error (HTTP %1$d). Try again later</string>
     <string name="chat_error_bad_response">The model returned no content. Try again</string>
     <string name="chat_stop">Stop</string>
     <string name="chat_stopped">Generation stopped</string>

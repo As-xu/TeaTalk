@@ -5,6 +5,7 @@ import com.teatalk.xs.data.model.ProviderRepository
 import com.teatalk.xs.data.net.ChatClient
 import com.teatalk.xs.data.net.ChatError
 import com.teatalk.xs.data.net.ChatEvent
+import com.teatalk.xs.data.net.label
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
@@ -101,7 +102,7 @@ class ChatEngine(
                 }
 
                 is ChatEvent.Failed -> {
-                    TeaTalkLog.w("Chat", "send.fail", "error" to event.error.name)
+                    TeaTalkLog.w("Chat", "send.fail", "error" to event.error.label)
                     emit(event)
                 }
             }

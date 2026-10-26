@@ -95,7 +95,7 @@
     <string name="profile_backup">备份与导出</string>
     <string name="profile_backup_sub">角色卡与聊天记录</string>
     <string name="profile_about">关于 TeaTalk</string>
-    <string name="profile_about_sub">0.2.0 · AGPL-3.0 · 数据只存本机</string>
+    <string name="profile_about_sub">v%1$s · AGPL-3.0 · 数据只存本机</string>
     <string name="profile_footnote">卸载 App 会删除全部本机数据，导出功能在 M1 提供。</string>
     <string name="profile_language">语言</string>
     <string name="profile_language_dialog_title">选择语言</string>
@@ -216,7 +216,7 @@
     <string name="chat_error_rate_limited">请求太频繁或额度用尽（429）</string>
     <string name="chat_error_timeout">网络超时，请重试</string>
     <string name="chat_error_network">网络不可用，请检查连接</string>
-    <string name="chat_error_http">服务端返回错误，请稍后重试</string>
+    <string name="chat_error_http">服务端返回错误（HTTP %1$d），请稍后重试</string>
     <string name="chat_error_bad_response">模型没有返回内容，请重试</string>
     <string name="chat_stop">停止</string>
     <string name="chat_stopped">已停止生成</string>

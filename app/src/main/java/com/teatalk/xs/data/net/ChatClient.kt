@@ -27,15 +27,34 @@ sealed interface ChatEvent {
     data class Failed(val error: ChatError, val detail: String? = null) : ChatEvent
 }
 
-enum class ChatError {
-    NO_PROVIDER,
-    UNAUTHORIZED,
-    RATE_LIMITED,
-    HTTP,
-    TIMEOUT,
-    NETWORK,
-    BAD_RESPONSE,
+sealed interface ChatError {
+    data object NO_PROVIDER : ChatError
+
+    data object UNAUTHORIZED : ChatError
+
+    data object RATE_LIMITED : ChatError
+
+    /** 其它 4xx/5xx：带状态码，便于用户投诉/排查。 */
+    data class HTTP(val code: Int) : ChatError
+
+    data object TIMEOUT : ChatError
+
+    data object NETWORK : ChatError
+
+    data object BAD_RESPONSE : ChatError
 }
+
+/** 日志用的稳定短名（HTTP 带状态码，便于 grep）。 */
+val ChatError.label: String
+    get() = when (this) {
+        ChatError.NO_PROVIDER -> "NO_PROVIDER"
+        ChatError.UNAUTHORIZED -> "UNAUTHORIZED"
+        ChatError.RATE_LIMITED -> "RATE_LIMITED"
+        ChatError.TIMEOUT -> "TIMEOUT"
+        ChatError.NETWORK -> "NETWORK"
+        ChatError.BAD_RESPONSE -> "BAD_RESPONSE"
+        is ChatError.HTTP -> "HTTP_${code}"
+    }
 
 /**
  * OpenAI 兼容的 `/chat/completions` 流式客户端（SSE）。
@@ -93,7 +112,7 @@ class ChatClient(
                     val error = when (response.code) {
                         401, 403 -> ChatError.UNAUTHORIZED
                         429 -> ChatError.RATE_LIMITED
-                        else -> ChatError.HTTP
+                        else -> ChatError.HTTP(response.code)
                     }
                     TeaTalkLog.w(
                         "Net",
@@ -164,7 +183,7 @@ class ChatClient(
                 "Net",
                 "chat.req.fail",
                 "host" to host,
-                "kind" to kind.name,
+                "kind" to kind.label,
                 "ms" to (System.currentTimeMillis() - started),
             )
             emit(ChatEvent.Failed(kind, e.message))

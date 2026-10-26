@@ -130,7 +130,13 @@ fun ProfileScreen(
         Spacer(Modifier.height(12.dp))
         SettingsGroup {
             SettingRow(Icons.Filled.SystemUpdateAlt, R.string.profile_backup, R.string.profile_backup_sub, {})
-            SettingRow(Icons.Filled.Info, R.string.profile_about, R.string.profile_about_sub, onOpenAbout)
+            SettingRow(
+                Icons.Filled.Info,
+                R.string.profile_about,
+                R.string.profile_about_sub,
+                onOpenAbout,
+                subtitleArgs = listOf(com.teatalk.xs.BuildConfig.VERSION_NAME),
+            )
         }
 
         Spacer(Modifier.height(16.dp))
@@ -208,6 +214,7 @@ private fun SettingRow(
     subtitleRes: Int?,
     onClick: () -> Unit,
     trailing: String? = null,
+    subtitleArgs: List<Any> = emptyList(),
 ) {
     val cs = MaterialTheme.colorScheme
     Column(Modifier.clickable(onClick = onClick)) {
@@ -226,7 +233,8 @@ private fun SettingRow(
                 Text(stringResource(titleRes), fontSize = 14.5.sp, color = cs.onBackground)
                 Spacer(Modifier.height(2.dp))
                 Text(
-                    subtitleRes?.let { stringResource(it) } ?: trailing.orEmpty(),
+                    subtitleRes?.let { stringResource(it, *subtitleArgs.toTypedArray()) }
+                        ?: trailing.orEmpty(),
                     fontSize = 11.5.sp,
                     color = cs.onSurfaceVariant,
                     maxLines = 1,
