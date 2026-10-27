@@ -7,6 +7,9 @@
     <string name="back">Back</string>
     <string name="delete">Delete</string>
     <string name="cancel">Cancel</string>
+    <string name="chat_preview_title">Message</string>
+    <string name="common_copy">Copy</string>
+    <string name="common_copied">Copied</string>
     <string name="close">Close</string>
     <string name="more">More</string>
     <string name="send">Send</string>
@@ -203,6 +206,9 @@
     <string name="toast_provider_activated">Active: %1$s</string>
     <!-- M1 streaming chat -->
     <string name="chat_error_no_provider">No model configured. Add one in Me → Model &amp; API</string>
+    <string name="chat_error_no_key">The API key for this provider is missing. Re-enter it in Me → Model &amp; API</string>
+    <string name="chat_error_no_model">No default model is set for this provider</string>
+    <string name="chat_truncated">Reply hit the length limit and was truncated</string>
     <string name="chat_error_unauthorized">API key is invalid or expired (401)</string>
     <string name="chat_error_rate_limited">Too many requests or quota exhausted (429)</string>
     <string name="chat_error_timeout">Request timed out. Try again</string>

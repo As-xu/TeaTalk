@@ -2,6 +2,7 @@ package com.teatalk.xs.data
 
 import com.teatalk.core.log.TeaTalkLog
 import com.teatalk.xs.data.model.ProviderRepository
+import com.teatalk.xs.data.model.ProviderResolution
 import com.teatalk.xs.data.net.ChatClient
 import com.teatalk.xs.data.net.ChatError
 import com.teatalk.xs.data.net.ChatEvent
@@ -13,10 +14,11 @@ import kotlinx.coroutines.flow.flow
 /**
  * 聊天回复引擎（M1 步骤 2/3 的最小版）。
  *
- * - [reply]：落用户消息后流式生成；
- * - [retry]：直接以当前历史重试（不重复落用户消息）；
- * - 正常结束时落 assistant 消息；被取消时由 UI/VM 决定是否保存半截。
+ * 发送与流式生成分开，是因为「停止后保存半截」必须两次进入：
+ * - [sendUserMessage] 落用户消息（幂等由 UI 的单飞行控制保证）；
+ * - [streamReply] 以当前历史生成，可被 `retry`/`stop` 再次进入。
  *
+ * [reply] 是两者的组合，保留给只关心「一次完整往返」的调用方。
  * prompt 预算/世界书注入是 M2 的事，这里先给「能真聊」的最小形状。
  */
 class ChatEngine(
@@ -25,19 +27,34 @@ class ChatEngine(
     private val client: ChatClient,
 ) {
 
-    fun reply(characterId: Long, userText: String): Flow<ChatEvent> = flow {
+    /** 落用户消息；返回 false 表示内容为空或角色不存在，调用方不应继续生成。 */
+    suspend fun sendUserMessage(characterId: Long, userText: String): Boolean {
         val text = userText.trim()
-        if (text.isEmpty()) return@flow
-        if (characters.find(characterId) == null) {
-            emit(ChatEvent.Failed(ChatError.BAD_RESPONSE, "character not found"))
-            return@flow
-        }
+        if (text.isEmpty()) return false
+        if (characters.find(characterId) == null) return false
         TeaTalkLog.i("Chat", "send.start", "characterId" to characterId, "chars" to text.length)
         characters.addMessage(characterId, ROLE_USER, text)
-        emitAll(stream(characterId))
+        return true
     }
 
-    fun retry(characterId: Long): Flow<ChatEvent> = flow {
+    /**
+     * 发送前的可发送性检查（不落库）。
+     *
+     * 为什么要单独一步：用户消息一旦先落库，provider 没配/没模型时就会留下一条
+     * 「自言自语」的孤立用户消息。这里先判一次，失败时不产生任何消息。
+     */
+    suspend fun preflightError(): ChatError? = when (val resolved = providers.resolve()) {
+        is ProviderResolution.Ok ->
+            if (resolved.provider.model.trim().isEmpty()) ChatError.NO_MODEL else null
+        ProviderResolution.NoProvider -> ChatError.NO_PROVIDER
+        is ProviderResolution.NoKey -> ChatError.NO_KEY
+    }
+
+    fun reply(characterId: Long, userText: String): Flow<ChatEvent> = flow {
+        if (sendUserMessage(characterId, userText)) emitAll(stream(characterId))
+    }
+
+    fun streamReply(characterId: Long): Flow<ChatEvent> = flow {
         TeaTalkLog.i("Chat", "send.retry", "characterId" to characterId)
         emitAll(stream(characterId))
     }
@@ -49,11 +66,19 @@ class ChatEngine(
             return@flow
         }
 
-        val provider = providers.active()
-        if (provider == null) {
-            TeaTalkLog.w("Chat", "send.no_provider", "characterId" to characterId)
-            emit(ChatEvent.Failed(ChatError.NO_PROVIDER))
-            return@flow
+        val provider = when (val resolved = providers.resolve()) {
+            is ProviderResolution.Ok -> resolved.provider
+            ProviderResolution.NoProvider -> {
+                TeaTalkLog.w("Chat", "send.no_provider", "characterId" to characterId)
+                emit(ChatEvent.Failed(ChatError.NO_PROVIDER))
+                return@flow
+            }
+
+            is ProviderResolution.NoKey -> {
+                TeaTalkLog.w("Chat", "send.no_key", "provider" to resolved.provider.id)
+                emit(ChatEvent.Failed(ChatError.NO_KEY))
+                return@flow
+            }
         }
         providers.touch(provider.id)
 
@@ -72,7 +97,14 @@ class ChatEngine(
             "sysChars" to messages.first().second.length,
         )
 
-        val model = provider.model.ifBlank { card.name }
+        // 不拿角色名兜底：模型名打错时服务端会 400/404，比「用角色名当模型」更容易发现。
+        val model = provider.model.trim()
+        if (model.isEmpty()) {
+            TeaTalkLog.w("Chat", "send.no_model", "provider" to provider.id)
+            emit(ChatEvent.Failed(ChatError.NO_MODEL))
+            return@flow
+        }
+
         val builder = StringBuilder()
         var firstTokenLogged = false
         client.stream(
@@ -92,13 +124,18 @@ class ChatEngine(
                     emit(event)
                 }
 
-                ChatEvent.Completed -> {
+                is ChatEvent.Completed -> {
                     val reply = builder.toString().trim()
                     if (reply.isNotEmpty()) {
                         characters.addMessage(characterId, ROLE_ASSISTANT, reply)
-                        TeaTalkLog.i("Chat", "stream.done", "chars" to reply.length)
+                        TeaTalkLog.i(
+                            "Chat",
+                            "stream.done",
+                            "chars" to reply.length,
+                            "truncated" to event.truncated,
+                        )
                     }
-                    emit(ChatEvent.Completed)
+                    emit(event)
                 }
 
                 is ChatEvent.Failed -> {

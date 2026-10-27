@@ -16,7 +16,18 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+
+/** 编辑弹层自己的状态：busy/note/models 都由 VM 持有，避免回调把成功失败塞回 Composable。 */
+data class ProvidersDialogState(
+    val busy: Boolean = false,
+    val note: UiText? = null,
+    val noteIsError: Boolean = false,
+    val models: List<String> = emptyList(),
+    /** 自增计数：Screen 观察它来关闭弹层（保存成功）。 */
+    val savedTick: Int = 0,
+)
 
 /** 我的 → 模型与接口：多 Provider 的增删改、默认项、测试连接与拉模型。 */
 class ProvidersViewModel(
@@ -39,12 +50,18 @@ class ProvidersViewModel(
     private val _message = MutableStateFlow<UiText?>(null)
     val message: StateFlow<UiText?> = _message.asStateFlow()
 
-    fun maskedKey(id: String): String? = repository.maskedKey(id)
+    private val _dialog = MutableStateFlow(ProvidersDialogState())
+    val dialog: StateFlow<ProvidersDialogState> = _dialog.asStateFlow()
 
-    fun apiKeyOf(id: String): String? = repository.apiKey(id)
+    fun maskedKey(id: String): String? = repository.maskedKey(id)
 
     fun consumeMessage() {
         _message.value = null
+    }
+
+    /** 打开/切换编辑弹层时清掉上一次的提示与模型列表。 */
+    fun resetDialog() {
+        _dialog.value = ProvidersDialogState()
     }
 
     fun save(
@@ -53,30 +70,35 @@ class ProvidersViewModel(
         baseUrl: String,
         apiKey: String,
         model: String,
-        models: List<String>,
     ) {
-        if (name.isBlank()) {
-            _message.value = UiText.of(R.string.providers_name_required)
-            return
-        }
-        if (!baseUrl.startsWith("http://") && !baseUrl.startsWith("https://")) {
-            _message.value = UiText.of(R.string.providers_invalid_url)
-            return
+        if (_dialog.value.busy) return
+        val trimmedName = name.trim()
+        val trimmedUrl = baseUrl.trim().trimEnd('/')
+        when {
+            trimmedName.isEmpty() -> {
+                _dialog.update { it.copy(note = UiText.of(R.string.providers_name_required), noteIsError = true) }
+                return
+            }
+
+            !trimmedUrl.startsWith("http://") && !trimmedUrl.startsWith("https://") -> {
+                _dialog.update { it.copy(note = UiText.of(R.string.providers_invalid_url), noteIsError = true) }
+                return
+            }
         }
         viewModelScope.launch {
-            _busy.value = true
+            _dialog.update { it.copy(busy = true, note = null) }
             val providerId = repository.save(
                 id = id,
-                name = name,
-                baseUrl = baseUrl,
+                name = trimmedName,
+                baseUrl = trimmedUrl,
                 apiFormat = "openai",
-                defaultModel = model,
-                models = models,
-                apiKey = apiKey,
+                defaultModel = model.trim(),
+                models = _dialog.value.models,
+                apiKey = apiKey.trim().ifBlank { null },
             )
             if (_activeId.value == null) _activeId.value = providerId
-            _busy.value = false
-            _message.value = UiText.providerSaved(name)
+            _dialog.update { it.copy(busy = false, savedTick = it.savedTick + 1) }
+            _message.value = UiText.providerSaved(trimmedName)
         }
     }
 
@@ -94,43 +116,72 @@ class ProvidersViewModel(
         _message.value = UiText.providerActivated(provider.name)
     }
 
-    fun testConnection(baseUrl: String, apiKey: String, onResult: (UiText) -> Unit) {
-        if (apiKey.isBlank()) {
-            onResult(UiText.of(R.string.providers_no_key))
+    fun testConnection(providerId: String?, baseUrl: String, enteredKey: String) {
+        val key = resolveKey(providerId, enteredKey)
+        if (key == null) {
+            _dialog.update { it.copy(note = UiText.of(R.string.providers_no_key), noteIsError = true) }
             return
         }
+        if (_dialog.value.busy) return
         viewModelScope.launch {
-            _busy.value = true
-            val result = client.listModels(baseUrl, apiKey)
-            _busy.value = false
-            onResult(
-                result.fold(
-                    onSuccess = { UiText.providerTestOk(it.size) },
-                    onFailure = { UiText.providerTestFail(it.message ?: "error") },
-                ),
-            )
+            _dialog.update { it.copy(busy = true, note = null) }
+            val result = client.listModels(baseUrl.trim(), key)
+            _dialog.update {
+                it.copy(
+                    busy = false,
+                    note = result.fold(
+                        onSuccess = { models -> UiText.providerTestOk(models.size) },
+                        onFailure = { error -> UiText.providerTestFail(error.message ?: "error") },
+                    ),
+                    noteIsError = result.isFailure,
+                )
+            }
         }
     }
 
-    fun fetchModels(
-        baseUrl: String,
-        apiKey: String,
-        onDone: (List<String>) -> Unit,
-        onError: (UiText) -> Unit,
-    ) {
-        if (apiKey.isBlank()) {
-            onError(UiText.of(R.string.providers_no_key))
+    fun fetchModels(providerId: String?, baseUrl: String, enteredKey: String) {
+        val key = resolveKey(providerId, enteredKey)
+        if (key == null) {
+            _dialog.update { it.copy(note = UiText.of(R.string.providers_no_key), noteIsError = true) }
             return
         }
+        if (_dialog.value.busy) return
         viewModelScope.launch {
-            _busy.value = true
-            val result = client.listModels(baseUrl, apiKey)
-            _busy.value = false
-            result.fold(
-                onSuccess = { onDone(it) },
-                onFailure = { onError(UiText.providerTestFail(it.message ?: "error")) },
-            )
+            _dialog.update { it.copy(busy = true, note = null) }
+            val result = client.listModels(baseUrl.trim(), key)
+            _dialog.update {
+                result.fold(
+                    onSuccess = { models ->
+                        it.copy(
+                            busy = false,
+                            models = models,
+                            note = UiText.of(R.string.providers_models_loaded, models.size),
+                            noteIsError = false,
+                        )
+                    },
+                    onFailure = { error ->
+                        it.copy(
+                            busy = false,
+                            note = UiText.providerTestFail(error.message ?: "error"),
+                            noteIsError = true,
+                        )
+                    },
+                )
+            }
         }
+    }
+
+    /**
+     * 用哪个 key 去测试：优先用户刚输入的；否则回落到已存的。
+     *
+     * 这里只把解密后的 key 放在 VM 局部变量里传给网络层，
+     * 不再像之前那样通过 `apiKeyOf()` 把明文 key 交给 Composable。
+     */
+    private fun resolveKey(providerId: String?, enteredKey: String): String? {
+        val typed = enteredKey.trim()
+        if (typed.isNotEmpty()) return typed
+        val id = providerId ?: return null
+        return repository.apiKey(id)?.takeIf { it.isNotBlank() }
     }
 
     companion object {

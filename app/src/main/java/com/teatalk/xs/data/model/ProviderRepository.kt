@@ -80,28 +80,49 @@ class ProviderRepository(
         dao.touch(providerId, System.currentTimeMillis())
     }
 
-    /** 当前生效 Provider + 解密后的 key（聊天引擎用；绝不写日志）。 */
-    suspend fun active(): ActiveProvider? {
-        val id = prefs.activeProviderId ?: return null
-        val row = dao.find(id) ?: return null
-        val key = secrets.get(id) ?: return null
-        return ActiveProvider(
-            id = row.id,
-            name = row.name,
-            baseUrl = row.baseUrl,
-            model = row.defaultModel,
-            apiKey = key,
-            temperature = 0.8,
+    /**
+     * 解析「当前该用哪个 Provider」。
+     *
+     * 刻意把三种失败分开：没配置 / 行在但没有 key / 没选默认模型。
+     * 之前统一返回 null，导致聊天把「没选模型」当成「没配置」并拿角色名兜底，
+     * 现在由引擎映射成 NO_PROVIDER / NO_KEY / NO_MODEL 三种明确错误。
+     */
+    suspend fun resolve(): ProviderResolution {
+        val id = prefs.activeProviderId ?: return ProviderResolution.NoProvider
+        val row = dao.find(id) ?: return ProviderResolution.NoProvider
+        val key = secrets.get(id)?.takeIf { it.isNotBlank() } ?: return ProviderResolution.NoKey(row)
+        return ProviderResolution.Ok(
+            ActiveProvider(
+                id = row.id,
+                name = row.name,
+                baseUrl = row.baseUrl,
+                model = row.defaultModel,
+                apiKey = key,
+                temperature = 0.8,
+            ),
         )
     }
 }
 
-/** 聊天引擎需要的「当前生效配置」，key 只在内存里出现。 */
-data class ActiveProvider(
+sealed interface ProviderResolution {
+    data class Ok(val provider: ActiveProvider) : ProviderResolution
+    data object NoProvider : ProviderResolution
+    data class NoKey(val provider: ModelProviderEntity) : ProviderResolution
+}
+
+/**
+ * 聊天引擎需要的「当前生效配置」，key 只在内存里出现。
+ *
+ * 不用 data class：自动生成的 toString() 会把 apiKey 打进日志/崩溃报告。
+ */
+class ActiveProvider(
     val id: String,
     val name: String,
     val baseUrl: String,
     val model: String,
     val apiKey: String,
     val temperature: Double,
-)
+) {
+    override fun toString(): String =
+        "ActiveProvider(id=$id, name=$name, baseUrl=${Redact.url(baseUrl)}, model=$model, key=<redacted>)"
+}

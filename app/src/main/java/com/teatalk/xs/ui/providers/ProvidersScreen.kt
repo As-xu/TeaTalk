@@ -41,15 +41,17 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
@@ -58,8 +60,6 @@ import androidx.compose.ui.window.Dialog
 import com.teatalk.xs.R
 import com.teatalk.xs.data.UiText
 import com.teatalk.xs.data.db.ModelProviderEntity
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.stringResource
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -68,6 +68,7 @@ fun ProvidersScreen(viewModel: ProvidersViewModel, onBack: () -> Unit) {
     val activeId by viewModel.activeId.collectAsState()
     val busy by viewModel.busy.collectAsState()
     val message by viewModel.message.collectAsState()
+    val dialogState by viewModel.dialog.collectAsState()
     val context = LocalContext.current
     val snackbar = remember { SnackbarHostState() }
     var editing by remember { mutableStateOf<ModelProviderEntity?>(null) }
@@ -78,6 +79,14 @@ fun ProvidersScreen(viewModel: ProvidersViewModel, onBack: () -> Unit) {
         val m = message ?: return@LaunchedEffect
         snackbar.showSnackbar(m.resolve(context))
         viewModel.consumeMessage()
+    }
+
+    // 保存成功 → VM 自增 savedTick，这里据此关闭弹层（不再依赖回调里手动关）
+    LaunchedEffect(dialogState.savedTick) {
+        if (dialogState.savedTick > 0) {
+            adding = false
+            editing = null
+        }
     }
 
     Scaffold(
@@ -105,7 +114,10 @@ fun ProvidersScreen(viewModel: ProvidersViewModel, onBack: () -> Unit) {
         snackbarHost = { SnackbarHost(snackbar) },
         floatingActionButton = {
             ExtendedFloatingActionButton(
-                onClick = { adding = true },
+                onClick = {
+                    viewModel.resetDialog()
+                    adding = true
+                },
                 containerColor = MaterialTheme.colorScheme.primary,
                 contentColor = MaterialTheme.colorScheme.onPrimary,
                 icon = { Icon(Icons.Filled.Add, contentDescription = null) },
@@ -155,7 +167,10 @@ fun ProvidersScreen(viewModel: ProvidersViewModel, onBack: () -> Unit) {
                         provider = provider,
                         active = provider.id == activeId,
                         maskedKey = viewModel.maskedKey(provider.id),
-                        onClick = { editing = provider },
+                        onClick = {
+                            viewModel.resetDialog()
+                            editing = provider
+                        },
                         onSetActive = { viewModel.setActive(provider) },
                         onDelete = { pendingDelete = provider },
                     )
@@ -167,24 +182,26 @@ fun ProvidersScreen(viewModel: ProvidersViewModel, onBack: () -> Unit) {
 
     if (adding || editing != null) {
         val initial = editing
-        ProviderEditDialog(
-            initial = initial,
-            storedKeyMasked = initial?.let { viewModel.maskedKey(it.id) },
-            storedApiKey = initial?.let { viewModel.apiKeyOf(it.id) },
-            onDismiss = {
-                adding = false
-                editing = null
-            },
-            onSave = { name, baseUrl, apiKey, model, models ->
-                viewModel.save(initial?.id, name, baseUrl, apiKey, model, models)
-                adding = false
-                editing = null
-            },
-            onTest = { baseUrl, apiKey, cb -> viewModel.testConnection(baseUrl, apiKey, cb) },
-            onFetch = { baseUrl, apiKey, onDone, onError ->
-                viewModel.fetchModels(baseUrl, apiKey, onDone, onError)
-            },
-        )
+        key(initial?.id) {
+            ProviderEditDialog(
+                initial = initial,
+                storedKeyMasked = initial?.let { viewModel.maskedKey(it.id) },
+                state = dialogState,
+                onDismiss = {
+                    adding = false
+                    editing = null
+                },
+                onSave = { name, baseUrl, apiKey, model ->
+                    viewModel.save(initial?.id, name, baseUrl, apiKey, model)
+                },
+                onTest = { baseUrl, apiKey ->
+                    viewModel.testConnection(initial?.id, baseUrl, apiKey)
+                },
+                onFetch = { baseUrl, apiKey ->
+                    viewModel.fetchModels(initial?.id, baseUrl, apiKey)
+                },
+            )
+        }
     }
 
     pendingDelete?.let { provider ->
@@ -261,21 +278,17 @@ private fun ProviderRow(
 private fun ProviderEditDialog(
     initial: ModelProviderEntity?,
     storedKeyMasked: String?,
-    storedApiKey: String?,
+    state: ProvidersDialogState,
     onDismiss: () -> Unit,
-    onSave: (name: String, baseUrl: String, apiKey: String, model: String, models: List<String>) -> Unit,
-    onTest: (baseUrl: String, apiKey: String, onResult: (UiText) -> Unit) -> Unit,
-    onFetch: (baseUrl: String, apiKey: String, onDone: (List<String>) -> Unit, onError: (UiText) -> Unit) -> Unit,
+    onSave: (name: String, baseUrl: String, apiKey: String, model: String) -> Unit,
+    onTest: (baseUrl: String, apiKey: String) -> Unit,
+    onFetch: (baseUrl: String, apiKey: String) -> Unit,
 ) {
     val context = LocalContext.current
     var name by remember { mutableStateOf(initial?.name.orEmpty()) }
-    var baseUrl by remember { mutableStateOf(initial?.baseUrl ?: "https://api.openai.com/v1") }
+    var baseUrl by remember { mutableStateOf(initial?.baseUrl.orEmpty()) }
     var apiKey by remember { mutableStateOf("") }
     var model by remember { mutableStateOf(initial?.defaultModel.orEmpty()) }
-    var models by remember { mutableStateOf(emptyList<String>()) }
-    var note by remember { mutableStateOf<String?>(null) }
-
-    val keyForCall: () -> String = { if (apiKey.isNotBlank()) apiKey else storedApiKey.orEmpty() }
 
     Dialog(onDismissRequest = onDismiss) {
         Surface(shape = RoundedCornerShape(22.dp), color = MaterialTheme.colorScheme.surface) {
@@ -293,6 +306,7 @@ private fun ProviderEditDialog(
                     onValueChange = { name = it },
                     label = { Text(stringResource(R.string.providers_name)) },
                     singleLine = true,
+                    enabled = !state.busy,
                     modifier = Modifier.fillMaxWidth(),
                 )
                 Spacer(Modifier.height(8.dp))
@@ -300,7 +314,9 @@ private fun ProviderEditDialog(
                     value = baseUrl,
                     onValueChange = { baseUrl = it },
                     label = { Text(stringResource(R.string.providers_base_url)) },
+                    placeholder = { Text("https://api.openai.com/v1") },
                     singleLine = true,
+                    enabled = !state.busy,
                     modifier = Modifier.fillMaxWidth(),
                 )
                 Spacer(Modifier.height(8.dp))
@@ -310,6 +326,7 @@ private fun ProviderEditDialog(
                     label = { Text(stringResource(R.string.providers_api_key)) },
                     placeholder = { if (storedKeyMasked != null) Text(storedKeyMasked) },
                     singleLine = true,
+                    enabled = !state.busy,
                     visualTransformation = PasswordVisualTransformation(),
                     modifier = Modifier.fillMaxWidth(),
                 )
@@ -319,33 +336,43 @@ private fun ProviderEditDialog(
                     onValueChange = { model = it },
                     label = { Text(stringResource(R.string.providers_model)) },
                     singleLine = true,
+                    enabled = !state.busy,
                     modifier = Modifier.fillMaxWidth(),
                 )
                 Spacer(Modifier.height(6.dp))
-                Row {
-                    TextButton(onClick = {
-                        note = null
-                        onTest(baseUrl, keyForCall()) { result ->
-                            note = result.resolve(context)
-                        }
-                    }) { Text(stringResource(R.string.providers_test)) }
-                    TextButton(onClick = {
-                        note = null
-                        onFetch(baseUrl, keyForCall(), { list ->
-                            models = list
-                            note = context.getString(R.string.providers_models_loaded, list.size)
-                        }, { err ->
-                            note = err.resolve(context)
-                        })
-                    }) { Text(stringResource(R.string.providers_fetch_models)) }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    TextButton(
+                        onClick = { onTest(baseUrl, apiKey) },
+                        enabled = !state.busy,
+                    ) { Text(stringResource(R.string.providers_test)) }
+                    TextButton(
+                        onClick = { onFetch(baseUrl, apiKey) },
+                        enabled = !state.busy,
+                    ) { Text(stringResource(R.string.providers_fetch_models)) }
+                    if (state.busy) {
+                        Spacer(Modifier.width(6.dp))
+                        CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
+                    }
                 }
-                note?.let {
-                    Text(it, fontSize = 12.sp, color = MaterialTheme.colorScheme.primary)
+                state.note?.let { note ->
+                    Text(
+                        note.resolve(context),
+                        fontSize = 12.sp,
+                        color = if (state.noteIsError) {
+                            MaterialTheme.colorScheme.error
+                        } else {
+                            MaterialTheme.colorScheme.primary
+                        },
+                    )
                 }
-                if (models.isNotEmpty()) {
+                if (state.models.isNotEmpty()) {
                     Spacer(Modifier.height(6.dp))
-                    Text(stringResource(R.string.providers_pick_model), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    models.take(12).forEach { id ->
+                    Text(
+                        stringResource(R.string.providers_pick_model),
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    state.models.take(12).forEach { id ->
                         Row(
                             Modifier.fillMaxWidth().clickable { model = id }.padding(vertical = 8.dp),
                             verticalAlignment = Alignment.CenterVertically,
@@ -364,7 +391,10 @@ private fun ProviderEditDialog(
                 Spacer(Modifier.height(10.dp))
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                     TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) }
-                    TextButton(onClick = { onSave(name, baseUrl, apiKey, model, models) }) {
+                    TextButton(
+                        onClick = { onSave(name, baseUrl, apiKey, model) },
+                        enabled = !state.busy,
+                    ) {
                         Text(stringResource(R.string.edit_save), color = MaterialTheme.colorScheme.primary)
                     }
                 }

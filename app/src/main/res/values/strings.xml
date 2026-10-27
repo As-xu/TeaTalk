@@ -9,6 +9,9 @@
     <string name="back">返回</string>
     <string name="delete">删除</string>
     <string name="cancel">取消</string>
+    <string name="chat_preview_title">消息预览</string>
+    <string name="common_copy">复制</string>
+    <string name="common_copied">已复制</string>
     <string name="close">关闭</string>
     <string name="more">更多</string>
     <string name="send">发送</string>
@@ -212,6 +215,9 @@
     <string name="toast_provider_activated">已设为默认：%1$s</string>
     <!-- M1 流式聊天 -->
     <string name="chat_error_no_provider">还没有配置模型，去「我的 → 模型与接口」添加一个</string>
+    <string name="chat_error_no_key">这个接口的 API Key 丢失了，请在「我的 → 模型与接口」重新填写</string>
+    <string name="chat_error_no_model">还没有为这个接口填写默认模型</string>
+    <string name="chat_truncated">回复达到长度上限，已被截断</string>
     <string name="chat_error_unauthorized">API Key 无效或已过期（401）</string>
     <string name="chat_error_rate_limited">请求太频繁或额度用尽（429）</string>
     <string name="chat_error_timeout">网络超时，请重试</string>

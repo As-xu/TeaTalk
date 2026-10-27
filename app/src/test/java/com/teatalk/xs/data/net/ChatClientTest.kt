@@ -69,7 +69,7 @@ class ChatClientTest {
         assertEquals(3, events.size)
         assertEquals(ChatEvent.Delta("你"), events[0])
         assertEquals(ChatEvent.Delta("好"), events[1])
-        assertEquals(ChatEvent.Completed, events[2])
+        assertEquals(ChatEvent.Completed(), events[2])
     }
 
     @Test
@@ -77,6 +77,48 @@ class ChatClientTest {
         server.enqueue(MockResponse().setResponseCode(401).setBody("{}"))
         val failed = run(client()).filterIsInstance<ChatEvent.Failed>().single()
         assertEquals(ChatError.UNAUTHORIZED, failed.error)
+    }
+
+    @Test
+    fun `403 is not zeroed into unauthorized`() {
+        // 403 = key 有效但没权限；之前和 401 合并，文案会误导用户以为 key 填错了
+        server.enqueue(MockResponse().setResponseCode(403).setBody("no permission"))
+        val failed = run(client()).filterIsInstance<ChatEvent.Failed>().single()
+        assertEquals(ChatError.HTTP(403), failed.error)
+    }
+
+    @Test
+    fun `mid stream error frame surfaces as failure`() {
+        // 部分服务端（含 OpenAI 兼容的代理）会在流中途推 {"error":{...}}，不能当成空回复
+        server.enqueue(
+            MockResponse()
+                .setHeader("Content-Type", "text/event-stream")
+                .setBody(
+                    "data: {\"choices\":[{\"delta\":{\"content\":\"Hi\"}}]}\n\n" +
+                        "data: {\"error\":{\"message\":\"quota exceeded\"}}\n\n" +
+                        "data: [DONE]\n\n",
+                ),
+        )
+        val events = run(client())
+        assertTrue(events.any { it is ChatEvent.Delta })
+        val failed = events.filterIsInstance<ChatEvent.Failed>().single()
+        assertEquals(ChatError.HTTP(200), failed.error)
+        assertTrue(failed.detail!!.contains("quota exceeded"))
+    }
+
+    @Test
+    fun `finish reason length marks truncated`() {
+        server.enqueue(
+            MockResponse()
+                .setHeader("Content-Type", "text/event-stream")
+                .setBody(
+                    "data: {\"choices\":[{\"delta\":{\"content\":\"Long\"}}]}\n\n" +
+                        "data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"length\"}]}\n\n" +
+                        "data: [DONE]\n\n",
+                ),
+        )
+        val completed = run(client()).filterIsInstance<ChatEvent.Completed>().single()
+        assertTrue(completed.truncated)
     }
 
     @Test

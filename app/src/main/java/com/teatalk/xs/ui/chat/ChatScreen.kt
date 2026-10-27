@@ -1,6 +1,7 @@
 package com.teatalk.xs.ui.chat
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -8,19 +9,26 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.imePadding
-import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -31,15 +39,18 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.outlined.SentimentSatisfied
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -49,8 +60,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -75,7 +89,9 @@ import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -107,35 +123,83 @@ class ChatViewModel(
     private val _notice = MutableStateFlow<UiText?>(null)
     val notice: StateFlow<UiText?> = _notice.asStateFlow()
 
+    /** 发送失败时要还给输入框的原文（NO_PROVIDER/NO_MODEL 等前置失败）。 */
+    private val _restoreText = MutableStateFlow<String?>(null)
+    val restoreText: StateFlow<String?> = _restoreText.asStateFlow()
+
+    /**
+     * 单飞行控制：同一时刻只允许一条生成任务。
+     *
+     * 之前用 `_streaming.value` 做守卫，但它是在协程里才置 true（赋值不即时），
+     * 快速双击发送会启动两条流、各落一条用户消息；停止也因为没有 join 而与
+     * 取消中的协程抢写库。这里用「代次号 + 同步置位」收口：
+     * - [generation] 递增后，旧协程的收尾不再改新状态；
+     * - [send] 同步把 [_streaming] 置 true 再启动；
+     * - [stop] 先取消，再 join，最后才落半截文本。
+     */
     private var job: Job? = null
+    private var generation = 0
 
     init {
         viewModelScope.launch { repository.ensureGreeting(characterId) }
     }
 
     fun send(text: String) {
-        if (_streaming.value || text.isBlank()) return
+        val trimmed = text.trim()
+        if (trimmed.isEmpty() || job != null) return
         _error.value = null
-        job = launchStream { engine.reply(characterId, text) }
+        _streamText.value = ""
+        _streaming.value = true
+        val gen = ++generation
+        job = viewModelScope.launch {
+            try {
+                val blocked = engine.preflightError()
+                if (blocked != null) {
+                    _error.value = UiText.chatError(blocked)
+                    _restoreText.value = trimmed
+                } else if (engine.sendUserMessage(characterId, trimmed)) {
+                    collectStream(engine.streamReply(characterId), gen)
+                }
+            } finally {
+                finishIfCurrent(gen)
+            }
+        }
     }
 
     fun retry() {
-        if (_streaming.value) return
+        if (job != null) return
         _error.value = null
-        job = launchStream { engine.retry(characterId) }
+        _streamText.value = ""
+        _streaming.value = true
+        val gen = ++generation
+        job = viewModelScope.launch {
+            try {
+                collectStream(engine.streamReply(characterId), gen)
+            } finally {
+                finishIfCurrent(gen)
+            }
+        }
     }
 
-    /** 停止生成：把已经收到的半截文本落库，避免用户白等。 */
+    /**
+     * 停止生成：取消后 join，再把已经收到的半截文本落库。
+     *
+     * join 必须在落库之前：否则被取消的协程可能还在写库，造成顺序错乱/重复插入。
+     */
     fun stop() {
+        val current = job ?: return
         val partial = _streamText.value.trim()
-        job?.cancel()
+        generation++ // 旧协程的 finally 不再碰状态
         job = null
+        current.cancel()
+        _streamText.value = ""
         viewModelScope.launch {
+            // 取消不保证立刻完成（网络线程可能还在返回），等它真正结束再写库
+            runCatching { current.join() }
             if (partial.isNotEmpty()) {
                 repository.addMessage(characterId, "assistant", partial)
             }
             _streaming.value = false
-            _streamText.value = ""
             _notice.value = UiText.chatStopped()
         }
     }
@@ -144,23 +208,39 @@ class ChatViewModel(
         _notice.value = null
     }
 
-    private fun launchStream(block: suspend () -> kotlinx.coroutines.flow.Flow<ChatEvent>): Job =
-        viewModelScope.launch {
-            _streaming.value = true
-            _streamText.value = ""
-            try {
-                block().collect { event ->
-                    when (event) {
-                        is ChatEvent.Delta -> _streamText.value += event.text
-                        ChatEvent.Completed -> Unit
-                        is ChatEvent.Failed -> _error.value = UiText.chatError(event.error)
-                    }
+    fun consumeRestoreText() {
+        _restoreText.value = null
+    }
+
+    private suspend fun collectStream(flow: Flow<ChatEvent>, gen: Int) {
+        flow.collect { event ->
+            if (gen != generation) return@collect
+            when (event) {
+                is ChatEvent.Delta -> _streamText.value += event.text
+
+                is ChatEvent.Completed -> {
+                    // 引擎在 Completed 前已落库整条回复
+                    if (event.truncated) _notice.value = UiText.chatTruncated()
                 }
-            } finally {
-                _streaming.value = false
-                _streamText.value = ""
+
+                is ChatEvent.Failed -> {
+                    // 失败也把已收到的半截留下，别让用户白等
+                    val partial = _streamText.value.trim()
+                    if (partial.isNotEmpty()) {
+                        repository.addMessage(characterId, "assistant", partial)
+                    }
+                    _error.value = UiText.chatError(event.error)
+                }
             }
         }
+    }
+
+    private fun finishIfCurrent(gen: Int) {
+        if (gen != generation) return
+        job = null
+        _streaming.value = false
+        _streamText.value = ""
+    }
 
     companion object {
         fun factory(app: TeaTalkApp, characterId: Long): ViewModelProvider.Factory = viewModelFactory {
@@ -187,16 +267,37 @@ fun ChatScreen(
     val streamText by viewModel.streamText.collectAsState()
     val error by viewModel.error.collectAsState()
     val notice by viewModel.notice.collectAsState()
+    val restoreText by viewModel.restoreText.collectAsState()
     var input by rememberSaveable { mutableStateOf("") }
     val listState = rememberLazyListState()
     val snackbar = remember { SnackbarHostState() }
+    // 长按气泡：弹层看全文 + 复制（气泡 max 268dp，长回复会被截在可视区里）
+    var preview by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
     val cs = MaterialTheme.colorScheme
     val context = androidx.compose.ui.platform.LocalContext.current
 
+    // 只有「用户本来就在底部」时才自动跟随；向上翻看历史时不打断。
+    val stickToBottom by remember {
+        derivedStateOf {
+            val info = listState.layoutInfo
+            val lastVisible = info.visibleItemsInfo.lastOrNull()?.index ?: -1
+            lastVisible >= info.totalItemsCount - 2
+        }
+    }
+
     LaunchedEffect(messages.size, streamText.length, streaming) {
         val count = messages.size + if (streaming) 1 else 0
-        if (count > 0) listState.scrollToItem(count - 1)
+        if (count > 0 && stickToBottom) {
+            listState.scrollToItem(count - 1)
+        }
+    }
+
+    LaunchedEffect(restoreText) {
+        restoreText?.let {
+            input = it
+            viewModel.consumeRestoreText()
+        }
     }
 
     notice?.let { text ->
@@ -229,9 +330,9 @@ fun ChatScreen(
                 }
                 items(messages, key = { it.id }) { message ->
                     if (message.role == "user") {
-                        UserBubble(message.content)
+                        UserBubble(message.content, onLongPress = { preview = it })
                     } else {
-                        AssistantBubble(message.content, character)
+                        AssistantBubble(message.content, character, onLongPress = { preview = it })
                     }
                 }
                 if (streaming) {
@@ -246,12 +347,16 @@ fun ChatScreen(
             }
 
             // 输入条：+ / 输入框 / 表情 / 发送·停止
-            Column(Modifier.fillMaxWidth().imePadding()) {
+            // 键盘与手势条取并集，避免 IME 打开时输入条浮在键盘上方约 13dp。
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .windowInsetsPadding(WindowInsets.ime.union(WindowInsets.navigationBars)),
+            ) {
                 Hairline()
                 Row(
                     Modifier
                         .fillMaxWidth()
-                        .navigationBarsPadding()
                         .padding(horizontal = 10.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
@@ -340,9 +445,32 @@ fun ChatScreen(
                 }
             }
         }
+        preview?.let { text ->
+            val clipboard = LocalClipboardManager.current
+            val copied = stringResource(R.string.common_copied)
+            AlertDialog(
+                onDismissRequest = { preview = null },
+                title = { Text(stringResource(R.string.chat_preview_title), fontSize = 16.sp) },
+                text = {
+                    Box(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState())) {
+                        Text(text, fontSize = 14.sp, lineHeight = 21.sp)
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = {
+                        clipboard.setText(AnnotatedString(text))
+                        preview = null
+                        scope.launch { snackbar.showSnackbar(copied) }
+                    }) { Text(stringResource(R.string.common_copy)) }
+                },
+                dismissButton = {
+                    TextButton(onClick = { preview = null }) { Text(stringResource(R.string.close)) }
+                },
+            )
+        }
         SnackbarHost(
             hostState = snackbar,
-            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 96.dp),
+            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 88.dp).imePadding(),
         )
     }
 }
@@ -384,6 +512,7 @@ private fun ChatHeader(character: CharacterEntity?, onBack: () -> Unit) {
     }
 }
 
+/** 错误条：「重试」用 TextButton（含最小点击区），文字用权重收缩，长文案不会把按钮挤成 14dp。 */
 @Composable
 private fun ErrorBanner(text: String, onRetry: () -> Unit) {
     val cs = MaterialTheme.colorScheme
@@ -393,23 +522,37 @@ private fun ErrorBanner(text: String, onRetry: () -> Unit) {
             .padding(horizontal = 14.dp, vertical = 6.dp)
             .clip(RoundedCornerShape(12.dp))
             .background(cs.errorContainer)
-            .padding(horizontal = 12.dp, vertical = 10.dp),
+            .padding(start = 12.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(text, fontSize = 12.5.sp, color = cs.onErrorContainer, modifier = Modifier.weight(1f))
-        Spacer(Modifier.width(8.dp))
         Text(
-            stringResource(R.string.chat_retry),
+            text,
             fontSize = 12.5.sp,
-            fontWeight = FontWeight.SemiBold,
+            lineHeight = 18.sp,
             color = cs.onErrorContainer,
-            modifier = Modifier.clickable { onRetry() },
+            modifier = Modifier.weight(1f).padding(vertical = 6.dp),
         )
+        TextButton(
+            onClick = onRetry,
+            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+        ) {
+            Text(
+                stringResource(R.string.chat_retry),
+                fontSize = 12.5.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = cs.onErrorContainer,
+            )
+        }
     }
 }
 
 @Composable
-private fun AssistantBubble(text: String, character: CharacterEntity?, thinking: Boolean = false) {
+private fun AssistantBubble(
+    text: String,
+    character: CharacterEntity?,
+    thinking: Boolean = false,
+    onLongPress: (String) -> Unit = {},
+) {
     val cs = MaterialTheme.colorScheme
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Start, verticalAlignment = Alignment.Top) {
         CharacterAvatar(avatarPath = character?.avatarPath, name = character?.name ?: "", size = 32.dp, corner = 10.dp)
@@ -417,6 +560,7 @@ private fun AssistantBubble(text: String, character: CharacterEntity?, thinking:
         Box(
             Modifier
                 .widthIn(max = 268.dp)
+                .pointerInput(text) { detectTapGestures(onLongPress = { onLongPress(text) }) }
                 .clip(RoundedCornerShape(16.dp, 16.dp, 16.dp, 6.dp))
                 .background(cs.surfaceContainerHigh)
                 .padding(horizontal = 13.dp, vertical = 10.dp),
@@ -431,12 +575,13 @@ private fun AssistantBubble(text: String, character: CharacterEntity?, thinking:
 }
 
 @Composable
-private fun UserBubble(text: String) {
+private fun UserBubble(text: String, onLongPress: (String) -> Unit = {}) {
     val cs = MaterialTheme.colorScheme
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
         Box(
             Modifier
                 .widthIn(max = 268.dp)
+                .pointerInput(text) { detectTapGestures(onLongPress = { onLongPress(text) }) }
                 .clip(RoundedCornerShape(16.dp, 16.dp, 6.dp, 16.dp))
                 .background(cs.primary)
                 .padding(horizontal = 13.dp, vertical = 10.dp),

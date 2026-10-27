@@ -42,6 +42,9 @@ private val CreamColors = lightColorScheme(
     inversePrimary = Color(0xFFE7BE96),
     error = Color(0xFFBA1A1A),
     onError = Color(0xFFFFFFFF),
+    // 显式给 errorContainer 角色：默认 lightColorScheme 的紫红容器会和奶油茶主色打架
+    errorContainer = Color(0xFFF9DEDC),
+    onErrorContainer = Color(0xFF410002),
 )
 
 private val TeaNightColors = darkColorScheme(
@@ -75,6 +78,8 @@ private val TeaNightColors = darkColorScheme(
     inversePrimary = Color(0xFF8C5A33),
     error = Color(0xFFFFB4AB),
     onError = Color(0xFF690005),
+    errorContainer = Color(0xFF93000A),
+    onErrorContainer = Color(0xFFFFDAD6),
 )
 
 /**

@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <paths>
-    <cache-path name="diagnostics" path="." />
+    <!-- 只暴露 cacheDir/logs 子目录：整目录暴露等于把缓存里的一切都交给分享目标 -->
+    <cache-path name="diagnostics" path="logs/" />
 </paths>

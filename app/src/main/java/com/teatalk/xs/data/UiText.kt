@@ -64,6 +64,8 @@ data class UiText(
         /** 聊天错误：把网络错误枚举翻成可读文案。 */
         fun chatError(error: com.teatalk.xs.data.net.ChatError): UiText = when (error) {
             com.teatalk.xs.data.net.ChatError.NO_PROVIDER -> of(R.string.chat_error_no_provider)
+            com.teatalk.xs.data.net.ChatError.NO_KEY -> of(R.string.chat_error_no_key)
+            com.teatalk.xs.data.net.ChatError.NO_MODEL -> of(R.string.chat_error_no_model)
             com.teatalk.xs.data.net.ChatError.UNAUTHORIZED -> of(R.string.chat_error_unauthorized)
             com.teatalk.xs.data.net.ChatError.RATE_LIMITED -> of(R.string.chat_error_rate_limited)
             com.teatalk.xs.data.net.ChatError.TIMEOUT -> of(R.string.chat_error_timeout)
@@ -73,5 +75,7 @@ data class UiText(
         }
 
         fun chatStopped(): UiText = of(R.string.chat_stopped)
+
+        fun chatTruncated(): UiText = of(R.string.chat_truncated)
     }
 }
