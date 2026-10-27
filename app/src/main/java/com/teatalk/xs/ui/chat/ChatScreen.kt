@@ -85,6 +85,7 @@ import com.teatalk.xs.data.CharacterRepository
 import com.teatalk.xs.data.MessageVariants
 import com.teatalk.xs.data.ChatEngine
 import com.teatalk.xs.data.UiText
+import com.teatalk.xs.data.model.ActiveProvider
 import com.teatalk.xs.data.db.CharacterEntity
 import com.teatalk.xs.data.db.MessageEntity
 import com.teatalk.xs.data.net.ChatEvent
@@ -143,6 +144,15 @@ class ChatViewModel(
      * - [stop] 先取消，再 join，最后才落半截文本。
      */
     private var job: Job? = null
+    /** 本次生成使用的接口（B2）：完成/停止/失败落库时写入来源。 */
+    private var pendingProvider: ActiveProvider? = null
+
+    private val _activeProviderId = MutableStateFlow<String?>(null)
+    val activeProviderId: StateFlow<String?> = _activeProviderId.asStateFlow()
+
+    init {
+        viewModelScope.launch { _activeProviderId.value = engine.activeProvider()?.id }
+    }
     private var generation = 0
 
     init {
@@ -162,7 +172,11 @@ class ChatViewModel(
                 if (blocked != null) {
                     _error.value = UiText.chatError(blocked)
                     _restoreText.value = trimmed
-                } else if (engine.sendUserMessage(characterId, trimmed)) {
+                } else {
+                    pendingProvider = engine.activeProvider()
+                    _activeProviderId.value = pendingProvider?.id
+                    if (!engine.sendUserMessage(characterId, trimmed)) return@launch
+                    
                     collectStream(engine.streamReply(characterId), gen)
                 }
             } finally {
@@ -194,6 +208,8 @@ class ChatViewModel(
                     _notice.value = UiText.of(R.string.chat_nothing_to_retry)
                     return@launch
                 }
+                pendingProvider = engine.activeProvider()
+                _activeProviderId.value = pendingProvider?.id
                 // 重试 = 重新生成最后一条回复：把它从 prompt 历史里剔除，结果作为新版本追加
                 collectStream(engine.streamReply(characterId, excludeLastAssistant = true), gen)
             } finally {
@@ -231,11 +247,24 @@ class ChatViewModel(
             // 取消不保证立刻完成（网络线程可能还在返回），等它真正结束再写库
             runCatching { current.join() }
             if (partial.isNotEmpty()) {
-                repository.appendAssistantReply(characterId, partial, MessageEntity.STATUS_STOPPED)
+                appendReply(partial, MessageEntity.STATUS_STOPPED)
             }
             _streaming.value = false
             _notice.value = UiText.chatStopped()
         }
+    }
+
+    /** 落一条回复并带上来源接口（B2）。 */
+    private suspend fun appendReply(text: String, status: String) {
+        val provider = pendingProvider
+        repository.appendAssistantReply(
+            characterId = characterId,
+            text = text,
+            status = status,
+            providerId = provider?.id,
+            providerName = provider?.name,
+            model = provider?.model,
+        )
     }
 
     fun consumeNotice() {
@@ -256,7 +285,7 @@ class ChatViewModel(
                     // 引擎不落库（M2）：由这里落，才能区分新回复 / 追加版本 + 状态
                     val reply = _streamText.value.trim()
                     if (reply.isNotEmpty()) {
-                        repository.appendAssistantReply(characterId, reply, MessageEntity.STATUS_COMPLETE)
+                        appendReply(reply, MessageEntity.STATUS_COMPLETE)
                     }
                     if (event.truncated) _notice.value = UiText.chatTruncated()
                 }
@@ -265,7 +294,7 @@ class ChatViewModel(
                     // 失败也把已收到的半截留下（标 failed），别让用户白等
                     val partial = _streamText.value.trim()
                     if (partial.isNotEmpty()) {
-                        repository.appendAssistantReply(characterId, partial, MessageEntity.STATUS_FAILED)
+                        appendReply(partial, MessageEntity.STATUS_FAILED)
                     }
                     _error.value = UiText.chatError(event.error)
                 }
@@ -302,6 +331,7 @@ fun ChatScreen(
     val character by viewModel.character.collectAsState()
     val messages by viewModel.messages.collectAsState()
     val streaming by viewModel.streaming.collectAsState()
+    val activeProviderId by viewModel.activeProviderId.collectAsState()
     val streamText by viewModel.streamText.collectAsState()
     val error by viewModel.error.collectAsState()
     val notice by viewModel.notice.collectAsState()
@@ -381,6 +411,15 @@ fun ChatScreen(
                             character = character,
                             variants = variants,
                             variantStatuses = remember(message) { MessageVariants.statuses(message) },
+                            providerHint = message.providerId
+                                ?.takeIf { it != activeProviderId }
+                                ?.let {
+                                    stringResource(
+                                        R.string.chat_generated_by,
+                                        message.providerName ?: "?",
+                                        message.model ?: "?",
+                                    )
+                                },
                             selected = message.selectedVariant.coerceIn(0, (variants.size - 1).coerceAtLeast(0)),
                             onSelectVariant = { viewModel.selectVariant(message.id, it) },
                             onLongPress = { preview = message },
@@ -644,6 +683,7 @@ private fun AssistantBubble(
     thinking: Boolean = false,
     variants: List<String> = emptyList(),
     variantStatuses: List<String> = emptyList(),
+    providerHint: String? = null,
     selected: Int = 0,
     onSelectVariant: (Int) -> Unit = {},
     onLongPress: (String) -> Unit = {},
@@ -722,6 +762,14 @@ private fun AssistantBubble(
                         }
                     }
                 }
+            }
+            providerHint?.let { hint ->
+                Text(
+                    hint,
+                    fontSize = 11.sp,
+                    color = cs.onSurfaceVariant.copy(alpha = 0.85f),
+                    modifier = Modifier.padding(top = 1.dp),
+                )
             }
         }
     }

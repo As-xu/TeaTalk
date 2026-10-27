@@ -96,7 +96,7 @@ interface CharacterDao {
     suspend fun lastMessage(characterId: Long): MessageEntity?
 
     @Query(
-        "UPDATE messages SET content = :content, variantsJson = :variantsJson, variantStatusJson = :variantStatusJson, selectedVariant = :selectedVariant, status = :status WHERE id = :id",
+        "UPDATE messages SET content = :content, variantsJson = :variantsJson, variantStatusJson = :variantStatusJson, selectedVariant = :selectedVariant, status = :status, providerId = :providerId, providerName = :providerName, model = :model WHERE id = :id",
     )
     suspend fun updateVariants(
         id: Long,
@@ -105,6 +105,9 @@ interface CharacterDao {
         variantStatusJson: String,
         selectedVariant: Int,
         status: String,
+        providerId: String?,
+        providerName: String?,
+        model: String?,
     )
 
     @Query("UPDATE messages SET content = :content, selectedVariant = :selectedVariant, status = :status WHERE id = :id")

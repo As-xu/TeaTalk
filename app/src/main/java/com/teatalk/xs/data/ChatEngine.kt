@@ -2,6 +2,7 @@ package com.teatalk.xs.data
 
 import com.teatalk.core.log.TeaTalkLog
 import com.teatalk.xs.data.model.ProviderRepository
+import com.teatalk.xs.data.model.ActiveProvider
 import com.teatalk.xs.data.model.ProviderResolution
 import com.teatalk.xs.data.net.ChatClient
 import com.teatalk.xs.data.net.ChatError
@@ -43,6 +44,10 @@ class ChatEngine(
      * 为什么要单独一步：用户消息一旦先落库，provider 没配/没模型时就会留下一条
      * 「自言自语」的孤立用户消息。这里先判一次，失败时不产生任何消息。
      */
+    /** 当前生效的接口（B2：落库时记录来源；未配置/无 key 返回 null）。 */
+    suspend fun activeProvider(): ActiveProvider? =
+        (providers.resolve() as? ProviderResolution.Ok)?.provider
+
     suspend fun preflightError(): ChatError? = when (val resolved = providers.resolve()) {
         is ProviderResolution.Ok ->
             if (resolved.provider.model.trim().isEmpty()) ChatError.NO_MODEL else null

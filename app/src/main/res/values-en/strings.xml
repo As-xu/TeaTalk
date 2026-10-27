@@ -240,5 +240,6 @@
     <string name="chat_variant_next">Next version</string>
     <string name="chat_variant_status_stopped">Stopped</string>
     <string name="chat_variant_status_failed">Failed</string>
+    <string name="chat_generated_by">Generated with %1$s · %2$s (not the current provider)</string>
 </resources>
 

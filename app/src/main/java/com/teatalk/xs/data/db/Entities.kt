@@ -49,6 +49,10 @@ data class MessageEntity(
     val variantsJson: String = "[]",
     /** 每个版本的生成状态（与 variantsJson 等长；空数组表示全部 complete）。 */
     @ColumnInfo(defaultValue = "[]") val variantStatusJson: String = "[]",
+    /** 生成该回复时使用的 Provider（B2：切换接口后旧消息仍可解释；老数据为 null）。 */
+    val providerId: String? = null,
+    val providerName: String? = null,
+    val model: String? = null,
     /** 当前选中版本的下标（0 起）。 */
     val selectedVariant: Int = 0,
     /** complete / stopped（停止生成留下的半截）/ failed（错误前半截）。 */

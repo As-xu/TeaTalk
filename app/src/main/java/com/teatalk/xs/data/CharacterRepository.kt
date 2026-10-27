@@ -234,7 +234,14 @@ class CharacterRepository(
      *
      * 返回消息 id（-1 表示空文本 / 角色不存在）。状态用 [MessageEntity.STATUS_COMPLETE] 等。
      */
-    suspend fun appendAssistantReply(characterId: Long, text: String, status: String): Long = withContext(Dispatchers.IO) {
+    suspend fun appendAssistantReply(
+        characterId: Long,
+        text: String,
+        status: String,
+        providerId: String? = null,
+        providerName: String? = null,
+        model: String? = null,
+    ): Long = withContext(Dispatchers.IO) {
         val body = text.trim()
         if (body.isEmpty()) return@withContext -1L
         if (dao.find(characterId) == null) return@withContext -1L
@@ -255,6 +262,9 @@ class CharacterRepository(
                 variantStatusJson = statusJson,
                 selectedVariant = selected,
                 status = status,
+                providerId = providerId ?: last.providerId,
+                providerName = providerName ?: last.providerName,
+                model = model ?: last.model,
             )
             TeaTalkLog.i("Chat", "reply.append", "messageId" to last.id, "variants" to (selected + 1), "chars" to body.length, "status" to status)
             last.id
@@ -269,6 +279,9 @@ class CharacterRepository(
                     variantStatusJson = MessageVariants.encodeStatuses(listOf(status)),
                     selectedVariant = 0,
                     status = status,
+                    providerId = providerId,
+                    providerName = providerName,
+                    model = model,
                 ),
             )
             TeaTalkLog.i("Chat", "reply.insert", "messageId" to id, "chars" to body.length)

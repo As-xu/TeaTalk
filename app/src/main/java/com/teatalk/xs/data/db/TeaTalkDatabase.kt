@@ -13,7 +13,7 @@ import com.teatalk.core.log.TeaTalkLog
         WorldBookEntity::class,
         ModelProviderEntity::class,
     ],
-    version = 5,
+    version = 6,
     exportSchema = false,
 )
 abstract class TeaTalkDatabase : RoomDatabase() {
@@ -22,7 +22,7 @@ abstract class TeaTalkDatabase : RoomDatabase() {
     abstract fun modelProviderDao(): ModelProviderDao
 
     companion object {
-        const val VERSION = 5
+        const val VERSION = 6
 
         /**
          * v1（M0）→ v2（D6 卡库）：
@@ -110,6 +110,20 @@ abstract class TeaTalkDatabase : RoomDatabase() {
                 val started = System.currentTimeMillis()
                 db.execSQL("ALTER TABLE messages ADD COLUMN variantStatusJson TEXT NOT NULL DEFAULT '[]'")
                 TeaTalkLog.i("Db", "db.migrate", "from" to 4, "to" to 5, "ms" to (System.currentTimeMillis() - started))
+            }
+        }
+
+        /**
+         * v5 → v6（M2 B2 Provider 切换兜底）：记录每条回复由哪个接口/模型生成。
+         * 可空列，老数据为 null（UI 不显示来源提示）。
+         */
+        val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                val started = System.currentTimeMillis()
+                db.execSQL("ALTER TABLE messages ADD COLUMN providerId TEXT")
+                db.execSQL("ALTER TABLE messages ADD COLUMN providerName TEXT")
+                db.execSQL("ALTER TABLE messages ADD COLUMN model TEXT")
+                TeaTalkLog.i("Db", "db.migrate", "from" to 5, "to" to 6, "ms" to (System.currentTimeMillis() - started))
             }
         }
     }

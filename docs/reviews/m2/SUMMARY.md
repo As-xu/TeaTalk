@@ -27,7 +27,7 @@
 | 编号 | 来源 | 问题 | 计划 |
 |---|---|---|---|
 | B1 | UX P0-1 / Arch #4 #6 | 版本级 `status` 缺失：一个气泡内有多个候选时无法表达“某候选失败/截断” | ✅ 已修（0.5.0，DB v5）：`variantStatusJson` + 变体条文字状态；状态点留待视觉打磨 |
-| B2 | UX P0-2 | 切换 Provider 后旧消息不可用 → 黑气泡，无解释 | 渲染前校验 provider 可用性，给“该回复由 X 生成”与“用其它模型重试”入口 |
+| B2 | UX P0-2 | 切换 Provider 后旧消息不可用 → 黑气泡，无解释 | ✅ 已修（0.5.1，DB v6）：记录 providerId/name/model 并显示来源提示；可点击重试入口留待下一步 |
 | B3 | UX P0-3 | 发送/滚动竞态：发送新消息与 `scrollToItem` 同时发生 | 发送时先取消 stick-to-bottom，完成后再吸附一次 |
 | B4 | Arch #2 #3 #14 | `appendAssistantReply` 非原子 RMW；调用方忽略返回值 | 改为事务 + 返回值检查，失败时回滚并提示 |
 | B5 | Arch #5 | stopped/failed 片段被当成历史送进下一次 prompt | 构造历史时过滤非 complete 候选 |

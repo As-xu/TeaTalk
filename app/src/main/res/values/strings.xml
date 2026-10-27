@@ -249,5 +249,6 @@
     <string name="chat_variant_next">下一个版本</string>
     <string name="chat_variant_status_stopped">已停止</string>
     <string name="chat_variant_status_failed">生成失败</string>
+    <string name="chat_generated_by">由 %1$s · %2$s 生成，与当前接口不同</string>
 </resources>
 
