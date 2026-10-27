@@ -226,5 +226,11 @@
     <string name="chat_stopped">Generation stopped</string>
     <string name="chat_retry">Retry</string>
     <string name="chat_thinking">Typing…</string>
+    <string name="chat_variant_pos">%1$d/%2$d</string>
+    <string name="chat_action_retry">Retry</string>
+    <string name="chat_action_delete">Delete</string>
+    <string name="chat_delete_title">Delete message</string>
+    <string name="chat_delete_message">This cannot be undone. Delete it?</string>
+    <string name="chat_deleted">Deleted</string>
 </resources>
 

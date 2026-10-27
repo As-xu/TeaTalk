@@ -227,6 +227,64 @@ class CharacterRepository(
     suspend fun recentMessages(characterId: Long, limit: Int): List<MessageEntity> =
         withContext(Dispatchers.IO) { dao.recentMessages(characterId, limit) }
 
+    // —— M2：多版本回复 / 切换版本 / 删除消息 ——
+
+    /**
+     * 落一条 assistant 回复；若最后一条也是 assistant（重试/换版本），则作为新版本追加。
+     *
+     * 返回消息 id（-1 表示空文本 / 角色不存在）。状态用 [MessageEntity.STATUS_COMPLETE] 等。
+     */
+    suspend fun appendAssistantReply(characterId: Long, text: String, status: String): Long = withContext(Dispatchers.IO) {
+        val body = text.trim()
+        if (body.isEmpty()) return@withContext -1L
+        if (dao.find(characterId) == null) return@withContext -1L
+        val last = dao.lastMessage(characterId)
+        if (last != null && last.role == ROLE_ASSISTANT) {
+            val variants = MessageVariants.of(last) + body
+            val selected = variants.lastIndex
+            dao.updateVariants(
+                id = last.id,
+                content = body,
+                variantsJson = MessageVariants.encode(variants),
+                selectedVariant = selected,
+                status = status,
+            )
+            TeaTalkLog.i("Chat", "reply.append", "messageId" to last.id, "variants" to variants.size, "chars" to body.length)
+            last.id
+        } else {
+            val id = dao.insertMessage(
+                MessageEntity(
+                    characterId = characterId,
+                    role = ROLE_ASSISTANT,
+                    content = body,
+                    createdAt = System.currentTimeMillis(),
+                    variantsJson = MessageVariants.encode(listOf(body)),
+                    selectedVariant = 0,
+                    status = status,
+                ),
+            )
+            TeaTalkLog.i("Chat", "reply.insert", "messageId" to id, "chars" to body.length)
+            id
+        }
+    }
+
+    /** 切换某条消息的版本；返回切换后的文本（null 表示下标无效）。 */
+    suspend fun selectVariant(messageId: Long, index: Int): String? = withContext(Dispatchers.IO) {
+        val message = dao.findMessage(messageId) ?: return@withContext null
+        val variants = MessageVariants.of(message)
+        if (index !in variants.indices) return@withContext null
+        val text = variants[index]
+        dao.selectVariant(messageId, text, index)
+        TeaTalkLog.i("Chat", "variant.select", "messageId" to messageId, "index" to index)
+        text
+    }
+
+    /** 删除一条消息（用户/assistant 都允许）。 */
+    suspend fun deleteMessage(messageId: Long) = withContext(Dispatchers.IO) {
+        dao.deleteMessage(messageId)
+        TeaTalkLog.i("Chat", "message.delete", "messageId" to messageId)
+    }
+
     private fun saveAvatar(bytes: ByteArray): String {
         val dir = File(appContext.filesDir, AVATAR_DIR).apply { mkdirs() }
         val name = "${UUID.randomUUID()}.png"

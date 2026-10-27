@@ -78,6 +78,7 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import com.teatalk.xs.R
 import com.teatalk.xs.TeaTalkApp
 import com.teatalk.xs.data.CharacterRepository
+import com.teatalk.xs.data.MessageVariants
 import com.teatalk.xs.data.ChatEngine
 import com.teatalk.xs.data.UiText
 import com.teatalk.xs.data.db.CharacterEntity
@@ -174,10 +175,24 @@ class ChatViewModel(
         val gen = ++generation
         job = viewModelScope.launch {
             try {
-                collectStream(engine.streamReply(characterId), gen)
+                // 重试 = 重新生成最后一条回复：把它从 prompt 历史里剔除，结果作为新版本追加
+                collectStream(engine.streamReply(characterId, excludeLastAssistant = true), gen)
             } finally {
                 finishIfCurrent(gen)
             }
+        }
+    }
+
+    /** 切换某条消息的版本（M2）。 */
+    fun selectVariant(messageId: Long, index: Int) {
+        viewModelScope.launch { repository.selectVariant(messageId, index) }
+    }
+
+    /** 删除一条消息（M2）。 */
+    fun deleteMessage(messageId: Long) {
+        viewModelScope.launch {
+            repository.deleteMessage(messageId)
+            _notice.value = UiText.of(R.string.chat_deleted)
         }
     }
 
@@ -197,7 +212,7 @@ class ChatViewModel(
             // 取消不保证立刻完成（网络线程可能还在返回），等它真正结束再写库
             runCatching { current.join() }
             if (partial.isNotEmpty()) {
-                repository.addMessage(characterId, "assistant", partial)
+                repository.appendAssistantReply(characterId, partial, MessageEntity.STATUS_STOPPED)
             }
             _streaming.value = false
             _notice.value = UiText.chatStopped()
@@ -219,15 +234,19 @@ class ChatViewModel(
                 is ChatEvent.Delta -> _streamText.value += event.text
 
                 is ChatEvent.Completed -> {
-                    // 引擎在 Completed 前已落库整条回复
+                    // 引擎不落库（M2）：由这里落，才能区分新回复 / 追加版本 + 状态
+                    val reply = _streamText.value.trim()
+                    if (reply.isNotEmpty()) {
+                        repository.appendAssistantReply(characterId, reply, MessageEntity.STATUS_COMPLETE)
+                    }
                     if (event.truncated) _notice.value = UiText.chatTruncated()
                 }
 
                 is ChatEvent.Failed -> {
-                    // 失败也把已收到的半截留下，别让用户白等
+                    // 失败也把已收到的半截留下（标 failed），别让用户白等
                     val partial = _streamText.value.trim()
                     if (partial.isNotEmpty()) {
-                        repository.addMessage(characterId, "assistant", partial)
+                        repository.appendAssistantReply(characterId, partial, MessageEntity.STATUS_FAILED)
                     }
                     _error.value = UiText.chatError(event.error)
                 }
@@ -271,8 +290,12 @@ fun ChatScreen(
     var input by rememberSaveable { mutableStateOf("") }
     val listState = rememberLazyListState()
     val snackbar = remember { SnackbarHostState() }
-    // 长按气泡：弹层看全文 + 复制（气泡 max 268dp，长回复会被截在可视区里）
-    var preview by remember { mutableStateOf<String?>(null) }
+    // 长按气泡：弹层看全文 + 复制 / 重试 / 删除（气泡 max 268dp，长回复会被截在可视区里）
+    var preview by remember { mutableStateOf<MessageEntity?>(null) }
+    var deleteTarget by remember { mutableStateOf<MessageEntity?>(null) }
+    val lastAssistantId = remember(messages) {
+        messages.lastOrNull()?.takeIf { it.role == "assistant" }?.id
+    }
     val scope = rememberCoroutineScope()
     val cs = MaterialTheme.colorScheme
     val context = androidx.compose.ui.platform.LocalContext.current
@@ -330,9 +353,17 @@ fun ChatScreen(
                 }
                 items(messages, key = { it.id }) { message ->
                     if (message.role == "user") {
-                        UserBubble(message.content, onLongPress = { preview = it })
+                        UserBubble(message.content, onLongPress = { preview = message })
                     } else {
-                        AssistantBubble(message.content, character, onLongPress = { preview = it })
+                        val variants = remember(message) { MessageVariants.of(message) }
+                        AssistantBubble(
+                            text = message.content,
+                            character = character,
+                            variants = variants,
+                            selected = message.selectedVariant.coerceIn(0, (variants.size - 1).coerceAtLeast(0)),
+                            onSelectVariant = { viewModel.selectVariant(message.id, it) },
+                            onLongPress = { preview = message },
+                        )
                     }
                 }
                 if (streaming) {
@@ -445,7 +476,7 @@ fun ChatScreen(
                 }
             }
         }
-        preview?.let { text ->
+        preview?.let { message ->
             val clipboard = LocalClipboardManager.current
             val copied = stringResource(R.string.common_copied)
             AlertDialog(
@@ -453,18 +484,46 @@ fun ChatScreen(
                 title = { Text(stringResource(R.string.chat_preview_title), fontSize = 16.sp) },
                 text = {
                     Box(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState())) {
-                        Text(text, fontSize = 14.sp, lineHeight = 21.sp)
+                        Text(message.content, fontSize = 14.sp, lineHeight = 21.sp)
                     }
                 },
                 confirmButton = {
                     TextButton(onClick = {
-                        clipboard.setText(AnnotatedString(text))
+                        clipboard.setText(AnnotatedString(message.content))
                         preview = null
                         scope.launch { snackbar.showSnackbar(copied) }
                     }) { Text(stringResource(R.string.common_copy)) }
                 },
                 dismissButton = {
-                    TextButton(onClick = { preview = null }) { Text(stringResource(R.string.close)) }
+                    Row {
+                        if (message.role == "assistant" && message.id == lastAssistantId) {
+                            TextButton(onClick = {
+                                preview = null
+                                viewModel.retry()
+                            }) { Text(stringResource(R.string.chat_action_retry)) }
+                        }
+                        TextButton(onClick = {
+                            preview = null
+                            deleteTarget = message
+                        }) { Text(stringResource(R.string.chat_action_delete), color = cs.error) }
+                        TextButton(onClick = { preview = null }) { Text(stringResource(R.string.close)) }
+                    }
+                },
+            )
+        }
+        deleteTarget?.let { message ->
+            AlertDialog(
+                onDismissRequest = { deleteTarget = null },
+                title = { Text(stringResource(R.string.chat_delete_title), fontSize = 16.sp) },
+                text = { Text(stringResource(R.string.chat_delete_message), fontSize = 13.5.sp) },
+                confirmButton = {
+                    TextButton(onClick = {
+                        deleteTarget = null
+                        viewModel.deleteMessage(message.id)
+                    }) { Text(stringResource(R.string.chat_action_delete), color = cs.error) }
+                },
+                dismissButton = {
+                    TextButton(onClick = { deleteTarget = null }) { Text(stringResource(R.string.close)) }
                 },
             )
         }
@@ -551,26 +610,57 @@ private fun AssistantBubble(
     text: String,
     character: CharacterEntity?,
     thinking: Boolean = false,
+    variants: List<String> = emptyList(),
+    selected: Int = 0,
+    onSelectVariant: (Int) -> Unit = {},
     onLongPress: (String) -> Unit = {},
 ) {
     val cs = MaterialTheme.colorScheme
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Start, verticalAlignment = Alignment.Top) {
         CharacterAvatar(avatarPath = character?.avatarPath, name = character?.name ?: "", size = 32.dp, corner = 10.dp)
         Spacer(Modifier.width(8.dp))
-        Box(
-            Modifier
-                .widthIn(max = 268.dp)
-                .pointerInput(text) { detectTapGestures(onLongPress = { onLongPress(text) }) }
-                .clip(RoundedCornerShape(16.dp, 16.dp, 16.dp, 6.dp))
-                .background(cs.surfaceContainerHigh)
-                .padding(horizontal = 13.dp, vertical = 10.dp),
-        ) {
-            if (thinking) {
-                Text(stringResource(R.string.chat_thinking), fontSize = 14.5.sp, color = cs.onSurfaceVariant)
-            } else {
-                Text(text, fontSize = 14.5.sp, lineHeight = 22.sp, color = cs.onSurface)
+        Column {
+            Box(
+                Modifier
+                    .widthIn(max = 268.dp)
+                    .pointerInput(text) { detectTapGestures(onLongPress = { onLongPress(text) }) }
+                    .clip(RoundedCornerShape(16.dp, 16.dp, 16.dp, 6.dp))
+                    .background(cs.surfaceContainerHigh)
+                    .padding(horizontal = 13.dp, vertical = 10.dp),
+            ) {
+                if (thinking) {
+                    Text(stringResource(R.string.chat_thinking), fontSize = 14.5.sp, color = cs.onSurfaceVariant)
+                } else {
+                    Text(text, fontSize = 14.5.sp, lineHeight = 22.sp, color = cs.onSurface)
+                }
+            }
+            if (variants.size > 1) {
+                Row(Modifier.padding(start = 2.dp, top = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+                    VariantArrow("\u2039", enabled = selected > 0) { onSelectVariant(selected - 1) }
+                    Text(
+                        stringResource(R.string.chat_variant_pos, selected + 1, variants.size),
+                        fontSize = 11.sp,
+                        color = cs.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 2.dp),
+                    )
+                    VariantArrow("\u203a", enabled = selected < variants.lastIndex) { onSelectVariant(selected + 1) }
+                }
             }
         }
+    }
+}
+
+@Composable
+private fun VariantArrow(text: String, enabled: Boolean, onClick: () -> Unit) {
+    val cs = MaterialTheme.colorScheme
+    Box(
+        Modifier
+            .size(26.dp)
+            .clip(CircleShape)
+            .clickable(enabled = enabled, onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(text, fontSize = 14.sp, color = if (enabled) cs.onSurfaceVariant else cs.outlineVariant)
     }
 }
 

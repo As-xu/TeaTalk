@@ -38,9 +38,25 @@ data class MessageEntity(
     val characterId: Long,
     /** user / assistant / system */
     val role: String,
+    /** 当前展示的文本（= variants[selectedVariant] 的镜像，老代码/列表预览都用它）。 */
     val content: String,
     val createdAt: Long = 0L,
-)
+    /**
+     * 多版本（M2）：同一轮回复的所有候选文本，JSON 数组字符串。
+     * 空数组表示「只有一个版本」（老数据/用户消息）。
+     */
+    val variantsJson: String = "[]",
+    /** 当前选中版本的下标（0 起）。 */
+    val selectedVariant: Int = 0,
+    /** complete / stopped（停止生成留下的半截）/ failed（错误前半截）。 */
+    val status: String = STATUS_COMPLETE,
+) {
+    companion object {
+        const val STATUS_COMPLETE = "complete"
+        const val STATUS_STOPPED = "stopped"
+        const val STATUS_FAILED = "failed"
+    }
+}
 
 /**
  * 独立世界书（D6）：从 ST 世界书 JSON 或角色卡内嵌世界书导入，存原始条目 JSON。

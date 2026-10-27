@@ -235,5 +235,11 @@
     <string name="chat_stopped">已停止生成</string>
     <string name="chat_retry">重试</string>
     <string name="chat_thinking">正在输入…</string>
+    <string name="chat_variant_pos">%1$d/%2$d</string>
+    <string name="chat_action_retry">重试</string>
+    <string name="chat_action_delete">删除</string>
+    <string name="chat_delete_title">删除这条消息</string>
+    <string name="chat_delete_message">删除后不可恢复，确定删除吗？</string>
+    <string name="chat_deleted">已删除</string>
 </resources>
 

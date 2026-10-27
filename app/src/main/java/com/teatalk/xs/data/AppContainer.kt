@@ -46,7 +46,7 @@ class AppContainer(context: Context) {
         val started = System.currentTimeMillis()
         TeaTalkLog.i("Db", "db.open", "name" to "teatalk.db", "version" to TeaTalkDatabase.VERSION)
         Room.databaseBuilder(appContext, TeaTalkDatabase::class.java, "teatalk.db")
-            .addMigrations(TeaTalkDatabase.MIGRATION_1_2, TeaTalkDatabase.MIGRATION_2_3)
+            .addMigrations(TeaTalkDatabase.MIGRATION_1_2, TeaTalkDatabase.MIGRATION_2_3, TeaTalkDatabase.MIGRATION_3_4)
             .build()
             .also {
                 TeaTalkLog.i("Db", "db.ready", "ms" to (System.currentTimeMillis() - started))

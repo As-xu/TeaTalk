@@ -50,16 +50,19 @@ class ChatEngine(
         is ProviderResolution.NoKey -> ChatError.NO_KEY
     }
 
-    fun reply(characterId: Long, userText: String): Flow<ChatEvent> = flow {
-        if (sendUserMessage(characterId, userText)) emitAll(stream(characterId))
+    /**
+     * 生成一条回复（不落库）：调用方在结束后用 [CharacterRepository.appendAssistantReply]
+     * 落库，这样才能区分「新回复」与「追加版本」，也才能带 complete/stopped/failed 状态。
+     *
+     * @param excludeLastAssistant 重试时把最后一条 assistant 从历史里剔除，避免模型看到自己
+     * 上一版回复而被带跑。
+     */
+    fun streamReply(characterId: Long, excludeLastAssistant: Boolean = false): Flow<ChatEvent> = flow {
+        TeaTalkLog.i("Chat", "send.retry", "characterId" to characterId, "excludeLast" to excludeLastAssistant)
+        emitAll(stream(characterId, excludeLastAssistant))
     }
 
-    fun streamReply(characterId: Long): Flow<ChatEvent> = flow {
-        TeaTalkLog.i("Chat", "send.retry", "characterId" to characterId)
-        emitAll(stream(characterId))
-    }
-
-    private fun stream(characterId: Long): Flow<ChatEvent> = flow {
+    private fun stream(characterId: Long, excludeLastAssistant: Boolean = false): Flow<ChatEvent> = flow {
         val character = characters.find(characterId)
         if (character == null) {
             emit(ChatEvent.Failed(ChatError.BAD_RESPONSE, "character not found"))
@@ -83,9 +86,12 @@ class ChatEngine(
         providers.touch(provider.id)
 
         val card = CardViewParser.parse(character.cardJson)
+        val history = characters.recentMessages(characterId, HISTORY_LIMIT).let { list ->
+            if (excludeLastAssistant && list.lastOrNull()?.role == ROLE_ASSISTANT) list.dropLast(1) else list
+        }
         val messages = buildList {
             add(ROLE_SYSTEM to systemPrompt(card, character.name))
-            characters.recentMessages(characterId, HISTORY_LIMIT).forEach { message ->
+            history.forEach { message ->
                 val role = if (message.role == ROLE_USER) ROLE_USER else ROLE_ASSISTANT
                 add(role to message.content)
             }
@@ -126,15 +132,12 @@ class ChatEngine(
 
                 is ChatEvent.Completed -> {
                     val reply = builder.toString().trim()
-                    if (reply.isNotEmpty()) {
-                        characters.addMessage(characterId, ROLE_ASSISTANT, reply)
-                        TeaTalkLog.i(
-                            "Chat",
-                            "stream.done",
-                            "chars" to reply.length,
-                            "truncated" to event.truncated,
-                        )
-                    }
+                    TeaTalkLog.i(
+                        "Chat",
+                        "stream.done",
+                        "chars" to reply.length,
+                        "truncated" to event.truncated,
+                    )
                     emit(event)
                 }
 

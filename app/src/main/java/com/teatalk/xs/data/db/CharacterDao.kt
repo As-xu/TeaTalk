@@ -86,6 +86,24 @@ interface CharacterDao {
     @Query("DELETE FROM messages WHERE characterId = :characterId")
     suspend fun deleteMessages(characterId: Long)
 
+    // —— M2 多版本 / 重试 / 删除 ——
+
+    @Query("SELECT * FROM messages WHERE id = :id LIMIT 1")
+    suspend fun findMessage(id: Long): MessageEntity?
+
+    /** 某角色最后一条消息（按时间倒序），用于「重试上一条回复」。 */
+    @Query("SELECT * FROM messages WHERE characterId = :characterId ORDER BY createdAt DESC, id DESC LIMIT 1")
+    suspend fun lastMessage(characterId: Long): MessageEntity?
+
+    @Query("UPDATE messages SET content = :content, variantsJson = :variantsJson, selectedVariant = :selectedVariant, status = :status WHERE id = :id")
+    suspend fun updateVariants(id: Long, content: String, variantsJson: String, selectedVariant: Int, status: String)
+
+    @Query("UPDATE messages SET content = :content, selectedVariant = :selectedVariant WHERE id = :id")
+    suspend fun selectVariant(id: Long, content: String, selectedVariant: Int)
+
+    @Query("DELETE FROM messages WHERE id = :id")
+    suspend fun deleteMessage(id: Long)
+
     /** 是否有任何会话（决定首屏进「聊天」还是「角色」）。 */
     @Query("SELECT COUNT(DISTINCT characterId) FROM messages")
     suspend fun countChats(): Int
