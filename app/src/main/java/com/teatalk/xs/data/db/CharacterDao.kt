@@ -95,11 +95,20 @@ interface CharacterDao {
     @Query("SELECT * FROM messages WHERE characterId = :characterId ORDER BY createdAt DESC, id DESC LIMIT 1")
     suspend fun lastMessage(characterId: Long): MessageEntity?
 
-    @Query("UPDATE messages SET content = :content, variantsJson = :variantsJson, selectedVariant = :selectedVariant, status = :status WHERE id = :id")
-    suspend fun updateVariants(id: Long, content: String, variantsJson: String, selectedVariant: Int, status: String)
+    @Query(
+        "UPDATE messages SET content = :content, variantsJson = :variantsJson, variantStatusJson = :variantStatusJson, selectedVariant = :selectedVariant, status = :status WHERE id = :id",
+    )
+    suspend fun updateVariants(
+        id: Long,
+        content: String,
+        variantsJson: String,
+        variantStatusJson: String,
+        selectedVariant: Int,
+        status: String,
+    )
 
-    @Query("UPDATE messages SET content = :content, selectedVariant = :selectedVariant WHERE id = :id")
-    suspend fun selectVariant(id: Long, content: String, selectedVariant: Int)
+    @Query("UPDATE messages SET content = :content, selectedVariant = :selectedVariant, status = :status WHERE id = :id")
+    suspend fun selectVariant(id: Long, content: String, selectedVariant: Int, status: String)
 
     @Query("DELETE FROM messages WHERE id = :id")
     suspend fun deleteMessage(id: Long)

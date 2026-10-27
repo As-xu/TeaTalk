@@ -380,6 +380,7 @@ fun ChatScreen(
                             text = message.content,
                             character = character,
                             variants = variants,
+                            variantStatuses = remember(message) { MessageVariants.statuses(message) },
                             selected = message.selectedVariant.coerceIn(0, (variants.size - 1).coerceAtLeast(0)),
                             onSelectVariant = { viewModel.selectVariant(message.id, it) },
                             onLongPress = { preview = message },
@@ -642,6 +643,7 @@ private fun AssistantBubble(
     character: CharacterEntity?,
     thinking: Boolean = false,
     variants: List<String> = emptyList(),
+    variantStatuses: List<String> = emptyList(),
     selected: Int = 0,
     onSelectVariant: (Int) -> Unit = {},
     onLongPress: (String) -> Unit = {},
@@ -665,25 +667,39 @@ private fun AssistantBubble(
                     Text(text, fontSize = 14.5.sp, lineHeight = 22.sp, color = cs.onSurface)
                 }
             }
-            if (variants.size > 1) {
-                val label = stringResource(R.string.chat_variant_label, selected + 1, variants.size)
+            val status = variantStatuses.getOrNull(selected) ?: MessageEntity.STATUS_COMPLETE
+            val statusText = when (status) {
+                MessageEntity.STATUS_STOPPED -> stringResource(R.string.chat_variant_status_stopped)
+                MessageEntity.STATUS_FAILED -> stringResource(R.string.chat_variant_status_failed)
+                else -> null
+            }
+            val multiVariant = variants.size > 1
+            if (multiVariant || statusText != null) {
+                val versionLabel = if (multiVariant) {
+                    stringResource(R.string.chat_variant_label, selected + 1, variants.size)
+                } else {
+                    null
+                }
+                val label = listOfNotNull(versionLabel, statusText).joinToString(" · ")
                 Row(
                     Modifier
                         .padding(top = 1.dp)
                         .semantics(mergeDescendants = true) { contentDescription = label },
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    IconButton(
-                        onClick = { onSelectVariant(selected - 1) },
-                        enabled = selected > 0,
-                        modifier = Modifier.size(32.dp),
-                    ) {
-                        Icon(
-                            Icons.AutoMirrored.Filled.KeyboardArrowLeft,
-                            contentDescription = stringResource(R.string.chat_variant_prev),
-                            tint = if (selected > 0) cs.onSurfaceVariant else cs.onSurfaceVariant.copy(alpha = 0.45f),
-                            modifier = Modifier.size(18.dp),
-                        )
+                    if (multiVariant) {
+                        IconButton(
+                            onClick = { onSelectVariant(selected - 1) },
+                            enabled = selected > 0,
+                            modifier = Modifier.size(32.dp),
+                        ) {
+                            Icon(
+                                Icons.AutoMirrored.Filled.KeyboardArrowLeft,
+                                contentDescription = stringResource(R.string.chat_variant_prev),
+                                tint = if (selected > 0) cs.onSurfaceVariant else cs.onSurfaceVariant.copy(alpha = 0.45f),
+                                modifier = Modifier.size(18.dp),
+                            )
+                        }
                     }
                     Text(
                         label,
@@ -691,17 +707,19 @@ private fun AssistantBubble(
                         fontWeight = FontWeight.Medium,
                         color = cs.onSurfaceVariant,
                     )
-                    IconButton(
-                        onClick = { onSelectVariant(selected + 1) },
-                        enabled = selected < variants.lastIndex,
-                        modifier = Modifier.size(32.dp),
-                    ) {
-                        Icon(
-                            Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                            contentDescription = stringResource(R.string.chat_variant_next),
-                            tint = if (selected < variants.lastIndex) cs.onSurfaceVariant else cs.onSurfaceVariant.copy(alpha = 0.45f),
-                            modifier = Modifier.size(18.dp),
-                        )
+                    if (multiVariant) {
+                        IconButton(
+                            onClick = { onSelectVariant(selected + 1) },
+                            enabled = selected < variants.lastIndex,
+                            modifier = Modifier.size(32.dp),
+                        ) {
+                            Icon(
+                                Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                                contentDescription = stringResource(R.string.chat_variant_next),
+                                tint = if (selected < variants.lastIndex) cs.onSurfaceVariant else cs.onSurfaceVariant.copy(alpha = 0.45f),
+                                modifier = Modifier.size(18.dp),
+                            )
+                        }
                     }
                 }
             }

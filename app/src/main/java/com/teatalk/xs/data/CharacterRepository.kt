@@ -240,16 +240,23 @@ class CharacterRepository(
         if (dao.find(characterId) == null) return@withContext -1L
         val last = dao.lastMessage(characterId)
         if (last != null && last.role == ROLE_ASSISTANT) {
-            val variants = MessageVariants.of(last) + body
-            val selected = variants.lastIndex
+            val (variantsJson, statusJson) = MessageVariants.append(
+                variantsJson = last.variantsJson,
+                variantStatusJson = last.variantStatusJson,
+                content = last.content,
+                text = body,
+                status = status,
+            )
+            val selected = MessageVariants.parse(variantsJson, body).lastIndex
             dao.updateVariants(
                 id = last.id,
                 content = body,
-                variantsJson = MessageVariants.encode(variants),
+                variantsJson = variantsJson,
+                variantStatusJson = statusJson,
                 selectedVariant = selected,
                 status = status,
             )
-            TeaTalkLog.i("Chat", "reply.append", "messageId" to last.id, "variants" to variants.size, "chars" to body.length)
+            TeaTalkLog.i("Chat", "reply.append", "messageId" to last.id, "variants" to (selected + 1), "chars" to body.length, "status" to status)
             last.id
         } else {
             val id = dao.insertMessage(
@@ -259,6 +266,7 @@ class CharacterRepository(
                     content = body,
                     createdAt = System.currentTimeMillis(),
                     variantsJson = MessageVariants.encode(listOf(body)),
+                    variantStatusJson = MessageVariants.encodeStatuses(listOf(status)),
                     selectedVariant = 0,
                     status = status,
                 ),
@@ -274,7 +282,8 @@ class CharacterRepository(
         val variants = MessageVariants.of(message)
         if (index !in variants.indices) return@withContext null
         val text = variants[index]
-        dao.selectVariant(messageId, text, index)
+        val status = MessageVariants.statuses(message)[index]
+        dao.selectVariant(messageId, text, index, status)
         TeaTalkLog.i("Chat", "variant.select", "messageId" to messageId, "index" to index)
         text
     }

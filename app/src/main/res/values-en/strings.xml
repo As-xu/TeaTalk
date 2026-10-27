@@ -238,5 +238,7 @@
     <string name="chat_delete_message_variants">This reply has %1$d versions. Deleting removes all of them and cannot be undone. Delete?</string>
     <string name="chat_variant_prev">Previous version</string>
     <string name="chat_variant_next">Next version</string>
+    <string name="chat_variant_status_stopped">Stopped</string>
+    <string name="chat_variant_status_failed">Failed</string>
 </resources>
 

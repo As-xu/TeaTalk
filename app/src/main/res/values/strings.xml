@@ -247,5 +247,7 @@
     <string name="chat_delete_message_variants">这条回复有 %1$d 个版本，删除后全部丢失且不可恢复，确定删除吗？</string>
     <string name="chat_variant_prev">上一个版本</string>
     <string name="chat_variant_next">下一个版本</string>
+    <string name="chat_variant_status_stopped">已停止</string>
+    <string name="chat_variant_status_failed">生成失败</string>
 </resources>
 

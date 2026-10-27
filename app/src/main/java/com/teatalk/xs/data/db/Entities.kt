@@ -1,5 +1,6 @@
 package com.teatalk.xs.data.db
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
@@ -46,6 +47,8 @@ data class MessageEntity(
      * 空数组表示「只有一个版本」（老数据/用户消息）。
      */
     val variantsJson: String = "[]",
+    /** 每个版本的生成状态（与 variantsJson 等长；空数组表示全部 complete）。 */
+    @ColumnInfo(defaultValue = "[]") val variantStatusJson: String = "[]",
     /** 当前选中版本的下标（0 起）。 */
     val selectedVariant: Int = 0,
     /** complete / stopped（停止生成留下的半截）/ failed（错误前半截）。 */

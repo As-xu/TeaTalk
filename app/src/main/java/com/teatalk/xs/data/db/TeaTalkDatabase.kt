@@ -13,7 +13,7 @@ import com.teatalk.core.log.TeaTalkLog
         WorldBookEntity::class,
         ModelProviderEntity::class,
     ],
-    version = 4,
+    version = 5,
     exportSchema = false,
 )
 abstract class TeaTalkDatabase : RoomDatabase() {
@@ -22,7 +22,7 @@ abstract class TeaTalkDatabase : RoomDatabase() {
     abstract fun modelProviderDao(): ModelProviderDao
 
     companion object {
-        const val VERSION = 4
+        const val VERSION = 5
 
         /**
          * v1（M0）→ v2（D6 卡库）：
@@ -98,6 +98,18 @@ abstract class TeaTalkDatabase : RoomDatabase() {
                 db.execSQL("ALTER TABLE messages ADD COLUMN selectedVariant INTEGER NOT NULL DEFAULT 0")
                 db.execSQL("ALTER TABLE messages ADD COLUMN status TEXT NOT NULL DEFAULT 'complete'")
                 TeaTalkLog.i("Db", "db.migrate", "from" to 3, "to" to 4, "ms" to (System.currentTimeMillis() - started))
+            }
+        }
+
+        /**
+         * v4 → v5（M2 变体级状态）：`messages` 增加 `variantStatusJson`（纯增量）。
+         * 存量消息为空数组：读取时按 complete 补齐与 variantsJson 等长。
+         */
+        val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                val started = System.currentTimeMillis()
+                db.execSQL("ALTER TABLE messages ADD COLUMN variantStatusJson TEXT NOT NULL DEFAULT '[]'")
+                TeaTalkLog.i("Db", "db.migrate", "from" to 4, "to" to 5, "ms" to (System.currentTimeMillis() - started))
             }
         }
     }
