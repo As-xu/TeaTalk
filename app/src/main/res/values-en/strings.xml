@@ -232,5 +232,11 @@
     <string name="chat_delete_title">Delete message</string>
     <string name="chat_delete_message">This cannot be undone. Delete it?</string>
     <string name="chat_deleted">Deleted</string>
+    <string name="chat_variant_label">Version %1$d of %2$d</string>
+    <string name="chat_nothing_to_retry">No reply to regenerate yet</string>
+    <string name="chat_busy_generating">Still generating - try again in a moment</string>
+    <string name="chat_delete_message_variants">This reply has %1$d versions. Deleting removes all of them and cannot be undone. Delete?</string>
+    <string name="chat_variant_prev">Previous version</string>
+    <string name="chat_variant_next">Next version</string>
 </resources>
 

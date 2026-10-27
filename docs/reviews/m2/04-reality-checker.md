@@ -1,0 +1,39 @@
+Reality Checker
+## Reality Check — TeaTalk M2 claims (`docs/09-M2-进度与验收.md`)
+
+I cross-checked the doc against source, git, the built APK, and — because an API 34 emulator was actually attached (`emulator-5554`, `ro.build.version.sdk=34`, `sdk_gphone64_x86_64`) — the live app DB and logcat ring buffer. **Two claims are factually wrong; four are weaker evidence than the doc implies. Most of the behavior claims do hold.**
+
+### ✅ Supported
+
+| Claim | Evidence |
+|---|---|
+| DB v4 migration is additive | [TeaTalkDatabase.kt](TeaTalk/app/src/main/java/com/teatalk/xs/data/db/TeaTalkDatabase.kt#L94-L102): three `ALTER TABLE messages ADD COLUMN … DEFAULT …`, no table rewrite; registered at [AppContainer.kt:49](TeaTalk/app/src/main/java/com/teatalk/xs/data/AppContainer.kt#L49); no `fallbackToDestructiveMigration`. Device log: `db.open … version=4` → `db.migrate from=3 to=4 ms=3` (15:15:26 GMT). Live schema has the 3 columns (`variantsJson '[]'`, `selectedVariant 0`, `status 'complete'`), 19 legacy rows intact and readable (`prompt.ready msgs=21` on the next send). |
+| 61 unit tests green | [MessageVariantsTest.kt](TeaTalk/app/src/test/java/com/teatalk/xs/data/MessageVariantsTest.kt) 5 + ChatClientTest 9 + FileLogSinkTest 3 = 17; core 23+7+3+11 = 44. All `failures="0" skipped="0"` in `app/build/test-results/testDebugUnitTest` (23:23:03 local) and `core/build/test-results/test` (22:56:54 local). 5+56 arithmetic is right. |
+| Retry appends a variant and excludes the old reply | [CharacterRepository.kt:237](TeaTalk/app/src/main/java/com/teatalk/xs/data/CharacterRepository.kt#L237), [ChatEngine.kt:89](TeaTalk/app/src/main/java/com/teatalk/xs/data/ChatEngine.kt#L89). Logs: `send.retry excludeLast=true` → `prompt.ready msgs=20` (vs `msgs=21` for a normal generation) → `reply.append messageId=33 variants=2 chars=20`. |
+| Variant switching works | `variant.select messageId=33 index=0`; [ChatScreen.kt:610-666](TeaTalk/app/src/main/java/com/teatalk/xs/ui/chat/ChatScreen.kt#L610-L666) renders `‹ n/m ›`. |
+| Selection survives a process restart | `variant.select` 15:19:35 → new pid `8482` `app.start` 15:19:48 → `db.open version=4`; [02](TeaTalk/docs/screenshots/m2/02-variants-2of2.png)/[03](TeaTalk/docs/screenshots/m2/03-variant-1of2.png) at 15:19/15:20 show `2/2` then `1/2`. |
+| Delete works | `message.delete messageId=33` 15:21:33; row 33 is gone from the DB (0 rows with `variantsJson != '[]'` remain). |
+| APK version metadata | `aapt2 dump badging dist/TeaTalk-0.4.0-debug.apk` → `versionCode='6' versionName='0.4.0'`, minSdk 28 / target 34; sha256 `744a98bb…` identical to `app/build/outputs/apk/debug/app-debug.apk`; contains M2 code (`MessageVariants`, `appendAssistantReply`, `excludeLastAssistant`, the three `ALTER TABLE messages …` strings) and new resources (`chat_delete_title`, `chat_variant_pos`, `chat_action_retry`). |
+| Screenshot content | [01](TeaTalk/docs/screenshots/m2/01-retry-dialog.png) = preview sheet "Retry / Delete / Close / Copy" over *"I'd call it \*Smoke and Honey\*."*; [02](TeaTalk/docs/screenshots/m2/02-variants-2of2.png) = `2/2` + *"The Unmarked Shop."*; [03](TeaTalk/docs/screenshots/m2/03-variant-1of2.png) = `1/2` + original text; [04](TeaTalk/docs/screenshots/m2/04-delete-confirm.png) = "Delete message / This cannot be undone." All four match the narration. |
+
+### ❌ Unsupported or overstated
+
+1. **"启动后 12 条消息" (row 1) is wrong.** The Old Card conversation had **19** messages before the migration (19 rows with `createdAt` < the 15:15:24 migrate; the engine itself logged `prompt.ready msgs=21`, i.e. 20 history rows + system, on the first post-migration send). Today the DB holds 20 rows for character 77, and no point in the history ever had 12 — messages ids 13 and 27 were deleted earlier, so the count was 21→19→20. The only "12" in the system is the **character/card count** (`SELECT count(*) FROM characters` = 12). The migration claim is fine; the number attached to it is fabricated-by-conflation.
+
+2. **The doc frames verification as 0.4.0 (versionCode 6); the verified build was `0.3.2` / `versionCode 5`.** Every log line in the whole M2 window says `app.start version=0.3.2`, and the installed package is `versionName=0.3.2 versionCode=5 lastUpdateTime=15:15:24`. The 5→6 bump landed *inside* commit `a65f2fe` (`app/build.gradle.kts` diff), and `dist/TeaTalk-0.4.0-debug.apk` was built at 23:22 — **after** the 23:21 delete, and it was never installed on this AVD (no `app.start version=0.4.0` ever, no later `lastUpdateTime`). So screenshots/logs prove M2 behavior in a *pre-bump* build; they do not prove the shipped 0.4.0(6) artifact. The header "版本：0.4.0（versionCode 6）" + §4 "验证（AVD teatalk34）" reads as if they were the same binary.
+
+3. **The `DB variants=2, selected=1 / selected=0` assertions (rows 3–5) are no longer verifiable.** The carrier row is exactly the message that row 6 deleted (`messageId=33`), so no DB state backs them; nothing was committed (no dump/sqlite artifact in the repo). They are *corroborated indirectly* by `reply.append … variants=2`, `variant.select … index=0` and the screenshots, but as written they are unbacked evidence.
+
+4. **Row 6's "消息消失 + toast" is not shown.** [04](TeaTalk/docs/screenshots/m2/04-delete-confirm.png) is the *pre-confirmation* dialog with the bubble still visible. No post-delete screenshot, no toast capture; only the log line and row-absence support it.
+
+5. **"消息状态（complete/stopped/failed）✅" is code-complete, not verified.** `STATUS_STOPPED`/`STATUS_FAILED` are only reachable paths ([ChatScreen.kt:215](TeaTalk/app/src/main/java/com/teatalk/xs/ui/chat/ChatScreen.kt#L215), :249); zero unit tests touch them, zero device runs exercised them (DB has **0** rows with `status != 'complete'`), and §5 admits the UI never shows status. "✅ 本轮" overstates the evidence.
+
+6. **"61 条单测全绿" is accurate but narrower than it sounds.** None of the 61 covers append/select/delete/migration — `MessageVariantsTest` only exercises the JSON codec; there is no `app/src/androidTest` at all. Also the core suite XML predates the M2 commit by ~27 min (harmless: `git show --stat a65f2fe` touches no `core/` files), and `exportSchema = false` means the migration is validated only at runtime on a device, never at build time.
+
+7. **Minor wording overshoot:** §3 says the long-press sheet is "重试 / 删除 / 关闭 / 复制" — Retry only appears for the **last** assistant message ([ChatScreen.kt:499](TeaTalk/app/src/main/java/com/teatalk/xs/ui/chat/ChatScreen.kt#L499), `message.id == lastAssistantId`); older bubbles get Delete/Close/Copy only. §4 row 2 scopes it correctly, §3 doesn't. Row 5 also cites no screenshot; the only "1/2" evidence ([03](TeaTalk/docs/screenshots/m2/03-variant-1of2.png), 15:20) was taken *after* the restart, so it doubles as row-5 evidence while the doc files it under row 4.
+
+8. **Artifact hygiene:** `dist/` is gitignored and `TeaTalk-0.4.0-debug.apk` has **no `.sha256` sidecar**, unlike every prior release (0.1.0–0.3.2). There is no committed record binding the APK to commit `a65f2fe`; only the byte-equality with the local build output ties it to the tree.
+
+### Verdict
+
+**Status: NEEDS WORK (doc revision, not code revision).** The M2 implementation claims — additive v4 migration, retry-as-variant with prompt exclusion, variant switching, restart persistence, deletion, 61 green tests, and 0.4.0/6 APK metadata — all hold up. The doc's *evidence section* does not: one wrong number (#1), one misleading build attribution (#2), and three assertions with no surviving artifact (#3–5). Fix rows 1–6 by (a) quoting the actual `db.migrate from=3 to=4` / `reply.append … variants=2` / `message.delete` log lines with the build stamp they came from, (b) replacing "12 条消息" with the real count, and (c) either reinstalling `dist/TeaTalk-0.4.0-debug.apk` (versionCode 6) and re-shooting, or renaming the header to state the verified build was 0.3.2(5) pre-bump.

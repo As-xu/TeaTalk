@@ -279,6 +279,11 @@ class CharacterRepository(
         text
     }
 
+    /** 该角色最后一条 assistant 消息 id（重试入口的守卫：只有在有回复可重生成时才允许重试）。 */
+    suspend fun lastAssistantMessageId(characterId: Long): Long? = withContext(Dispatchers.IO) {
+        dao.lastMessage(characterId)?.takeIf { it.role == ROLE_ASSISTANT }?.id
+    }
+
     /** 删除一条消息（用户/assistant 都允许）。 */
     suspend fun deleteMessage(messageId: Long) = withContext(Dispatchers.IO) {
         dao.deleteMessage(messageId)

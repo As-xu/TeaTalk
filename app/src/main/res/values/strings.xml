@@ -241,5 +241,11 @@
     <string name="chat_delete_title">删除这条消息</string>
     <string name="chat_delete_message">删除后不可恢复，确定删除吗？</string>
     <string name="chat_deleted">已删除</string>
+    <string name="chat_variant_label">版本 %1$d/%2$d</string>
+    <string name="chat_nothing_to_retry">还没有可重新生成的回复</string>
+    <string name="chat_busy_generating">正在生成，稍等再试</string>
+    <string name="chat_delete_message_variants">这条回复有 %1$d 个版本，删除后全部丢失且不可恢复，确定删除吗？</string>
+    <string name="chat_variant_prev">上一个版本</string>
+    <string name="chat_variant_next">下一个版本</string>
 </resources>
 

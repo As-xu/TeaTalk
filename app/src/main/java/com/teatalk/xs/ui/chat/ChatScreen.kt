@@ -34,6 +34,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.MoreVert
@@ -62,6 +64,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
@@ -168,13 +172,28 @@ class ChatViewModel(
     }
 
     fun retry() {
-        if (job != null) return
+        if (job != null) {
+            // 生成中不静默吞掉点击：给一条提示，避免「点了没反应」
+            _notice.value = UiText.of(R.string.chat_busy_generating)
+            return
+        }
         _error.value = null
         _streamText.value = ""
         _streaming.value = true
         val gen = ++generation
         job = viewModelScope.launch {
             try {
+                // 先做和发送同样的可发送性检查，避免「错误条重试」在没配模型时又空跑一次
+                val blocked = engine.preflightError()
+                if (blocked != null) {
+                    _error.value = UiText.chatError(blocked)
+                    return@launch
+                }
+                // 只有「最后一条是 assistant」才谈得上重试；否则（例如只有开场白）直接提示
+                if (repository.lastAssistantMessageId(characterId) == null) {
+                    _notice.value = UiText.of(R.string.chat_nothing_to_retry)
+                    return@launch
+                }
                 // 重试 = 重新生成最后一条回复：把它从 prompt 历史里剔除，结果作为新版本追加
                 collectStream(engine.streamReply(characterId, excludeLastAssistant = true), gen)
             } finally {
@@ -310,9 +329,10 @@ fun ChatScreen(
     }
 
     LaunchedEffect(messages.size, streamText.length, streaming) {
+        // 列表第 0 项是「今天」分隔行，所以最后一项下标 = 消息数 + 流式占位 - 1 + 1
         val count = messages.size + if (streaming) 1 else 0
         if (count > 0 && stickToBottom) {
-            listState.scrollToItem(count - 1)
+            listState.scrollToItem(count)
         }
     }
 
@@ -515,7 +535,18 @@ fun ChatScreen(
             AlertDialog(
                 onDismissRequest = { deleteTarget = null },
                 title = { Text(stringResource(R.string.chat_delete_title), fontSize = 16.sp) },
-                text = { Text(stringResource(R.string.chat_delete_message), fontSize = 13.5.sp) },
+                text = {
+                    val variantCount = remember(message) { MessageVariants.of(message).size }
+                    Text(
+                        if (variantCount > 1) {
+                            stringResource(R.string.chat_delete_message_variants, variantCount)
+                        } else {
+                            stringResource(R.string.chat_delete_message)
+                        },
+                        fontSize = 14.sp,
+                        lineHeight = 21.sp,
+                    )
+                },
                 confirmButton = {
                     TextButton(onClick = {
                         deleteTarget = null
@@ -523,7 +554,7 @@ fun ChatScreen(
                     }) { Text(stringResource(R.string.chat_action_delete), color = cs.error) }
                 },
                 dismissButton = {
-                    TextButton(onClick = { deleteTarget = null }) { Text(stringResource(R.string.close)) }
+                    TextButton(onClick = { deleteTarget = null }) { Text(stringResource(R.string.cancel)) }
                 },
             )
         }
@@ -635,32 +666,46 @@ private fun AssistantBubble(
                 }
             }
             if (variants.size > 1) {
-                Row(Modifier.padding(start = 2.dp, top = 2.dp), verticalAlignment = Alignment.CenterVertically) {
-                    VariantArrow("\u2039", enabled = selected > 0) { onSelectVariant(selected - 1) }
+                val label = stringResource(R.string.chat_variant_label, selected + 1, variants.size)
+                Row(
+                    Modifier
+                        .padding(top = 1.dp)
+                        .semantics(mergeDescendants = true) { contentDescription = label },
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    IconButton(
+                        onClick = { onSelectVariant(selected - 1) },
+                        enabled = selected > 0,
+                        modifier = Modifier.size(32.dp),
+                    ) {
+                        Icon(
+                            Icons.AutoMirrored.Filled.KeyboardArrowLeft,
+                            contentDescription = stringResource(R.string.chat_variant_prev),
+                            tint = if (selected > 0) cs.onSurfaceVariant else cs.onSurfaceVariant.copy(alpha = 0.45f),
+                            modifier = Modifier.size(18.dp),
+                        )
+                    }
                     Text(
-                        stringResource(R.string.chat_variant_pos, selected + 1, variants.size),
-                        fontSize = 11.sp,
+                        label,
+                        fontSize = 11.5.sp,
+                        fontWeight = FontWeight.Medium,
                         color = cs.onSurfaceVariant,
-                        modifier = Modifier.padding(horizontal = 2.dp),
                     )
-                    VariantArrow("\u203a", enabled = selected < variants.lastIndex) { onSelectVariant(selected + 1) }
+                    IconButton(
+                        onClick = { onSelectVariant(selected + 1) },
+                        enabled = selected < variants.lastIndex,
+                        modifier = Modifier.size(32.dp),
+                    ) {
+                        Icon(
+                            Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                            contentDescription = stringResource(R.string.chat_variant_next),
+                            tint = if (selected < variants.lastIndex) cs.onSurfaceVariant else cs.onSurfaceVariant.copy(alpha = 0.45f),
+                            modifier = Modifier.size(18.dp),
+                        )
+                    }
                 }
             }
         }
-    }
-}
-
-@Composable
-private fun VariantArrow(text: String, enabled: Boolean, onClick: () -> Unit) {
-    val cs = MaterialTheme.colorScheme
-    Box(
-        Modifier
-            .size(26.dp)
-            .clip(CircleShape)
-            .clickable(enabled = enabled, onClick = onClick),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(text, fontSize = 14.sp, color = if (enabled) cs.onSurfaceVariant else cs.outlineVariant)
     }
 }
 

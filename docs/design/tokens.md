@@ -4,6 +4,22 @@
 > 落地位置：`app/src/main/java/com/teatalk/xs/ui/theme/Theme.kt`（`CreamColors` / `CreamDarkColors`）。
 > 规则：**业务代码一律用 MaterialTheme 语义色，不写十六进制色**；新增颜色先进本表。
 
+> **与实现对齐（2026-10-27）**：下表部分数值为设计稿值，`app/src/main/java/com/teatalk/xs/ui/theme/Theme.kt` 的实际实现以 Material3 语义槽为准，差异如下（审阅 UI Designer 指出，后续以代码为准并回填）：
+>
+> | 槽位 | 代码实现（light） | 文档值 |
+> |---|---|---|
+> | primary | `#8C5A33` | `#8C5A33` ✅ |
+> | primaryContainer | `#F4DCC4` | `#F6E7D3` |
+> | background | `#FBF7F0` | `#FBF7F0` ✅ |
+> | surface | `#FFFDF9` | `#FFFDF9` ✅ |
+> | surfaceVariant | `#EFE7DA` | `#F3ECE1` |
+> | outline | `#8A7A6A` | `#E6DDD0`（文档误把 outlineVariant 当 outline） |
+> | outlineVariant | `#DED2C2` | `#F0E8DC` |
+> | 暗色 primary | `#E7BE96` | `#E8C29A` |
+> | 暗色 background | `#171310` | `#17130F` |
+>
+> 结论：以 `Theme.kt` 为唯一事实源；文档此表待下一轮统一（列入 M2 UI 打磨）。
+
 ## 1. 色彩（浅色 / 暗色）
 
 | 语义 | 浅色 cream | 暗色 cream-night | 用途 |
