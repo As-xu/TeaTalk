@@ -71,4 +71,37 @@ data class ImportedCard(
 )
 
 /** 文件根本不是角色卡时抛出（不是"卡有问题"，是"这不是卡"）。 */
-class CardImportException(message: String, cause: Throwable? = null) : Exception(message, cause)
+/**
+ * 「根本不是角色卡」的分类原因。
+ *
+ * 解析层很宽容：字段缺失只记 warnings；只有下面这些情况才拒绝导入。
+ * 带上原因是为了让 UI 给出可操作的提示（「这是普通图片」vs「JSON 坏了」）。
+ */
+enum class CardImportReason {
+    /** 是 PNG，但没有 chara / ccv3 文本块（普通图片/截图）。 */
+    NO_CHARACTER_DATA,
+
+    /** 是 JPEG 等不支持携带角色卡数据的图片格式。 */
+    UNSUPPORTED_IMAGE,
+
+    /** 既不是 PNG/ZIP，也不是可读文本（未知二进制文件）。 */
+    UNSUPPORTED_FILE,
+
+    /** ZIP/CHARX 里没有 card.json。 */
+    MISSING_CARD_JSON,
+
+    /** CHARX 里的 card.json 超过解压上限（压缩炸弹防护）。 */
+    CARD_JSON_TOO_LARGE,
+
+    /** JSON 无法解析，或顶层不是对象。 */
+    BAD_JSON,
+
+    /** 声明是 V2/V3，但缺少 data 对象。 */
+    MISSING_DATA,
+}
+
+class CardImportException(
+    val reason: CardImportReason,
+    message: String,
+    cause: Throwable? = null,
+) : Exception(message, cause)

@@ -46,6 +46,14 @@ object CardParser {
     fun parse(bytes: ByteArray): ImportedCard = when {
         PngTextReader.isPng(bytes) -> parsePng(bytes)
         isZip(bytes) -> parseCharx(bytes)
+        isJpeg(bytes) -> throw CardImportException(
+            CardImportReason.UNSUPPORTED_IMAGE,
+            "JPEG 图片不能携带角色卡数据（ST 只认 PNG tEXt）",
+        )
+        isBinary(bytes) -> throw CardImportException(
+            CardImportReason.UNSUPPORTED_FILE,
+            "不认识这个文件：既不是 PNG/CHARX，也不是 JSON 文本",
+        )
         else -> parseJsonText(decodeUtf8(bytes), preferredSource = null)
     }
 
@@ -53,7 +61,10 @@ object CardParser {
 
     private fun parsePng(bytes: ByteArray): ImportedCard {
         val cardJson = PngTextReader.cardJson(bytes)
-            ?: throw CardImportException("PNG 里没有 chara / ccv3 元数据，不是角色卡")
+            ?: throw CardImportException(
+            CardImportReason.NO_CHARACTER_DATA,
+            "PNG 里没有 chara / ccv3 元数据，不是角色卡",
+        )
         val preferred = if (PngTextReader.hasKeyword(bytes, "ccv3")) CardSource.PNG_V3 else CardSource.PNG_V2
         return parseJsonText(cardJson, preferredSource = preferred)
     }
@@ -67,7 +78,10 @@ object CardParser {
                 if (!entry.isDirectory && entry.name.substringAfterLast('/').equals("card.json", ignoreCase = true)) {
                     // 压缩炸弹防护：先看声明尺寸，再按上限边读边计数（ZIP 头部尺寸不可信）
                     if (entry.size > MAX_CHARX_JSON_BYTES) {
-                        throw CardImportException("CHARX 内 card.json 过大（声明 ${entry.size} 字节）")
+                        throw CardImportException(
+                            CardImportReason.CARD_JSON_TOO_LARGE,
+                            "CHARX 内 card.json 过大（声明 ${entry.size} 字节）",
+                        )
                     }
                     val out = ByteArrayOutputStream()
                     val chunk = ByteArray(8 * 1024)
@@ -77,7 +91,10 @@ object CardParser {
                         if (n < 0) break
                         total += n
                         if (total > MAX_CHARX_JSON_BYTES) {
-                            throw CardImportException("CHARX 内 card.json 解压后超过 ${MAX_CHARX_JSON_BYTES / 1024 / 1024} MB，已拒绝")
+                            throw CardImportException(
+                                CardImportReason.CARD_JSON_TOO_LARGE,
+                                "CHARX 内 card.json 解压后超过 ${MAX_CHARX_JSON_BYTES / 1024 / 1024} MB，已拒绝",
+                            )
                         }
                         out.write(chunk, 0, n)
                     }
@@ -90,7 +107,7 @@ object CardParser {
                 entry = zip.nextEntry
             }
         }
-        throw CardImportException("CHARX 压缩包里没有 card.json")
+        throw CardImportException(CardImportReason.MISSING_CARD_JSON, "CHARX 压缩包里没有 card.json")
     }
 
     // ---- JSON ----
@@ -99,11 +116,11 @@ object CardParser {
         val warnings = mutableListOf<String>()
         val root = try {
             json.parseToJsonElement(stripBom(text).trim()) as? JsonObject
-                ?: throw CardImportException("角色卡 JSON 顶层不是对象")
+                ?: throw CardImportException(CardImportReason.BAD_JSON, "角色卡 JSON 顶层不是对象")
         } catch (e: CardImportException) {
             throw e
         } catch (e: Exception) {
-            throw CardImportException("角色卡 JSON 解析失败", e)
+            throw CardImportException(CardImportReason.BAD_JSON, "角色卡 JSON 解析失败", e)
         }
 
         val spec = root.strOrNull("spec")
@@ -116,13 +133,13 @@ object CardParser {
             spec == StCharacterCard.SPEC_V3 -> {
                 warnings += "V3 卡：多出的字段（group_only_greetings / assets 等）已保留在原始 JSON 中"
                 dataObj = (root["data"] as? JsonObject)
-                    ?: throw CardImportException("V3 卡缺少 data 对象")
+                    ?: throw CardImportException(CardImportReason.MISSING_DATA, "V3 卡缺少 data 对象")
                 derivedSource = preferredSource ?: CardSource.JSON_V3
             }
 
             spec == StCharacterCard.SPEC_V2 -> {
                 dataObj = (root["data"] as? JsonObject)
-                    ?: throw CardImportException("V2 卡缺少 data 对象")
+                    ?: throw CardImportException(CardImportReason.MISSING_DATA, "V2 卡缺少 data 对象")
                 derivedSource = preferredSource ?: CardSource.JSON_V2
             }
 
@@ -242,6 +259,17 @@ object CardParser {
     }
 
     // ---- helpers ----
+
+    /** JPEG 魔术数 FF D8 FF（手机相册里的图几乎都是这种，给明确提示而不是「解析失败」）。 */
+    private fun isJpeg(bytes: ByteArray): Boolean =
+        bytes.size >= 3 && bytes[0] == 0xFF.toByte() && bytes[1] == 0xD8.toByte() && bytes[2] == 0xFF.toByte()
+
+    /** 前 1KB 里出现 NUL 基本可判定二进制；纯文本 JSON 不会有。 */
+    private fun isBinary(bytes: ByteArray): Boolean {
+        val limit = minOf(bytes.size, 1024)
+        for (i in 0 until limit) if (bytes[i] == 0.toByte()) return true
+        return false
+    }
 
     private fun isZip(bytes: ByteArray): Boolean =
         bytes.size > 4 && bytes[0] == 'P'.code.toByte() && bytes[1] == 'K'.code.toByte()

@@ -298,4 +298,47 @@ class CardParserTest {
         }
         return out.toByteArray()
     }
+
+    // ---- 导入失败原因分类（给用户可操作提示）----
+
+    @Test
+    fun `普通 PNG 无文本块时给出 NO_CHARACTER_DATA`() {
+        val plainPng = pngText()
+        val e = assertFailsWith<CardImportException> { CardParser.parse(plainPng) }
+        assertEquals(CardImportReason.NO_CHARACTER_DATA, e.reason)
+    }
+
+    @Test
+    fun `JPEG 文件给出 UNSUPPORTED_IMAGE`() {
+        val jpeg = byteArrayOf(0xFF.toByte(), 0xD8.toByte(), 0xFF.toByte(), 0xE0.toByte(), 0, 0, 0, 0)
+        val e = assertFailsWith<CardImportException> { CardParser.parse(jpeg) }
+        assertEquals(CardImportReason.UNSUPPORTED_IMAGE, e.reason)
+    }
+
+    @Test
+    fun `未知二进制给出 UNSUPPORTED_FILE`() {
+        val binary = ByteArray(64) { if (it % 7 == 0) 0 else (it + 1).toByte() }
+        val e = assertFailsWith<CardImportException> { CardParser.parse(binary) }
+        assertEquals(CardImportReason.UNSUPPORTED_FILE, e.reason)
+    }
+
+    @Test
+    fun `坏 JSON 给出 BAD_JSON`() {
+        val e = assertFailsWith<CardImportException> { CardParser.parse("{ not json ".toByteArray()) }
+        assertEquals(CardImportReason.BAD_JSON, e.reason)
+    }
+
+    @Test
+    fun `ZIP 无 cardJson 给出 MISSING_CARD_JSON`() {
+        val zip = zipOf("other.txt" to "hi")
+        val e = assertFailsWith<CardImportException> { CardParser.parse(zip) }
+        assertEquals(CardImportReason.MISSING_CARD_JSON, e.reason)
+    }
+
+    @Test
+    fun `V2 缺 data 给出 MISSING_DATA`() {
+        val bytes = """{"spec":"chara_card_v2","data":null}""".toByteArray()
+        val e = assertFailsWith<CardImportException> { CardParser.parse(bytes) }
+        assertEquals(CardImportReason.MISSING_DATA, e.reason)
+    }
 }

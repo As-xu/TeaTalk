@@ -105,6 +105,13 @@
     <string name="import_open_failed">Couldn\'t open the selected file</string>
     <string name="import_parse_failed">Failed to parse the character card</string>
     <string name="import_failed_detail">Import failed: %1$s</string>
+    <string name="import_err_not_a_card">This PNG has no character data — it looks like a plain image or screenshot. Import a character-card PNG exported from SillyTavern.</string>
+    <string name="import_err_jpeg">JPEG images can\'t carry character data. Use a PNG / JSON / CHARX character card instead.</string>
+    <string name="import_err_unsupported">Unsupported file. Pick a PNG / JSON / CHARX character card.</string>
+    <string name="import_err_charx">This CHARX has no card.json — the file may be corrupted.</string>
+    <string name="import_err_too_large">Character data is too large (over 16 MB) — import aborted.</string>
+    <string name="import_err_bad_json">That\'s not a valid character-card JSON — the file may be corrupted or the wrong pick.</string>
+    <string name="import_err_missing_data">The card is missing required structure (the V2/V3 data object).</string>
     <string name="import_card_too_large">Card exceeds %1$d MB — aborted</string>
     <string name="offline_reply">(offline demo) I heard “%1$s”. Once a model is connected, “%2$s” will reply for real.</string>
     <string name="greeting_fallback">…</string>

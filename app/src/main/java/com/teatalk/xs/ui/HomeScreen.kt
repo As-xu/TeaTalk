@@ -2,12 +2,21 @@ package com.teatalk.xs.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.Snackbar
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -78,7 +87,8 @@ fun HomeScreen(
     val externalText = externalMessage?.let { msg ->
         val raw = if (msg.args.isEmpty()) stringResource(msg.res)
         else stringResource(msg.res, *msg.args.toTypedArray())
-        if (raw.length > 60) raw.take(57) + "…" else raw
+        // 截断上限放宽：导入失败的原因需要完整可读，Snackbar 已支持 6 行
+        if (raw.length > 240) raw.take(237) + "…" else raw
     }
     LaunchedEffect(externalText) {
         val text = externalText ?: return@LaunchedEffect
@@ -96,7 +106,34 @@ fun HomeScreen(
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
-        snackbarHost = { SnackbarHost(snackbarHostState) },
+        snackbarHost = {
+            // 自定义 Snackbar：导入失败的原因往往需要三行以上，Material3 默认样式只留两行
+            SnackbarHost(snackbarHostState) { data ->
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = MaterialTheme.colorScheme.inverseSurface,
+                    contentColor = MaterialTheme.colorScheme.inverseOnSurface,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                ) {
+                    Row(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
+                        Text(
+                            text = data.visuals.message,
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier.weight(1f),
+                            maxLines = 6,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        data.visuals.actionLabel?.let { label ->
+                            TextButton(onClick = { data.performAction() }) {
+                                Text(label)
+                            }
+                        }
+                    }
+                }
+            }
+        },
         bottomBar = {
             if (showBottomBar) {
                 AppBottomBar(

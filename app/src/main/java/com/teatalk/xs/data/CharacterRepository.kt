@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.Uri
 import com.teatalk.core.card.CardImportException
 import com.teatalk.xs.R
+import com.teatalk.core.card.CardImportReason
 import com.teatalk.core.card.CardParser
 import com.teatalk.core.card.PngTextReader
 import com.teatalk.core.log.Redact
@@ -94,13 +95,29 @@ class CharacterRepository(
             TeaTalkLog.w("Card", "import.too_large", "maxMb" to e.maxMb)
             ImportOutcome.Failure(UiText.of(R.string.import_card_too_large, e.maxMb))
         } catch (e: CardImportException) {
-            // :core 的异常文案是开发期诊断用的（中文），对用户统一显示本地化的“解析失败”
-            TeaTalkLog.w("Card", "import.fail", "type" to "CardImportException", "ms" to (System.currentTimeMillis() - started))
-            ImportOutcome.Failure(UiText.of(R.string.import_parse_failed))
+            // :core 的异常文案是开发期诊断用的（中文）；对用户按「原因」给可操作的提示
+            TeaTalkLog.w(
+                "Card",
+                "import.fail",
+                "reason" to e.reason.name,
+                "ms" to (System.currentTimeMillis() - started),
+            )
+            ImportOutcome.Failure(UiText.of(reasonString(e.reason)))
         } catch (e: Exception) {
             TeaTalkLog.e("Card", "import.fail", e, "ms" to (System.currentTimeMillis() - started))
             ImportOutcome.Failure(UiText.of(R.string.import_failed_detail, e.message ?: e.javaClass.simpleName))
         }
+    }
+
+    /** 把「为什么不是角色卡」翻译成用户能行动的文案。 */
+    private fun reasonString(reason: CardImportReason): Int = when (reason) {
+        CardImportReason.NO_CHARACTER_DATA -> R.string.import_err_not_a_card
+        CardImportReason.UNSUPPORTED_IMAGE -> R.string.import_err_jpeg
+        CardImportReason.UNSUPPORTED_FILE -> R.string.import_err_unsupported
+        CardImportReason.MISSING_CARD_JSON -> R.string.import_err_charx
+        CardImportReason.CARD_JSON_TOO_LARGE -> R.string.import_err_too_large
+        CardImportReason.BAD_JSON -> R.string.import_err_bad_json
+        CardImportReason.MISSING_DATA -> R.string.import_err_missing_data
     }
 
     suspend fun delete(character: CharacterEntity) = withContext(Dispatchers.IO) {

@@ -114,6 +114,13 @@
     <string name="import_open_failed">无法打开所选文件</string>
     <string name="import_parse_failed">角色卡解析失败</string>
     <string name="import_failed_detail">导入失败：%1$s</string>
+    <string name="import_err_not_a_card">这张 PNG 里没有角色卡数据，可能只是普通图片或截图。请导入 SillyTavern 导出的角色卡 PNG。</string>
+    <string name="import_err_jpeg">JPEG 图片不能携带角色卡数据，请改用 PNG / JSON / CHARX 角色卡。</string>
+    <string name="import_err_unsupported">不支持这个文件，请选择 PNG / JSON / CHARX 角色卡。</string>
+    <string name="import_err_charx">CHARX 包里没有 card.json，文件可能已损坏。</string>
+    <string name="import_err_too_large">角色卡数据过大（超过 16 MB），已中止导入。</string>
+    <string name="import_err_bad_json">这不是有效的角色卡 JSON，文件可能已损坏或选错了。</string>
+    <string name="import_err_missing_data">角色卡缺少必要的数据结构（V2/V3 的 data 字段）。</string>
     <string name="import_card_too_large">角色卡超过 %1$d MB，已中止</string>
     <string name="offline_reply">（离线示例回复）我听见你说「%1$s」。接上模型后，这里会是「%2$s」的真实回应。</string>
     <string name="greeting_fallback">……</string>

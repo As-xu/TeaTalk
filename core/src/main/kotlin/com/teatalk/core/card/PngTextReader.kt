@@ -63,7 +63,11 @@ object PngTextReader {
         return try {
             String(Base64.getDecoder().decode(picked.text.trim()), Charsets.UTF_8)
         } catch (e: IllegalArgumentException) {
-            throw CardImportException("PNG 的 ${picked.keyword} 元数据不是合法 base64", e)
+            throw CardImportException(
+                CardImportReason.NO_CHARACTER_DATA,
+                "PNG 的 ${picked.keyword} 元数据不是合法 base64",
+                e,
+            )
         }
     }
 
