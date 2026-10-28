@@ -67,6 +67,7 @@ import kotlinx.coroutines.flow.stateIn
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import com.teatalk.xs.ui.theme.TypeScale
 
 class ChatListViewModel(private val repository: CharacterRepository) : ViewModel() {
     val chats: StateFlow<List<ConversationWithLastMessage>?> = repository.observeChats()
@@ -138,13 +139,13 @@ fun ChatListScreen(
                 Modifier.size(44.dp).clip(RoundedCornerShape(14.dp)).background(cs.primaryContainer),
                 contentAlignment = Alignment.Center,
             ) {
-                Text("茶", fontSize = 20.sp, color = cs.onPrimaryContainer, fontWeight = FontWeight.SemiBold)
+                Text("茶", fontSize = TypeScale.s20, color = cs.onPrimaryContainer, fontWeight = FontWeight.SemiBold)
             }
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
-                Text(stringResource(R.string.chatlist_title), fontSize = 19.sp, fontWeight = FontWeight.SemiBold, color = cs.onBackground)
+                Text(stringResource(R.string.chatlist_title), fontSize = TypeScale.s19, fontWeight = FontWeight.SemiBold, color = cs.onBackground)
                 Spacer(Modifier.height(2.dp))
-                Text(stringResource(R.string.chatlist_subtitle), fontSize = 11.5.sp, color = cs.onSurfaceVariant)
+                Text(stringResource(R.string.chatlist_subtitle), fontSize = TypeScale.s11_5, color = cs.onSurfaceVariant)
             }
             IconButton(onClick = {}) {
                 Icon(Icons.Filled.Search, contentDescription = stringResource(R.string.search), tint = cs.onSurfaceVariant, modifier = Modifier.size(21.dp))
@@ -165,9 +166,9 @@ fun ChatListScreen(
                     Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 14.dp, bottom = 6.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text(stringResource(R.string.chatlist_section_title), fontSize = 13.sp, fontWeight = FontWeight.Medium, color = cs.onSurfaceVariant)
+                    Text(stringResource(R.string.chatlist_section_title), fontSize = TypeScale.s13, fontWeight = FontWeight.Medium, color = cs.onSurfaceVariant)
                     Spacer(Modifier.weight(1f))
-                    Text(pluralStringResource(R.plurals.chatlist_waiting, list.size, list.size), fontSize = 12.sp, color = cs.onSurfaceVariant)
+                    Text(pluralStringResource(R.plurals.chatlist_waiting, list.size, list.size), fontSize = TypeScale.s12, color = cs.onSurfaceVariant)
                 }
                 LazyColumn(Modifier.fillMaxSize()) {
                     items(list, key = { it.conversation.id }) { chat ->
@@ -212,7 +213,7 @@ private fun ChatRow(chat: ConversationWithLastMessage, onClick: () -> Unit) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         chat.conversation.title.ifBlank { chat.characterName },
-                        fontSize = 15.sp,
+                        fontSize = TypeScale.s15,
                         fontWeight = FontWeight.Medium,
                         color = cs.onBackground,
                         maxLines = 1,
@@ -222,14 +223,14 @@ private fun ChatRow(chat: ConversationWithLastMessage, onClick: () -> Unit) {
                     Spacer(Modifier.weight(1f))
                     Text(
                         chat.lastAt?.let { formatChatTime(it) } ?: "",
-                        fontSize = 11.sp,
+                        fontSize = TypeScale.s11,
                         color = cs.onSurfaceVariant,
                     )
                 }
                 Spacer(Modifier.height(4.dp))
                 Text(
                     chat.lastContent?.let { previewText(it) } ?: stringResource(R.string.chatlist_last_placeholder),
-                    fontSize = 12.5.sp,
+                    fontSize = TypeScale.s12_5,
                     color = cs.onSurfaceVariant,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -252,14 +253,14 @@ private fun EmptyChats(onGoCharacters: () -> Unit) {
             Modifier.size(72.dp).clip(CircleShape).background(cs.surfaceContainerHigh),
             contentAlignment = Alignment.Center,
         ) {
-            Text("茶", fontSize = 28.sp, color = cs.onSurfaceVariant, fontWeight = FontWeight.Medium)
+            Text("茶", fontSize = TypeScale.s28, color = cs.onSurfaceVariant, fontWeight = FontWeight.Medium)
         }
         Spacer(Modifier.height(18.dp))
-        Text(stringResource(R.string.chatlist_empty_title), fontSize = 17.sp, fontWeight = FontWeight.Medium, color = cs.onBackground)
+        Text(stringResource(R.string.chatlist_empty_title), fontSize = TypeScale.s17, fontWeight = FontWeight.Medium, color = cs.onBackground)
         Spacer(Modifier.height(6.dp))
         Text(
             stringResource(R.string.chatlist_empty_body),
-            fontSize = 13.sp,
+            fontSize = TypeScale.s13,
             color = cs.onSurfaceVariant,
         )
         Spacer(Modifier.height(18.dp))
@@ -270,7 +271,7 @@ private fun EmptyChats(onGoCharacters: () -> Unit) {
                 .clickable(onClick = onGoCharacters)
                 .padding(horizontal = 22.dp, vertical = 11.dp),
         ) {
-            Text(stringResource(R.string.chatlist_empty_cta), fontSize = 14.sp, color = cs.onPrimary, fontWeight = FontWeight.Medium)
+            Text(stringResource(R.string.chatlist_empty_cta), fontSize = TypeScale.s14, color = cs.onPrimary, fontWeight = FontWeight.Medium)
         }
     }
 }

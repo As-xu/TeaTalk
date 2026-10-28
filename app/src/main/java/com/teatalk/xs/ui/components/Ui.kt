@@ -30,6 +30,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.teatalk.xs.ui.theme.TypeScale
 
 /** 底部 Tab 的数据：图标 + 文案 + 路由 key。 */
 data class TabItem(
@@ -69,7 +70,7 @@ fun AppBottomBar(
                     Spacer(Modifier.height(2.dp))
                     Text(
                         stringResource(tab.labelRes),
-                        fontSize = 10.sp,
+                        fontSize = TypeScale.s10,
                         color = tint,
                         fontWeight = if (active) FontWeight.Medium else FontWeight.Normal,
                     )
@@ -94,7 +95,7 @@ fun SearchPill(hint: String, modifier: Modifier = Modifier) {
     ) {
         Icon(Icons.Filled.Search, contentDescription = null, tint = cs.onSurfaceVariant, modifier = Modifier.size(17.dp))
         Spacer(Modifier.width(6.dp))
-        Text(hint, fontSize = 13.5.sp, color = cs.onSurfaceVariant)
+        Text(hint, fontSize = TypeScale.s13_5, color = cs.onSurfaceVariant)
     }
 }
 
@@ -108,9 +109,9 @@ fun SectionLabel(text: String, trailing: String? = null, modifier: Modifier = Mo
     ) {
         Box(Modifier.width(3.dp).height(14.dp).clip(RoundedCornerShape(2.dp)).background(cs.primary))
         Spacer(Modifier.width(8.dp))
-        Text(text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = cs.onBackground)
+        Text(text, fontSize = TypeScale.s14, fontWeight = FontWeight.SemiBold, color = cs.onBackground)
         Spacer(Modifier.weight(1f))
-        if (trailing != null) Text(trailing, fontSize = 12.sp, color = cs.onSurfaceVariant)
+        if (trailing != null) Text(trailing, fontSize = TypeScale.s12, color = cs.onSurfaceVariant)
     }
 }
 
@@ -126,7 +127,7 @@ fun PillTag(text: String, tinted: Boolean = true, modifier: Modifier = Modifier)
             .background(bg)
             .padding(horizontal = 7.dp, vertical = 2.dp),
     ) {
-        Text(text, fontSize = 11.sp, color = fg)
+        Text(text, fontSize = TypeScale.s11, color = fg)
     }
 }
 

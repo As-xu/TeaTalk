@@ -66,6 +66,7 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import com.teatalk.xs.ui.theme.TypeScale
 
 data class CharacterDetailState(
     val character: CharacterEntity? = null,
@@ -168,7 +169,7 @@ fun CharacterDetailScreen(
                 Column(Modifier.align(Alignment.BottomStart).padding(start = 20.dp, end = 20.dp, bottom = 18.dp)) {
                     Text(
                         character?.name ?: view.name.ifBlank { stringResource(R.string.character_fallback) },
-                        fontSize = 26.sp,
+                        fontSize = TypeScale.s26,
                         fontWeight = FontWeight.Bold,
                         color = Color.White,
                     )
@@ -179,7 +180,7 @@ fun CharacterDetailScreen(
                             if (view.version.isNotBlank()) append("v${view.version} · ")
                             append(character?.cardSource ?: "")
                         }.trimEnd(' ', '·'),
-                        fontSize = 12.sp,
+                        fontSize = TypeScale.s12,
                         color = Color.White.copy(alpha = 0.82f),
                     )
                     if (view.tags.isNotEmpty()) {
@@ -192,7 +193,7 @@ fun CharacterDetailScreen(
                                         .background(Color.White.copy(alpha = 0.16f))
                                         .padding(horizontal = 8.dp, vertical = 3.dp),
                                 ) {
-                                    Text(tag, fontSize = 11.sp, color = Color.White)
+                                    Text(tag, fontSize = TypeScale.s11, color = Color.White)
                                 }
                             }
                         }
@@ -217,7 +218,7 @@ fun CharacterDetailScreen(
                 ) {
                     Text(
                         stringResource(R.string.detail_start_chat),
-                        fontSize = 15.sp,
+                        fontSize = TypeScale.s15,
                         fontWeight = FontWeight.Medium,
                         color = cs.onPrimary,
                     )
@@ -266,20 +267,20 @@ fun CharacterDetailScreen(
                         Column {
                             Text(
                                 entry.comment.ifBlank { entry.keys.joinToString("、") },
-                                fontSize = 13.sp,
+                                fontSize = TypeScale.s13,
                                 fontWeight = FontWeight.Medium,
                                 color = cs.onSurface,
                             )
                             if (entry.keys.isNotEmpty()) {
                                 Text(
                                     entry.keys.joinToString("、"),
-                                    fontSize = 11.sp,
+                                    fontSize = TypeScale.s11,
                                     color = cs.onSurfaceVariant,
                                 )
                             }
                             Text(
                                 entry.content.take(120),
-                                fontSize = 12.sp,
+                                fontSize = TypeScale.s12,
                                 color = cs.onSurfaceVariant.copy(alpha = 0.9f),
                             )
                         }
@@ -333,7 +334,7 @@ private fun OutlinedPill(text: String, enabled: Boolean, onClick: () -> Unit) {
     ) {
         Text(
             text,
-            fontSize = 14.sp,
+            fontSize = TypeScale.s14,
             color = if (enabled) cs.onSurfaceVariant else cs.onSurfaceVariant.copy(alpha = 0.45f),
         )
     }
@@ -353,7 +354,7 @@ private fun SectionCard(title: String, content: @Composable () -> Unit) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.width(3.dp).height(13.dp).clip(RoundedCornerShape(2.dp)).background(cs.primary))
             Spacer(Modifier.width(8.dp))
-            Text(title, fontSize = 13.5.sp, fontWeight = FontWeight.SemiBold, color = cs.onBackground)
+            Text(title, fontSize = TypeScale.s13_5, fontWeight = FontWeight.SemiBold, color = cs.onBackground)
         }
         Spacer(Modifier.height(8.dp))
         content()
@@ -364,7 +365,7 @@ private fun SectionCard(title: String, content: @Composable () -> Unit) {
 private fun BodyText(text: String) {
     Text(
         text,
-        fontSize = 13.5.sp,
+        fontSize = TypeScale.s13_5,
         lineHeight = 21.sp,
         color = MaterialTheme.colorScheme.onSurface,
     )
@@ -374,8 +375,8 @@ private fun BodyText(text: String) {
 private fun FieldLine(label: String, value: String) {
     val cs = MaterialTheme.colorScheme
     Row(Modifier.padding(top = 2.dp)) {
-        Text("$label：", fontSize = 13.sp, color = cs.onSurfaceVariant)
-        Text(value, fontSize = 13.5.sp, color = cs.onSurface, modifier = Modifier.weight(1f))
+        Text("$label：", fontSize = TypeScale.s13, color = cs.onSurfaceVariant)
+        Text(value, fontSize = TypeScale.s13_5, color = cs.onSurface, modifier = Modifier.weight(1f))
     }
 }
 

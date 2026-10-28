@@ -72,6 +72,7 @@ import com.teatalk.xs.data.db.CharacterEntity
 import com.teatalk.xs.ui.components.PillTag
 import java.io.File
 import kotlinx.coroutines.launch
+import com.teatalk.xs.ui.theme.TypeScale
 
 private val CARD_MIME_TYPES = arrayOf("image/png", "image/jpeg", "application/json", "application/zip", "*/*")
 
@@ -134,14 +135,14 @@ fun CharactersScreen(
                     .padding(start = 20.dp, end = 8.dp, top = 10.dp, bottom = 6.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(stringResource(R.string.characters_title), fontSize = 21.sp, fontWeight = FontWeight.SemiBold, color = cs.onBackground)
+                Text(stringResource(R.string.characters_title), fontSize = TypeScale.s21, fontWeight = FontWeight.SemiBold, color = cs.onBackground)
                 Spacer(Modifier.weight(1f))
                 TextButton(onClick = { picker.launch(CARD_MIME_TYPES) }, enabled = !importing) {
                     Icon(Icons.Filled.Add, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(Modifier.width(2.dp))
                     Text(
                         stringResource(if (importing) R.string.characters_importing else R.string.characters_import),
-                        fontSize = 14.sp,
+                        fontSize = TypeScale.s14,
                         fontWeight = FontWeight.Medium,
                     )
                 }
@@ -171,7 +172,7 @@ fun CharactersScreen(
                 Spacer(Modifier.weight(1f))
                 Text(
                     pluralStringResource(R.plurals.characters_count, cards?.size ?: 0, cards?.size ?: 0),
-                    fontSize = 12.sp,
+                    fontSize = TypeScale.s12,
                     color = cs.onSurfaceVariant,
                 )
             }
@@ -301,13 +302,13 @@ private fun SearchField(
         Spacer(Modifier.width(8.dp))
         Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
             if (query.isEmpty()) {
-                Text(hint, fontSize = 13.5.sp, color = cs.onSurfaceVariant)
+                Text(hint, fontSize = TypeScale.s13_5, color = cs.onSurfaceVariant)
             }
             BasicTextField(
                 value = query,
                 onValueChange = onQueryChange,
                 singleLine = true,
-                textStyle = androidx.compose.ui.text.TextStyle(fontSize = 13.5.sp, color = cs.onBackground),
+                textStyle = androidx.compose.ui.text.TextStyle(fontSize = TypeScale.s13_5, color = cs.onBackground),
                 cursorBrush = SolidColor(cs.primary),
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                 keyboardActions = KeyboardActions(onSearch = { focusManager.clearFocus() }),
@@ -317,7 +318,7 @@ private fun SearchField(
         if (query.isNotEmpty()) {
             Text(
                 stringResource(R.string.characters_search_clear),
-                fontSize = 12.sp,
+                fontSize = TypeScale.s12,
                 color = cs.primary,
                 modifier = Modifier.clickable { onQueryChange("") }.padding(start = 6.dp),
             )
@@ -337,7 +338,7 @@ private fun FilterChip(selected: Boolean, label: String, onClick: () -> Unit) {
     ) {
         Text(
             label,
-            fontSize = 12.5.sp,
+            fontSize = TypeScale.s12_5,
             color = if (selected) cs.onPrimaryContainer else cs.onSurfaceVariant,
             fontWeight = if (selected) FontWeight.Medium else FontWeight.Normal,
         )
@@ -356,7 +357,7 @@ private fun TagChip(label: String, selected: Boolean, onClick: () -> Unit) {
     ) {
         Text(
             label,
-            fontSize = 12.sp,
+            fontSize = TypeScale.s12,
             color = if (selected) cs.primary else cs.onSurfaceVariant,
             fontWeight = if (selected) FontWeight.Medium else FontWeight.Normal,
         )
@@ -394,7 +395,7 @@ private fun CharacterCard(
             } else {
                 Text(
                     character.name.take(1),
-                    fontSize = 44.sp,
+                    fontSize = TypeScale.s44,
                     color = cs.primary,
                     modifier = Modifier.align(Alignment.Center),
                 )
@@ -411,7 +412,7 @@ private fun CharacterCard(
             )
             Text(
                 character.name,
-                fontSize = 15.sp,
+                fontSize = TypeScale.s15,
                 fontWeight = FontWeight.SemiBold,
                 color = Color.White,
                 maxLines = 2,
@@ -428,7 +429,7 @@ private fun CharacterCard(
         val tag = parseTags(character.tagsJson).take(2).joinToString(" · ")
         Text(
             tag.takeIf { it.isNotBlank() } ?: sourceLabel(character.cardSource),
-            fontSize = 11.5.sp,
+            fontSize = TypeScale.s11_5,
             color = cs.onSurfaceVariant,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
@@ -449,7 +450,7 @@ private fun CardActionSheet(
     Column(Modifier.fillMaxWidth().padding(bottom = 24.dp)) {
         Text(
             character.name,
-            fontSize = 15.sp,
+            fontSize = TypeScale.s15,
             fontWeight = FontWeight.SemiBold,
             color = cs.onBackground,
             maxLines = 1,
@@ -479,7 +480,7 @@ private fun SheetAction(label: String, onClick: () -> Unit, danger: Boolean = fa
             .padding(horizontal = 24.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(label, fontSize = 15.sp, color = if (danger) cs.error else cs.onBackground)
+        Text(label, fontSize = TypeScale.s15, color = if (danger) cs.error else cs.onBackground)
     }
 }
 
@@ -490,15 +491,15 @@ private fun WarningsSheet(warnings: List<String>, onDismiss: () -> Unit) {
     val cs = MaterialTheme.colorScheme
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState()) {
         Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp).padding(bottom = 32.dp)) {
-            Text(stringResource(R.string.warnings_title), fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = cs.onBackground)
+            Text(stringResource(R.string.warnings_title), fontSize = TypeScale.s16, fontWeight = FontWeight.SemiBold, color = cs.onBackground)
             Spacer(Modifier.height(4.dp))
-            Text(stringResource(R.string.warnings_hint), fontSize = 12.5.sp, color = cs.onSurfaceVariant)
+            Text(stringResource(R.string.warnings_hint), fontSize = TypeScale.s12_5, color = cs.onSurfaceVariant)
             Spacer(Modifier.height(12.dp))
             warnings.forEach { warning ->
                 Row(Modifier.padding(vertical = 4.dp)) {
-                    Text("·", color = cs.primary, fontSize = 14.sp)
+                    Text("·", color = cs.primary, fontSize = TypeScale.s14)
                     Spacer(Modifier.width(8.dp))
-                    Text(warning, fontSize = 13.sp, color = cs.onBackground)
+                    Text(warning, fontSize = TypeScale.s13, color = cs.onBackground)
                 }
             }
         }
@@ -513,13 +514,13 @@ private fun NoMatchCharacters(onClear: () -> Unit) {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
-        Text(stringResource(R.string.characters_no_match_title), fontSize = 16.sp, fontWeight = FontWeight.Medium, color = cs.onBackground)
+        Text(stringResource(R.string.characters_no_match_title), fontSize = TypeScale.s16, fontWeight = FontWeight.Medium, color = cs.onBackground)
         Spacer(Modifier.height(6.dp))
-        Text(stringResource(R.string.characters_no_match_body), fontSize = 13.sp, color = cs.onSurfaceVariant)
+        Text(stringResource(R.string.characters_no_match_body), fontSize = TypeScale.s13, color = cs.onSurfaceVariant)
         Spacer(Modifier.height(16.dp))
         Text(
             stringResource(R.string.characters_search_clear),
-            fontSize = 14.sp,
+            fontSize = TypeScale.s14,
             color = cs.primary,
             modifier = Modifier
                 .clip(RoundedCornerShape(18.dp))
@@ -542,12 +543,12 @@ private fun EmptyCharacters(onImport: () -> Unit) {
             Modifier.size(72.dp).clip(RoundedCornerShape(20.dp)).background(cs.surfaceContainerHigh),
             contentAlignment = Alignment.Center,
         ) {
-            Text(stringResource(R.string.characters_placeholder_letter), fontSize = 28.sp, color = cs.onSurfaceVariant, fontWeight = FontWeight.Medium)
+            Text(stringResource(R.string.characters_placeholder_letter), fontSize = TypeScale.s28, color = cs.onSurfaceVariant, fontWeight = FontWeight.Medium)
         }
         Spacer(Modifier.height(18.dp))
-        Text(stringResource(R.string.characters_empty_title), fontSize = 17.sp, fontWeight = FontWeight.Medium, color = cs.onBackground)
+        Text(stringResource(R.string.characters_empty_title), fontSize = TypeScale.s17, fontWeight = FontWeight.Medium, color = cs.onBackground)
         Spacer(Modifier.height(6.dp))
-        Text(stringResource(R.string.characters_empty_body), fontSize = 13.sp, color = cs.onSurfaceVariant)
+        Text(stringResource(R.string.characters_empty_body), fontSize = TypeScale.s13, color = cs.onSurfaceVariant)
         Spacer(Modifier.height(18.dp))
         Box(
             Modifier
@@ -557,7 +558,7 @@ private fun EmptyCharacters(onImport: () -> Unit) {
                 .padding(horizontal = 22.dp, vertical = 11.dp),
             contentAlignment = Alignment.Center,
         ) {
-            Text(stringResource(R.string.characters_import_cta), fontSize = 14.sp, color = cs.onPrimary, fontWeight = FontWeight.Medium)
+            Text(stringResource(R.string.characters_import_cta), fontSize = TypeScale.s14, color = cs.onPrimary, fontWeight = FontWeight.Medium)
         }
     }
 }

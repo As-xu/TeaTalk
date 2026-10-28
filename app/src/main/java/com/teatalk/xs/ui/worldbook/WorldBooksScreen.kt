@@ -55,6 +55,7 @@ import com.teatalk.core.worldinfo.WorldInfoEntry
 import com.teatalk.xs.R
 import com.teatalk.xs.data.db.WorldBookEntity
 import com.teatalk.xs.ui.components.Hairline
+import com.teatalk.xs.ui.theme.TypeScale
 
 private val WORLDBOOK_MIME_TYPES = arrayOf("application/json", "*/*")
 
@@ -97,14 +98,14 @@ fun WorldBooksScreen(
                 IconButton(onClick = onBack) {
                     Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.back))
                 }
-                Text(stringResource(R.string.worldbook_title), fontSize = 19.sp, fontWeight = FontWeight.SemiBold, color = cs.onBackground)
+                Text(stringResource(R.string.worldbook_title), fontSize = TypeScale.s19, fontWeight = FontWeight.SemiBold, color = cs.onBackground)
                 Spacer(Modifier.weight(1f))
                 TextButton(onClick = { picker.launch(WORLDBOOK_MIME_TYPES) }, enabled = !importing) {
                     Icon(Icons.Filled.Add, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(Modifier.width(2.dp))
                     Text(
                         stringResource(if (importing) R.string.characters_importing else R.string.worldbook_import),
-                        fontSize = 14.sp,
+                        fontSize = TypeScale.s14,
                         fontWeight = FontWeight.Medium,
                     )
                 }
@@ -124,17 +125,17 @@ fun WorldBooksScreen(
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Column(Modifier.weight(1f)) {
-                                Text(book.name, fontSize = 15.sp, fontWeight = FontWeight.Medium, color = cs.onBackground, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                Text(book.name, fontSize = TypeScale.s15, fontWeight = FontWeight.Medium, color = cs.onBackground, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                 Spacer(Modifier.height(2.dp))
                                 Text(
                                     stringResource(R.string.worldbook_entry_count, book.entryCount),
-                                    fontSize = 12.sp,
+                                    fontSize = TypeScale.s12,
                                     color = cs.onSurfaceVariant,
                                 )
                             }
                             Text(
                                 stringResource(R.string.delete),
-                                fontSize = 12.5.sp,
+                                fontSize = TypeScale.s12_5,
                                 color = cs.onSurfaceVariant,
                                 modifier = Modifier.clickable {
                                     val target = book
@@ -190,17 +191,17 @@ private fun WorldBookDetailSheet(
         Column(Modifier.fillMaxWidth().heightIn(max = 620.dp).padding(horizontal = 22.dp).padding(bottom = 28.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
-                    Text(book.name, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = cs.onBackground)
+                    Text(book.name, fontSize = TypeScale.s16, fontWeight = FontWeight.SemiBold, color = cs.onBackground)
                     Spacer(Modifier.height(2.dp))
                     Text(
                         stringResource(R.string.worldbook_entry_count, book.entryCount),
-                        fontSize = 12.sp,
+                        fontSize = TypeScale.s12,
                         color = cs.onSurfaceVariant,
                     )
                 }
                 Text(
                     stringResource(R.string.delete),
-                    fontSize = 13.sp,
+                    fontSize = TypeScale.s13,
                     color = cs.error,
                     modifier = Modifier.clickable(onClick = onDelete).padding(8.dp),
                 )
@@ -212,25 +213,25 @@ private fun WorldBookDetailSheet(
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(
                                 entry.comment.ifBlank { "#${entry.uid}" },
-                                fontSize = 13.5.sp,
+                                fontSize = TypeScale.s13_5,
                                 fontWeight = FontWeight.Medium,
                                 color = cs.onBackground,
                             )
                             Spacer(Modifier.width(8.dp))
                             if (!entry.enabled) {
-                                Text(stringResource(R.string.worldbook_entry_disabled), fontSize = 11.sp, color = cs.error)
+                                Text(stringResource(R.string.worldbook_entry_disabled), fontSize = TypeScale.s11, color = cs.error)
                             }
                         }
                         Text(
                             if (entry.keys.isEmpty()) stringResource(R.string.worldbook_entry_no_keys)
                             else stringResource(R.string.worldbook_entry_keys, entry.keys.joinToString(", ")),
-                            fontSize = 11.5.sp,
+                            fontSize = TypeScale.s11_5,
                             color = cs.onSurfaceVariant,
                             modifier = Modifier.padding(top = 2.dp),
                         )
                         Text(
                             entry.content,
-                            fontSize = 12.5.sp,
+                            fontSize = TypeScale.s12_5,
                             color = cs.onSurfaceVariant,
                             maxLines = 3,
                             overflow = TextOverflow.Ellipsis,
@@ -256,12 +257,12 @@ private fun EmptyWorldBooks(onImport: () -> Unit) {
             Modifier.size(72.dp).clip(RoundedCornerShape(20.dp)).background(cs.surfaceContainerHigh),
             contentAlignment = Alignment.Center,
         ) {
-            Text("书", fontSize = 28.sp, color = cs.onSurfaceVariant, fontWeight = FontWeight.Medium)
+            Text("书", fontSize = TypeScale.s28, color = cs.onSurfaceVariant, fontWeight = FontWeight.Medium)
         }
         Spacer(Modifier.height(18.dp))
-        Text(stringResource(R.string.worldbook_empty_title), fontSize = 17.sp, fontWeight = FontWeight.Medium, color = cs.onBackground)
+        Text(stringResource(R.string.worldbook_empty_title), fontSize = TypeScale.s17, fontWeight = FontWeight.Medium, color = cs.onBackground)
         Spacer(Modifier.height(6.dp))
-        Text(stringResource(R.string.worldbook_empty_body), fontSize = 13.sp, color = cs.onSurfaceVariant)
+        Text(stringResource(R.string.worldbook_empty_body), fontSize = TypeScale.s13, color = cs.onSurfaceVariant)
         Spacer(Modifier.height(18.dp))
         Box(
             Modifier
@@ -271,7 +272,7 @@ private fun EmptyWorldBooks(onImport: () -> Unit) {
                 .padding(horizontal = 22.dp, vertical = 11.dp),
             contentAlignment = Alignment.Center,
         ) {
-            Text(stringResource(R.string.worldbook_import_cta), fontSize = 14.sp, color = cs.onPrimary, fontWeight = FontWeight.Medium)
+            Text(stringResource(R.string.worldbook_import_cta), fontSize = TypeScale.s14, color = cs.onPrimary, fontWeight = FontWeight.Medium)
         }
     }
 }

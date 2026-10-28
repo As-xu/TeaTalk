@@ -60,6 +60,7 @@ import androidx.compose.ui.window.Dialog
 import com.teatalk.xs.R
 import com.teatalk.xs.data.UiText
 import com.teatalk.xs.data.db.ModelProviderEntity
+import com.teatalk.xs.ui.theme.TypeScale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -101,7 +102,7 @@ fun ProvidersScreen(viewModel: ProvidersViewModel, onBack: () -> Unit) {
                 }
                 Text(
                     stringResource(R.string.providers_title),
-                    fontSize = 20.sp,
+                    fontSize = TypeScale.s20,
                     fontWeight = FontWeight.SemiBold,
                     modifier = Modifier.weight(1f),
                 )
@@ -141,11 +142,11 @@ fun ProvidersScreen(viewModel: ProvidersViewModel, onBack: () -> Unit) {
                     Icon(Icons.Filled.CheckCircle, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 Spacer(Modifier.height(14.dp))
-                Text(stringResource(R.string.providers_empty_title), fontSize = 16.sp, fontWeight = FontWeight.Medium)
+                Text(stringResource(R.string.providers_empty_title), fontSize = TypeScale.s16, fontWeight = FontWeight.Medium)
                 Spacer(Modifier.height(6.dp))
                 Text(
                     stringResource(R.string.providers_empty_hint),
-                    fontSize = 13.sp,
+                    fontSize = TypeScale.s13,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
@@ -157,7 +158,7 @@ fun ProvidersScreen(viewModel: ProvidersViewModel, onBack: () -> Unit) {
                 item {
                     Text(
                         stringResource(R.string.providers_active_note),
-                        fontSize = 12.sp,
+                        fontSize = TypeScale.s12,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(top = 8.dp),
                     )
@@ -245,22 +246,22 @@ private fun ProviderRow(
             )
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
-                Text(provider.name, fontSize = 15.sp, fontWeight = FontWeight.Medium)
+                Text(provider.name, fontSize = TypeScale.s15, fontWeight = FontWeight.Medium)
                 Text(
                     provider.baseUrl,
-                    fontSize = 12.sp,
+                    fontSize = TypeScale.s12,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                 )
                 Text(
                     stringResource(R.string.providers_row_model, provider.defaultModel.ifBlank { "-" }) +
                         " · " + (maskedKey ?: stringResource(R.string.providers_row_no_key)),
-                    fontSize = 12.sp,
+                    fontSize = TypeScale.s12,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
             if (!active) {
-                TextButton(onClick = onSetActive) { Text(stringResource(R.string.providers_set_active), fontSize = 12.sp) }
+                TextButton(onClick = onSetActive) { Text(stringResource(R.string.providers_set_active), fontSize = TypeScale.s12) }
             }
             IconButton(onClick = onDelete) {
                 Icon(
@@ -297,7 +298,7 @@ private fun ProviderEditDialog(
             ) {
                 Text(
                     stringResource(if (initial == null) R.string.providers_add else R.string.providers_edit),
-                    fontSize = 17.sp,
+                    fontSize = TypeScale.s17,
                     fontWeight = FontWeight.SemiBold,
                 )
                 Spacer(Modifier.height(12.dp))
@@ -357,7 +358,7 @@ private fun ProviderEditDialog(
                 state.note?.let { note ->
                     Text(
                         note.resolve(context),
-                        fontSize = 12.sp,
+                        fontSize = TypeScale.s12,
                         color = if (state.noteIsError) {
                             MaterialTheme.colorScheme.error
                         } else {
@@ -369,7 +370,7 @@ private fun ProviderEditDialog(
                     Spacer(Modifier.height(6.dp))
                     Text(
                         stringResource(R.string.providers_pick_model),
-                        fontSize = 12.sp,
+                        fontSize = TypeScale.s12,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     state.models.take(12).forEach { id ->
@@ -384,7 +385,7 @@ private fun ProviderEditDialog(
                                 modifier = Modifier.size(16.dp),
                             )
                             Spacer(Modifier.width(8.dp))
-                            Text(id, fontSize = 13.sp)
+                            Text(id, fontSize = TypeScale.s13)
                         }
                     }
                 }

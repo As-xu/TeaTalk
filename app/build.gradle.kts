@@ -13,8 +13,10 @@ android {
         applicationId = "com.teatalk.xs"
         minSdk = 28
         targetSdk = 34
-        versionCode = 15
-        versionName = "0.7.4"
+        versionCode = 16
+        versionName = "0.7.5"
+
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     buildTypes {
@@ -51,6 +53,11 @@ android {
 }
 
 dependencies {
+
+    androidTestImplementation("androidx.test:core:1.6.1")
+    androidTestImplementation("androidx.test.ext:junit:1.2.1")
+    androidTestImplementation("androidx.test:runner:1.6.2")
+    androidTestImplementation("androidx.room:room-testing:2.6.1")
     implementation(project(":core"))
 
     implementation(libs.androidx.core.ktx)
@@ -82,6 +89,7 @@ dependencies {
     // android.jar 里的 org.json 是桩实现，单元测试用真实实现
     testImplementation("org.json:json:20240303")
 }
+
 
 
 

@@ -33,6 +33,7 @@ import com.teatalk.xs.R
 import com.teatalk.xs.data.CardEdit
 import com.teatalk.xs.data.CardViewParser
 import com.teatalk.xs.data.db.CharacterEntity
+import com.teatalk.xs.ui.theme.TypeScale
 
 /**
  * 卡片编辑弹窗（D6）：名称 / 标签 / 简介 / 性格 / 场景 / 开场白 / 创作者注释。
@@ -107,7 +108,7 @@ private fun EditField(
 ) {
     val cs = MaterialTheme.colorScheme
     Column(Modifier.fillMaxWidth()) {
-        Text(stringResource(labelRes), fontSize = 11.5.sp, color = cs.onSurfaceVariant)
+        Text(stringResource(labelRes), fontSize = TypeScale.s11_5, color = cs.onSurfaceVariant)
         Box(
             Modifier
                 .fillMaxWidth()
@@ -121,7 +122,7 @@ private fun EditField(
                 onValueChange = onValueChange,
                 singleLine = singleLine,
                 minLines = minLines,
-                textStyle = TextStyle(fontSize = 13.sp, color = cs.onBackground),
+                textStyle = TextStyle(fontSize = TypeScale.s13, color = cs.onBackground),
                 cursorBrush = SolidColor(cs.primary),
                 modifier = Modifier.fillMaxWidth(),
             )

@@ -1,5 +1,7 @@
 package com.teatalk.xs.ui.chat
 
+import android.os.SystemClock
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.clickable
@@ -122,6 +124,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import com.teatalk.xs.ui.theme.TypeScale
 
 class ChatViewModel(
     private val repository: CharacterRepository,
@@ -417,6 +420,9 @@ class ChatViewModel(
     }
 
     private suspend fun collectStream(flow: Flow<ChatEvent>, gen: Int) {
+        // 流式节流：token 可能每几十毫秒来一个，逐 token 触发重组会让 Markdown 反复全量解析（O(n²) 字符拷贝）。
+        // 这里最多每 50ms 刷一次 UI，收尾时用 commitOnce 的完整文本，显示不受影响。
+        var lastUiEmit = 0L
         flow.collect { event ->
             if (gen != generation) return@collect
             when (event) {
@@ -427,17 +433,23 @@ class ChatViewModel(
 
                 is ChatEvent.Delta -> {
                     accumulated.append(event.text)
-                    _streamText.value = accumulated.toString()
+                    val now = SystemClock.uptimeMillis()
+                    if (now - lastUiEmit >= STREAM_UI_INTERVAL_MS) {
+                        lastUiEmit = now
+                        _streamText.value = accumulated.toString()
+                    }
                 }
 
                 is ChatEvent.Completed -> {
                     // 引擎不落库（M2）：由这里落，才能区分新回复 / 追加版本 + 状态
+                    _streamText.value = accumulated.toString()
                     commitOnce(gen, MessageEntity.STATUS_COMPLETE, accumulated.toString())
                     if (event.truncated) _notice.value = UiText.chatTruncated()
                 }
 
                 is ChatEvent.Failed -> {
                     // 失败也把已收到的半截留下（标 failed），别让用户白等
+                    _streamText.value = accumulated.toString()
                     commitOnce(gen, MessageEntity.STATUS_FAILED, accumulated.toString())
                     _error.value = UiText.chatError(event.error)
                 }
@@ -485,6 +497,9 @@ class ChatViewModel(
     }
 
     companion object {
+        /** UI 刷新节流窗口：约 20fps，足够顺滑又不至于逐 token 重组。 */
+        const val STREAM_UI_INTERVAL_MS = 50L
+
         fun factory(app: TeaTalkApp, conversationId: Long): ViewModelProvider.Factory = viewModelFactory {
             initializer {
                 ChatViewModel(
@@ -532,6 +547,7 @@ fun ChatScreen(
     val scope = rememberCoroutineScope()
     val cs = MaterialTheme.colorScheme
     val context = androidx.compose.ui.platform.LocalContext.current
+    val clipboard = LocalClipboardManager.current
 
     // 只有「用户本来就在底部」时才自动跟随；向上翻看历史时不打断。
     val stickToBottom by remember {
@@ -627,7 +643,7 @@ fun ChatScreen(
                             messages.firstOrNull()?.let {
                                 stringResource(R.string.chat_today_header, timeOf(it.createdAt))
                             } ?: stringResource(R.string.chat_intro_default),
-                            fontSize = 11.sp,
+                            fontSize = TypeScale.s11,
                             color = cs.onSurfaceVariant,
                         )
                     }
@@ -653,13 +669,16 @@ fun ChatScreen(
                                 },
                             selected = message.selectedVariant.coerceIn(0, (variants.size - 1).coerceAtLeast(0)),
                             onSelectVariant = { viewModel.selectVariant(message.id, it) },
-                            onLongPress = { preview = message },
+                            onOpenPreview = { preview = message },
+                            onCopy = { clipboard.setText(AnnotatedString(message.content)) },
+                            onRetry = if (message.id == lastAssistantId) viewModel::retry else null,
+                            onDelete = if (message.id == lastAssistantId) ({ deleteTarget = message }) else null,
                         )
                     }
                 }
                 if (streaming) {
                     item(key = "streaming") {
-                        AssistantBubble(streamText, character, thinking = streamText.isEmpty())
+                        AssistantBubble(streamText, character, thinking = streamText.isEmpty(), streaming = true)
                     }
                 }
             }
@@ -714,14 +733,14 @@ fun ChatScreen(
                             value = input,
                             onValueChange = { input = it },
                             modifier = Modifier.weight(1f),
-                            textStyle = TextStyle(fontSize = 14.5.sp, color = cs.onSurface),
+                            textStyle = TextStyle(fontSize = TypeScale.s14_5, color = cs.onSurface),
                             cursorBrush = SolidColor(cs.primary),
                             maxLines = 4,
                             decorationBox = { inner ->
                                 if (input.isEmpty()) {
                                     Text(
                                         stringResource(R.string.chat_input_hint),
-                                        fontSize = 14.5.sp,
+                                        fontSize = TypeScale.s14_5,
                                         color = cs.onSurfaceVariant,
                                     )
                                 }
@@ -783,10 +802,10 @@ fun ChatScreen(
             val copied = stringResource(R.string.common_copied)
             AlertDialog(
                 onDismissRequest = { preview = null },
-                title = { Text(stringResource(R.string.chat_preview_title), fontSize = 16.sp) },
+                title = { Text(stringResource(R.string.chat_preview_title), fontSize = TypeScale.s16) },
                 text = {
                     Box(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState())) {
-                        Text(message.content, fontSize = 14.sp, lineHeight = 21.sp)
+                        Text(message.content, fontSize = TypeScale.s14, lineHeight = 21.sp)
                     }
                 },
                 confirmButton = {
@@ -797,26 +816,14 @@ fun ChatScreen(
                     }) { Text(stringResource(R.string.common_copy)) }
                 },
                 dismissButton = {
-                    Row {
-                        if (message.role == "assistant" && message.id == lastAssistantId) {
-                            TextButton(onClick = {
-                                preview = null
-                                viewModel.retry()
-                            }) { Text(stringResource(R.string.chat_action_retry)) }
-                        }
-                        TextButton(onClick = {
-                            preview = null
-                            deleteTarget = message
-                        }) { Text(stringResource(R.string.chat_action_delete), color = cs.error) }
-                        TextButton(onClick = { preview = null }) { Text(stringResource(R.string.close)) }
-                    }
+                    TextButton(onClick = { preview = null }) { Text(stringResource(R.string.close)) }
                 },
             )
         }
         deleteTarget?.let { message ->
             AlertDialog(
                 onDismissRequest = { deleteTarget = null },
-                title = { Text(stringResource(R.string.chat_delete_title), fontSize = 16.sp) },
+                title = { Text(stringResource(R.string.chat_delete_title), fontSize = TypeScale.s16) },
                 text = {
                     val variantCount = remember(message) { MessageVariants.of(message).size }
                     Text(
@@ -825,7 +832,7 @@ fun ChatScreen(
                         } else {
                             stringResource(R.string.chat_delete_message)
                         },
-                        fontSize = 14.sp,
+                        fontSize = TypeScale.s14,
                         lineHeight = 21.sp,
                     )
                 },
@@ -874,7 +881,7 @@ fun ChatScreen(
                     BasicTextField(
                         value = title,
                         onValueChange = { title = it },
-                        textStyle = TextStyle(fontSize = 14.5.sp, color = cs.onSurface),
+                        textStyle = TextStyle(fontSize = TypeScale.s14_5, color = cs.onSurface),
                         cursorBrush = SolidColor(cs.primary),
                         decorationBox = { inner ->
                             Box(
@@ -882,7 +889,7 @@ fun ChatScreen(
                                     .background(cs.surfaceContainerHigh).padding(horizontal = 12.dp, vertical = 10.dp),
                             ) {
                                 if (title.isEmpty()) {
-                                    Text(stringResource(R.string.chat_conversation_title_hint), fontSize = 14.5.sp, color = cs.onSurfaceVariant)
+                                    Text(stringResource(R.string.chat_conversation_title_hint), fontSize = TypeScale.s14_5, color = cs.onSurfaceVariant)
                                 }
                                 inner()
                             }
@@ -961,7 +968,7 @@ private fun ChatHeader(
             // 标题优先显示「会话名」：同一角色的多条会话在头部就能区分（否则只能靠时间猜）
             Text(
                 conversationTitle.ifBlank { character?.name ?: stringResource(R.string.character_fallback) },
-                fontSize = 15.5.sp,
+                fontSize = TypeScale.s15_5,
                 fontWeight = FontWeight.SemiBold,
                 color = cs.onBackground,
                 maxLines = 1,
@@ -971,7 +978,7 @@ private fun ChatHeader(
                 // 会话没有标题时副标题不再重复角色名
                 if (conversationTitle.isBlank()) stringResource(R.string.chat_online_status)
                 else stringResource(R.string.chat_header_subtitle, character?.name ?: stringResource(R.string.character_fallback)),
-                fontSize = 11.sp,
+                fontSize = TypeScale.s11,
                 color = cs.onSurfaceVariant,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -1015,7 +1022,7 @@ private fun ConversationSheet(
         Column(Modifier.fillMaxWidth().padding(bottom = 12.dp)) {
             Text(
                 stringResource(R.string.chat_conversations_title),
-                fontSize = 16.sp,
+                fontSize = TypeScale.s16,
                 fontWeight = FontWeight.SemiBold,
                 color = cs.onBackground,
                 modifier = Modifier.padding(horizontal = 20.dp, vertical = 10.dp),
@@ -1032,14 +1039,14 @@ private fun ConversationSheet(
                     Column(Modifier.weight(1f)) {
                         Text(
                             item.title.ifBlank { stringResource(R.string.chat_conversation_untitled) },
-                            fontSize = 14.5.sp,
+                            fontSize = TypeScale.s14_5,
                             color = cs.onBackground,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                         )
                         Text(
                             stringResource(R.string.chat_conversation_updated, timeOf(item.updatedAt)),
-                            fontSize = 11.5.sp,
+                            fontSize = TypeScale.s11_5,
                             color = cs.onSurfaceVariant,
                         )
                     }
@@ -1096,7 +1103,7 @@ private fun ErrorBanner(
     ) {
         Text(
             text,
-            fontSize = 12.5.sp,
+            fontSize = TypeScale.s12_5,
             lineHeight = 18.sp,
             color = cs.onErrorContainer,
             modifier = Modifier.weight(1f).padding(vertical = 6.dp),
@@ -1107,7 +1114,7 @@ private fun ErrorBanner(
         ) {
             Text(
                 stringResource(R.string.chat_retry),
-                fontSize = 12.5.sp,
+                fontSize = TypeScale.s12_5,
                 fontWeight = FontWeight.SemiBold,
                 color = cs.onErrorContainer,
             )
@@ -1120,31 +1127,70 @@ private fun AssistantBubble(
     text: String,
     character: CharacterEntity?,
     thinking: Boolean = false,
+    streaming: Boolean = false,
     variants: List<String> = emptyList(),
     variantStatuses: List<String> = emptyList(),
     providerHint: String? = null,
     selected: Int = 0,
     onSelectVariant: (Int) -> Unit = {},
-    onLongPress: (String) -> Unit = {},
+    onOpenPreview: () -> Unit = {},
+    onCopy: () -> Unit = {},
+    onRetry: (() -> Unit)? = null,
+    onDelete: (() -> Unit)? = null,
 ) {
     val cs = MaterialTheme.colorScheme
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Start, verticalAlignment = Alignment.Top) {
         CharacterAvatar(avatarPath = character?.avatarPath, name = character?.name ?: "", size = 32.dp, corner = 10.dp)
         Spacer(Modifier.width(8.dp))
         Column {
+            var actionsOpen by remember { mutableStateOf(false) }
+            Box {
             Box(
                 Modifier
                     .widthIn(max = 268.dp)
-                    .pointerInput(text) { detectTapGestures(onLongPress = { onLongPress(text) }) }
+                    .pointerInput(text) { detectTapGestures(onLongPress = { actionsOpen = true }) }
                     .clip(RoundedCornerShape(16.dp, 16.dp, 16.dp, 6.dp))
                     .background(cs.surfaceContainerHigh)
                     .padding(horizontal = 13.dp, vertical = 10.dp),
             ) {
                 if (thinking) {
-                    Text(stringResource(R.string.chat_thinking), fontSize = 14.5.sp, color = cs.onSurfaceVariant)
+                    Text(stringResource(R.string.chat_thinking), fontSize = TypeScale.s14_5, color = cs.onSurfaceVariant)
+                } else if (streaming) {
+                    // 流式期间用纯文本：半截的 ** / ` 会闪，且整段 Markdown 反复解析是 O(n²) 热点。
+                    // 生成结束落库后由历史气泡按 Markdown 渲染。
+                    Text(
+                        text = text,
+                        fontSize = TypeScale.s14_5,
+                        lineHeight = 22.sp,
+                        color = cs.onSurface,
+                    )
                 } else {
                     MarkdownText(text = text, color = cs.onSurface)
                 }
+            }
+            // 长按动作：锚定在气泡上的下拉菜单（不再用居中弹窗遮挡上下文）
+            DropdownMenu(expanded = actionsOpen, onDismissRequest = { actionsOpen = false }) {
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.chat_preview_title)) },
+                    onClick = { actionsOpen = false; onOpenPreview() },
+                )
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.common_copy)) },
+                    onClick = { actionsOpen = false; onCopy() },
+                )
+                onRetry?.let { retry ->
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.chat_action_retry)) },
+                        onClick = { actionsOpen = false; retry() },
+                    )
+                }
+                onDelete?.let { delete ->
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.delete), color = cs.error) },
+                        onClick = { actionsOpen = false; delete() },
+                    )
+                }
+            }
             }
             val status = variantStatuses.getOrNull(selected) ?: MessageEntity.STATUS_COMPLETE
             val statusText = when (status) {
@@ -1182,7 +1228,7 @@ private fun AssistantBubble(
                     }
                     Text(
                         label,
-                        fontSize = 11.5.sp,
+                        fontSize = TypeScale.s11_5,
                         fontWeight = FontWeight.Medium,
                         color = cs.onSurfaceVariant,
                     )
@@ -1205,7 +1251,7 @@ private fun AssistantBubble(
             providerHint?.let { hint ->
                 Text(
                     hint,
-                    fontSize = 11.sp,
+                    fontSize = TypeScale.s11,
                     color = cs.onSurfaceVariant.copy(alpha = 0.85f),
                     modifier = Modifier.padding(top = 1.dp),
                 )
@@ -1226,7 +1272,7 @@ private fun UserBubble(text: String, onLongPress: (String) -> Unit = {}) {
                 .background(cs.primary)
                 .padding(horizontal = 13.dp, vertical = 10.dp),
         ) {
-            Text(text, fontSize = 14.5.sp, lineHeight = 22.sp, color = cs.onPrimary)
+            Text(text, fontSize = TypeScale.s14_5, lineHeight = 22.sp, color = cs.onPrimary)
         }
     }
 }

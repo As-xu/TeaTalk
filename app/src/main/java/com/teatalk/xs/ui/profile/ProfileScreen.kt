@@ -48,6 +48,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.teatalk.xs.R
 import com.teatalk.xs.ui.components.Hairline
+import com.teatalk.xs.ui.theme.TypeScale
 
 /** 应用内语言选项：null = 跟随系统。 */
 private data class LanguageOption(val tag: String?, val labelRes: Int)
@@ -98,24 +99,24 @@ fun ProfileScreen(
                     Modifier.size(48.dp).clip(RoundedCornerShape(15.dp)).background(cs.surface),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Text("茶", fontSize = 22.sp, color = cs.onSurface, fontWeight = FontWeight.SemiBold)
+                    Text("茶", fontSize = TypeScale.s22, color = cs.onSurface, fontWeight = FontWeight.SemiBold)
                 }
                 Spacer(Modifier.size(14.dp))
                 Column(Modifier.weight(1f)) {
                     Text(
                         stringResource(R.string.profile_persona_name),
-                        fontSize = 18.sp,
+                        fontSize = TypeScale.s18,
                         fontWeight = FontWeight.SemiBold,
                         color = cs.onBackground,
                     )
                     Spacer(Modifier.height(2.dp))
                     Text(
                         stringResource(R.string.profile_persona_bio),
-                        fontSize = 12.sp,
+                        fontSize = TypeScale.s12,
                         color = cs.onSurfaceVariant,
                     )
                 }
-                Text(stringResource(R.string.edit), fontSize = 12.5.sp, color = cs.primary)
+                Text(stringResource(R.string.edit), fontSize = TypeScale.s12_5, color = cs.primary)
             }
         }
 
@@ -142,7 +143,7 @@ fun ProfileScreen(
         Spacer(Modifier.height(16.dp))
         Text(
             stringResource(R.string.profile_footnote),
-            fontSize = 11.5.sp,
+            fontSize = TypeScale.s11_5,
             color = cs.onSurfaceVariant,
             modifier = Modifier.fillMaxWidth(),
         )
@@ -157,7 +158,7 @@ fun ProfileScreen(
                 Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     Text(
                         stringResource(R.string.profile_language_dialog_hint),
-                        fontSize = 12.sp,
+                        fontSize = TypeScale.s12,
                         color = cs.onSurfaceVariant,
                     )
                     Spacer(Modifier.height(6.dp))
@@ -176,7 +177,7 @@ fun ProfileScreen(
                         ) {
                             Text(
                                 stringResource(option.labelRes),
-                                fontSize = 14.5.sp,
+                                fontSize = TypeScale.s14_5,
                                 color = if (selected) cs.primary else cs.onSurface,
                                 fontWeight = if (selected) FontWeight.Medium else FontWeight.Normal,
                                 modifier = Modifier.weight(1f),
@@ -230,12 +231,12 @@ private fun SettingRow(
             }
             Spacer(Modifier.size(12.dp))
             Column(Modifier.weight(1f)) {
-                Text(stringResource(titleRes), fontSize = 14.5.sp, color = cs.onBackground)
+                Text(stringResource(titleRes), fontSize = TypeScale.s14_5, color = cs.onBackground)
                 Spacer(Modifier.height(2.dp))
                 Text(
                     subtitleRes?.let { stringResource(it, *subtitleArgs.toTypedArray()) }
                         ?: trailing.orEmpty(),
-                    fontSize = 11.5.sp,
+                    fontSize = TypeScale.s11_5,
                     color = cs.onSurfaceVariant,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,

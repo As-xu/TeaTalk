@@ -33,6 +33,7 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.teatalk.xs.ui.theme.LocalCodeSurfaces
+import com.teatalk.xs.ui.theme.TypeScale
 
 /**
  * 轻量 Markdown：覆盖角色扮演里真正会出现的写法（标题/粗体/斜体/删除线/行内代码/列表/引用/代码块/分隔线）。
@@ -376,7 +377,7 @@ fun MarkdownText(
                     if (!language.isNullOrBlank()) {
                         Text(
                             language,
-                            fontSize = 10.sp,
+                            fontSize = TypeScale.s10,
                             color = cs.onSurfaceVariant,
                             modifier = Modifier.padding(bottom = 4.dp),
                         )

@@ -11,6 +11,7 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.TextUnit
+import androidx.compose.ui.unit.sp
 
 /**
  * 配色定稿：A「奶油茶」（用户 2026-10-25 拍板），暗色为「奶油茶夜」。
@@ -148,3 +149,27 @@ private fun android.content.Context.findActivityWindow(): android.view.Window? {
     return null
 }
 
+/** 字号令牌：UI 只从这里取字号，避免散落的 11/11.5/12.5sp 魔数（审阅 P1）。 */
+object TypeScale {
+    val s10 = 10.sp
+    val s11 = 11.sp
+    val s11_5 = 11.5.sp
+    val s12 = 12.sp
+    val s12_5 = 12.5.sp
+    val s13 = 13.sp
+    val s13_5 = 13.5.sp
+    val s14 = 14.sp
+    val s14_5 = 14.5.sp
+    val s15 = 15.sp
+    val s15_5 = 15.5.sp
+    val s16 = 16.sp
+    val s17 = 17.sp
+    val s18 = 18.sp
+    val s19 = 19.sp
+    val s20 = 20.sp
+    val s21 = 21.sp
+    val s22 = 22.sp
+    val s26 = 26.sp
+    val s28 = 28.sp
+    val s44 = 44.sp
+}

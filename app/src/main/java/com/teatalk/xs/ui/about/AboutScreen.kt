@@ -47,6 +47,7 @@ import com.teatalk.xs.data.db.TeaTalkDatabase
 import com.teatalk.xs.log.Diagnostics
 import com.teatalk.xs.ui.components.Hairline
 import kotlinx.coroutines.delay
+import com.teatalk.xs.ui.theme.TypeScale
 
 /** 关于 + 诊断日志（设置 → 我的 → 关于 TeaTalk）。 */
 @Composable
@@ -75,7 +76,7 @@ fun AboutScreen(onBack: () -> Unit) {
             }
             Text(
                 stringResource(R.string.profile_about),
-                fontSize = 19.sp,
+                fontSize = TypeScale.s19,
                 fontWeight = FontWeight.SemiBold,
                 color = cs.onBackground,
             )
@@ -105,10 +106,10 @@ fun AboutScreen(onBack: () -> Unit) {
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Column(Modifier.weight(1f)) {
-                            Text(stringResource(R.string.logs_debug), fontSize = 15.sp, fontWeight = FontWeight.Medium, color = cs.onSurface)
+                            Text(stringResource(R.string.logs_debug), fontSize = TypeScale.s15, fontWeight = FontWeight.Medium, color = cs.onSurface)
                             Text(
                                 stringResource(R.string.logs_debug_sub),
-                                fontSize = 12.sp,
+                                fontSize = TypeScale.s12,
                                 color = cs.onSurfaceVariant,
                                 modifier = Modifier.padding(top = 2.dp),
                             )
@@ -138,16 +139,16 @@ fun AboutScreen(onBack: () -> Unit) {
             }
             item {
                 Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 6.dp)) {
-                    Text(stringResource(R.string.logs_recent), fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = cs.onBackground)
+                    Text(stringResource(R.string.logs_recent), fontSize = TypeScale.s14, fontWeight = FontWeight.SemiBold, color = cs.onBackground)
                     Spacer(Modifier.weight(1f))
-                    Text("${lines.size}", fontSize = 12.sp, color = cs.onSurfaceVariant)
+                    Text("${lines.size}", fontSize = TypeScale.s12, color = cs.onSurfaceVariant)
                 }
             }
             if (lines.isEmpty()) {
                 item {
                     Text(
                         stringResource(R.string.logs_empty),
-                        fontSize = 13.sp,
+                        fontSize = TypeScale.s13,
                         color = cs.onSurfaceVariant,
                         modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp),
                     )
@@ -156,7 +157,7 @@ fun AboutScreen(onBack: () -> Unit) {
                 items(lines) { line ->
                     Text(
                         line,
-                        fontSize = 10.sp,
+                        fontSize = TypeScale.s10,
                         lineHeight = 14.sp,
                         fontFamily = FontFamily.Monospace,
                         color = cs.onSurfaceVariant,
@@ -173,8 +174,8 @@ fun AboutScreen(onBack: () -> Unit) {
 private fun InfoRow(label: String, value: String) {
     val cs = MaterialTheme.colorScheme
     Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text(label, fontSize = 13.sp, color = cs.onSurfaceVariant, modifier = Modifier.width(120.dp), maxLines = 1)
-        Text(value, fontSize = 13.sp, color = cs.onSurface, modifier = Modifier.weight(1f))
+        Text(label, fontSize = TypeScale.s13, color = cs.onSurfaceVariant, modifier = Modifier.width(120.dp), maxLines = 1)
+        Text(value, fontSize = TypeScale.s13, color = cs.onSurface, modifier = Modifier.weight(1f))
     }
 }
 
@@ -182,7 +183,7 @@ private fun InfoRow(label: String, value: String) {
 private fun ActionRow(title: String, subtitle: String, onClick: () -> Unit) {
     val cs = MaterialTheme.colorScheme
     Column(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = 12.dp)) {
-        Text(title, fontSize = 15.sp, fontWeight = FontWeight.Medium, color = cs.onSurface)
-        Text(subtitle, fontSize = 12.sp, color = cs.onSurfaceVariant, modifier = Modifier.padding(top = 2.dp))
+        Text(title, fontSize = TypeScale.s15, fontWeight = FontWeight.Medium, color = cs.onSurface)
+        Text(subtitle, fontSize = TypeScale.s12, color = cs.onSurfaceVariant, modifier = Modifier.padding(top = 2.dp))
     }
 }
