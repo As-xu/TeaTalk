@@ -73,6 +73,7 @@
     <string name="list_separator">", "</string>
     <string name="detail_by_author">by %1$s · </string>
 
+    <string name="chat_header_subtitle">%1$s · online</string>
     <string name="chat_online_status">Online · Roleplay mode</string>
     <string name="chat_input_hint">Say something…</string>
     <string name="chat_intro_default">Start a roleplay</string>

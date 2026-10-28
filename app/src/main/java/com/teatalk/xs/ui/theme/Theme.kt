@@ -5,7 +5,12 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.material3.LocalTextStyle
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.unit.TextUnit
 
 /**
  * 配色定稿：A「奶油茶」（用户 2026-10-25 拍板），暗色为「奶油茶夜」。
@@ -83,6 +88,21 @@ private val TeaNightColors = darkColorScheme(
 )
 
 /**
+ * 代码块/行内代码的底色。
+ *
+ * 不能直接用 surfaceContainerHighest：在奶油茶里它和气泡底色只差 ~1.05:1，
+ * 代码块几乎「陷」进气泡。这里单独给一组与背景有明显层差的令牌。
+ */
+data class CodeSurfaces(val block: Color, val inline: Color)
+
+val LocalCodeSurfaces = staticCompositionLocalOf {
+    CodeSurfaces(Color(0xFFE6DAC6), Color(0xFFEDE2D0))
+}
+
+private val CreamCodeSurfaces = CodeSurfaces(Color(0xFFE6DAC6), Color(0xFFEDE2D0))
+private val NightCodeSurfaces = CodeSurfaces(Color(0xFF100D0B), Color(0xFF171310))
+
+/**
  * @param darkTheme 跟随系统深浅色。设置页的「跟随系统 / 常暗 / 常亮」在 M2 做，届时由设置驱动本参数。
  */
 @Composable
@@ -92,8 +112,16 @@ fun TeaTalkTheme(
 ) {
     MaterialTheme(
         colorScheme = if (darkTheme) TeaNightColors else CreamColors,
-        content = content,
-    )
+    ) {
+        CompositionLocalProvider(
+            // 默认行高交给字体度量：只改 fontSize 的小字（11sp 脚注等）不再继承 bodyLarge 的 24sp 行高，
+            // 否则小字的行距会比正文还大（UI 审阅列为 P0）。
+            LocalTextStyle provides TextStyle.Default.copy(lineHeight = TextUnit.Unspecified),
+            LocalCodeSurfaces provides if (darkTheme) NightCodeSurfaces else CreamCodeSurfaces,
+        ) {
+            content()
+        }
+    }
 }
 
 /** 状态栏/导航栏图标明暗跟随主题（浅色底要用深色图标，否则看不见）。 */

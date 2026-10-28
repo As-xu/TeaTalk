@@ -23,6 +23,9 @@ import org.json.JSONObject
 
 /** 一次流式请求里发生的事。 */
 sealed interface ChatEvent {
+    /** 本次请求最终使用的接口与模型（调用方据此落库来源，不再旁路读取）。 */
+    data class Started(val providerId: String, val providerName: String, val model: String) : ChatEvent
+
     data class Delta(val text: String) : ChatEvent
 
     /** 正常结束；[truncated] 表示服务端因长度上限提前截断（finish_reason=length）。 */

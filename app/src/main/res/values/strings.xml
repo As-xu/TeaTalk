@@ -80,6 +80,7 @@
     <string name="detail_by_author">作者 %1$s · </string>
 
     <!-- 聊天页 -->
+    <string name="chat_header_subtitle">%1$s · 在线</string>
     <string name="chat_online_status">在线 · 角色扮演模式</string>
     <string name="chat_input_hint">说点什么…</string>
     <string name="chat_intro_default">开始一段角色扮演</string>

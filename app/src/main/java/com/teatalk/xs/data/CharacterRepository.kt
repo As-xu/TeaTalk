@@ -17,6 +17,8 @@ import com.teatalk.xs.data.db.ConversationWithLastMessage
 import com.teatalk.xs.data.db.MessageEntity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
@@ -43,6 +45,15 @@ class CharacterRepository(
     private val dao: CharacterDao,
     private val conversations: ConversationDao,
 ) {
+
+    /**
+     * 回复落库的进程内互斥。
+     *
+     * 「追加版本」本质是读-改-写（读最后一条 → 拼 variantsJson → 写回）。停止与完成
+     * 两条路径都可能同时进入，若不串行会互相覆盖：完整回复被半截版覆盖，或出现两条相同变体。
+     * 进程内只有这一个仓库实例，Mutex 足够；跨进程无写入方。
+     */
+    private val replyMutex = Mutex()
 
     fun observeCharacters(): Flow<List<CharacterEntity>> = dao.observeAll()
 
@@ -108,7 +119,7 @@ class CharacterRepository(
         TeaTalkLog.i("Chat", "conversation.delete", "conversationId" to conversationId)
     }
 
-    private suspend fun touchConversation(conversationId: Long) {
+    suspend fun touchConversation(conversationId: Long) {
         conversations.touch(conversationId, System.currentTimeMillis())
     }
 
@@ -306,13 +317,18 @@ class CharacterRepository(
         providerId: String? = null,
         providerName: String? = null,
         model: String? = null,
-    ): Long = withContext(Dispatchers.IO) {
+        replyToMessageId: Long? = null,
+    ): Long = replyMutex.withLock {
+      withContext(Dispatchers.IO) {
         val body = text.trim()
         if (body.isEmpty()) return@withContext -1L
         val conversation = conversations.find(conversationId) ?: return@withContext -1L
         if (dao.find(conversation.characterId) == null) return@withContext -1L
         val last = dao.lastMessage(conversationId)
-        if (last != null && last.role == ROLE_ASSISTANT) {
+        // 锚点必须对得上才允许「追加版本」：否则说明写库顺序已经被打乱（停止与新发送交错），
+        // 宁可新插入一条，也不要把半截文本盖到别的回复上。
+        val anchored = replyToMessageId == null || last?.id == replyToMessageId
+        if (last != null && last.role == ROLE_ASSISTANT && anchored) {
             val (variantsJson, statusJson) = MessageVariants.append(
                 variantsJson = last.variantsJson,
                 variantStatusJson = last.variantStatusJson,
@@ -354,6 +370,7 @@ class CharacterRepository(
             TeaTalkLog.i("Chat", "reply.insert", "messageId" to id, "chars" to body.length)
             id
         }.also { touchConversation(conversationId) }
+      }
     }
 
     /** 切换某条消息的版本；返回切换后的文本（null 表示下标无效）。 */

@@ -58,6 +58,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -92,7 +93,6 @@ import com.teatalk.xs.data.CharacterRepository
 import com.teatalk.xs.data.MessageVariants
 import com.teatalk.xs.data.ChatEngine
 import com.teatalk.xs.data.UiText
-import com.teatalk.xs.data.model.ActiveProvider
 import com.teatalk.xs.data.db.CharacterEntity
 import com.teatalk.xs.data.db.ConversationEntity
 import com.teatalk.xs.data.db.MessageEntity
@@ -106,10 +106,13 @@ import com.teatalk.xs.ui.components.Hairline
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -168,8 +171,19 @@ class ChatViewModel(
      * - [stop] 先取消，再 join，最后才落半截文本。
      */
     private var job: Job? = null
-    /** 本次生成使用的接口（B2）：完成/停止/失败落库时写入来源。 */
-    private var pendingProvider: ActiveProvider? = null
+    /** 停止中：生成协程的 finally 在此期间不碰 UI 状态（收尾由 stop() 负责）。 */
+    private var stopping = false
+    /** 本轮回复的锚点（用户消息 id / 被重试的 assistant id），落库时校验，防错位。 */
+    private var replyAnchorId: Long? = null
+    /** 本轮实际使用的接口（来自 `ChatEvent.Started`，不跨轮共享）。 */
+    private var replyProvider: ChatEvent.Started? = null
+    /** 本轮是否已落过库（同一轮最多一条）。 */
+    private var committed = false
+    private val commitMutex = Mutex()
+    private val accumulated = StringBuilder()
+    private val _busy = MutableStateFlow(false)
+    /** 生成或停止中（UI 用来禁用会「离开当前会话」的动作）。 */
+    val busy: StateFlow<Boolean> = _busy.asStateFlow()
 
     private val _activeProviderId = MutableStateFlow<String?>(null)
     val activeProviderId: StateFlow<String?> = _activeProviderId.asStateFlow()
@@ -185,10 +199,20 @@ class ChatViewModel(
 
     fun send(text: String) {
         val trimmed = text.trim()
-        if (trimmed.isEmpty() || job != null) return
+        if (trimmed.isEmpty()) return
+        if (job != null || stopping) {
+            // 生成/停止过程中不静默吞掉：给一条提示，避免「点了没反应」
+            _notice.value = UiText.of(R.string.chat_busy_generating)
+            return
+        }
         _error.value = null
         _streamText.value = ""
+        accumulated.setLength(0)
+        replyProvider = null
+        committed = false
+        replyAnchorId = null
         _streaming.value = true
+        _busy.value = true
         val gen = ++generation
         job = viewModelScope.launch {
             try {
@@ -196,12 +220,11 @@ class ChatViewModel(
                 if (blocked != null) {
                     _error.value = UiText.chatError(blocked)
                     _restoreText.value = trimmed
-                } else {
-                    pendingProvider = engine.activeProvider()
-                    _activeProviderId.value = pendingProvider?.id
-                    if (!engine.sendUserMessage(conversationId, trimmed)) return@launch
-                    collectStream(engine.streamReply(conversationId), gen)
+                    return@launch
                 }
+                val anchor = engine.sendUserMessage(conversationId, trimmed) ?: return@launch
+                replyAnchorId = anchor
+                collectStream(engine.streamReply(conversationId, anchor), gen)
             } finally {
                 finishIfCurrent(gen)
             }
@@ -209,32 +232,37 @@ class ChatViewModel(
     }
 
     fun retry() {
-        if (job != null) {
-            // 生成中不静默吞掉点击：给一条提示，避免「点了没反应」
+        if (job != null || stopping) {
             _notice.value = UiText.of(R.string.chat_busy_generating)
             return
         }
         _error.value = null
         _streamText.value = ""
+        accumulated.setLength(0)
+        replyProvider = null
+        committed = false
         _streaming.value = true
+        _busy.value = true
         val gen = ++generation
         job = viewModelScope.launch {
             try {
-                // 先做和发送同样的可发送性检查，避免「错误条重试」在没配模型时又空跑一次
                 val blocked = engine.preflightError()
                 if (blocked != null) {
                     _error.value = UiText.chatError(blocked)
                     return@launch
                 }
                 // 只有「最后一条是 assistant」才谈得上重试；否则（例如只有开场白）直接提示
-                if (repository.lastAssistantMessageId(conversationId) == null) {
+                val lastAssistant = repository.lastAssistantMessageId(conversationId)
+                if (lastAssistant == null) {
                     _notice.value = UiText.of(R.string.chat_nothing_to_retry)
                     return@launch
                 }
-                pendingProvider = engine.activeProvider()
-                _activeProviderId.value = pendingProvider?.id
-                // 重试 = 重新生成最后一条回复：把它从 prompt 历史里剔除，结果作为新版本追加
-                collectStream(engine.streamReply(conversationId, excludeLastAssistant = true), gen)
+                // 重试 = 重新生成最后一条回复：它本身是锚点（结果作为新版本追加），从 prompt 历史里剔除
+                replyAnchorId = lastAssistant
+                collectStream(
+                    engine.streamReply(conversationId, lastAssistant, excludeLastAssistant = true),
+                    gen,
+                )
             } finally {
                 finishIfCurrent(gen)
             }
@@ -255,43 +283,37 @@ class ChatViewModel(
     }
 
     /**
-     * 停止生成：取消后 join，再把已经收到的半截文本落库。
+     * 停止生成。
      *
-     * join 必须在落库之前：否则被取消的协程可能还在写库，造成顺序错乱/重复插入。
+     * 顺序很重要：先 cancel，再 join，最后落半截文本；且**落库与状态收尾都由 stop 这条
+     * 协程负责**，生成协程的 finally 在 stopping 期间不动状态。否则会出现：
+     * 「完整回复刚落库，停止又把半截追加成同一消息的第二个版本」或「停止后立刻发送，
+     * 半截回复被插到新问题下面」。
      */
     fun stop() {
         val current = job ?: return
-        val partial = _streamText.value.trim()
-        generation++ // 旧协程的 finally 不再碰状态
-        job = null
+        val gen = generation
+        val partial = accumulated.toString()
+        stopping = true
         current.cancel()
-        _streamText.value = ""
         viewModelScope.launch {
             // 取消不保证立刻完成（网络线程可能还在返回），等它真正结束再写库
             runCatching { current.join() }
-            if (partial.isNotEmpty()) {
-                appendReply(partial, MessageEntity.STATUS_STOPPED)
+            commitOnce(gen, MessageEntity.STATUS_STOPPED, partial)
+            if (gen == generation) {
+                job = null
+                stopping = false
+                _streaming.value = false
+                _streamText.value = ""
+                _busy.value = false
+                _notice.value = UiText.chatStopped()
             }
-            _streaming.value = false
-            _notice.value = UiText.chatStopped()
         }
     }
 
-    /** 落一条回复并带上来源接口（B2）。 */
-    private suspend fun appendReply(text: String, status: String) {
-        val provider = pendingProvider
-        repository.appendAssistantReply(
-            conversationId = conversationId,
-            text = text,
-            status = status,
-            providerId = provider?.id,
-            providerName = provider?.name,
-            model = provider?.model,
-        )
-    }
-
-    /** 新建会话；成功后由 UI 导航到新会话。 */
+    /** 新建会话；成功后由 UI 导航到新会话。生成中先停止，避免流把内容写进旧会话。 */
     fun createConversation(onCreated: (Long) -> Unit) {
+        if (guardStreaming()) return
         viewModelScope.launch {
             val characterId = character.value?.id ?: conversation.value?.characterId ?: return@launch
             val id = repository.createConversation(characterId) ?: return@launch
@@ -304,13 +326,27 @@ class ChatViewModel(
         viewModelScope.launch { repository.renameConversation(id, title) }
     }
 
-    /** 删除会话；当前会话被删时回调 onDeleted 让页面退出。 */
+    /** 删除会话；当前会话被删时回调 onDeleted 让页面退出。生成中先拒绝。 */
     fun deleteConversation(id: Long, isCurrent: Boolean, onDeleted: () -> Unit) {
+        if (guardStreaming()) return
         viewModelScope.launch {
             repository.deleteConversation(id)
             _notice.value = UiText.of(R.string.chat_conversation_deleted)
             if (isCurrent) onDeleted()
         }
+    }
+
+    /**
+     * 打开/切换会话前的守卫（P0）：流式生成时不允许直接切走。
+     *
+     * 不替用户自动停止——切会话后「已停止」的回执会落在另一个会话上，容易误判。
+     */
+    fun guardStreaming(): Boolean {
+        if (job != null || stopping) {
+            _notice.value = UiText.of(R.string.chat_busy_generating)
+            return true
+        }
+        return false
     }
 
     fun consumeNotice() {
@@ -325,34 +361,68 @@ class ChatViewModel(
         flow.collect { event ->
             if (gen != generation) return@collect
             when (event) {
-                is ChatEvent.Delta -> _streamText.value += event.text
+                is ChatEvent.Started -> {
+                    replyProvider = event
+                    _activeProviderId.value = event.providerId
+                }
+
+                is ChatEvent.Delta -> {
+                    accumulated.append(event.text)
+                    _streamText.value = accumulated.toString()
+                }
 
                 is ChatEvent.Completed -> {
                     // 引擎不落库（M2）：由这里落，才能区分新回复 / 追加版本 + 状态
-                    val reply = _streamText.value.trim()
-                    if (reply.isNotEmpty()) {
-                        appendReply(reply, MessageEntity.STATUS_COMPLETE)
-                    }
+                    commitOnce(gen, MessageEntity.STATUS_COMPLETE, accumulated.toString())
                     if (event.truncated) _notice.value = UiText.chatTruncated()
                 }
 
                 is ChatEvent.Failed -> {
                     // 失败也把已收到的半截留下（标 failed），别让用户白等
-                    val partial = _streamText.value.trim()
-                    if (partial.isNotEmpty()) {
-                        appendReply(partial, MessageEntity.STATUS_FAILED)
-                    }
+                    commitOnce(gen, MessageEntity.STATUS_FAILED, accumulated.toString())
                     _error.value = UiText.chatError(event.error)
                 }
             }
         }
     }
 
+    /**
+     * 只落一次库。
+     *
+     * 完成与停止可能同时到达（取消点落在 Completed 的落库中间），用「代次 + 已提交标记 + Mutex」
+     * 保证同一轮生成最多写一条：先到者为准，后到者静默丢弃。
+     */
+    private suspend fun commitOnce(gen: Int, status: String, raw: String) {
+        val body = raw.trim()
+        if (body.isEmpty()) return
+        commitMutex.withLock {
+            if (gen != generation || committed) return
+            committed = true
+            try {
+                repository.appendAssistantReply(
+                    conversationId = conversationId,
+                    text = body,
+                    status = status,
+                    providerId = replyProvider?.providerId,
+                    providerName = replyProvider?.providerName,
+                    model = replyProvider?.model,
+                    replyToMessageId = replyAnchorId,
+                )
+            } catch (cancelled: CancellationException) {
+                // 写库被取消：可能已回滚，放开标记让停止路径重试
+                committed = false
+                throw cancelled
+            }
+        }
+    }
+
     private fun finishIfCurrent(gen: Int) {
         if (gen != generation) return
+        if (stopping) return // 收尾交给 stop() 的协程
         job = null
         _streaming.value = false
         _streamText.value = ""
+        _busy.value = false
     }
 
     companion object {
@@ -412,6 +482,9 @@ fun ChatScreen(
         }
     }
 
+    // 生成中按返回：先停止并留在页面（回执可见），再按一次才真正返回。
+    BackHandler(enabled = streaming) { viewModel.stop() }
+
     LaunchedEffect(messages.size, streamText.length, streaming) {
         // 列表第 0 项是「今天」分隔行，所以最后一项下标 = 消息数 + 流式占位 - 1 + 1
         val count = messages.size + if (streaming) 1 else 0
@@ -438,6 +511,7 @@ fun ChatScreen(
         Column(Modifier.fillMaxSize().statusBarsPadding()) {
             ChatHeader(
                 character = character,
+                conversationTitle = conversation?.title.orEmpty(),
                 onBack = onBack,
                 menuOpen = menuOpen,
                 onMenuOpenChange = { menuOpen = it },
@@ -671,8 +745,11 @@ fun ChatScreen(
                 currentId = viewModel.conversation.value?.id ?: 0L,
                 onDismiss = { showConversations = false },
                 onSelect = { id ->
-                    showConversations = false
-                    if (id != (viewModel.conversation.value?.id ?: 0L)) onOpenConversation(id)
+                    // 生成中不直接切走：切走后「已停止」的回执会落在另一个会话上
+                    if (!viewModel.guardStreaming()) {
+                        showConversations = false
+                        if (id != (viewModel.conversation.value?.id ?: 0L)) onOpenConversation(id)
+                    }
                 },
                 onRename = { renameTarget = it },
                 onDelete = { deleteConversationTarget = it },
@@ -749,6 +826,7 @@ fun ChatScreen(
 @Composable
 private fun ChatHeader(
     character: CharacterEntity?,
+    conversationTitle: String,
     onBack: () -> Unit,
     menuOpen: Boolean,
     onMenuOpenChange: (Boolean) -> Unit,
@@ -770,15 +848,24 @@ private fun ChatHeader(
         CharacterAvatar(avatarPath = character?.avatarPath, name = character?.name ?: "", size = 36.dp, corner = 12.dp)
         Spacer(Modifier.width(10.dp))
         Column(Modifier.weight(1f)) {
+            // 标题优先显示「会话名」：同一角色的多条会话在头部就能区分（否则只能靠时间猜）
             Text(
-                character?.name ?: stringResource(R.string.character_fallback),
+                conversationTitle.ifBlank { character?.name ?: stringResource(R.string.character_fallback) },
                 fontSize = 15.5.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = cs.onBackground,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-            Text(stringResource(R.string.chat_online_status), fontSize = 11.sp, color = cs.onSurfaceVariant)
+            Text(
+                // 会话没有标题时副标题不再重复角色名
+                if (conversationTitle.isBlank()) stringResource(R.string.chat_online_status)
+                else stringResource(R.string.chat_header_subtitle, character?.name ?: stringResource(R.string.character_fallback)),
+                fontSize = 11.sp,
+                color = cs.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
         }
         Box {
             IconButton(onClick = { onMenuOpenChange(true) }) {
@@ -849,7 +936,7 @@ private fun ConversationSheet(
                             Icons.Filled.Check,
                             contentDescription = null,
                             tint = cs.primary,
-                            modifier = Modifier.size(18.dp),
+                            modifier = Modifier.size(20.dp),
                         )
                         Spacer(Modifier.width(8.dp))
                     }
@@ -858,7 +945,7 @@ private fun ConversationSheet(
                             Icons.Filled.Edit,
                             contentDescription = stringResource(R.string.chat_conversation_rename),
                             tint = cs.onSurfaceVariant,
-                            modifier = Modifier.size(18.dp),
+                            modifier = Modifier.size(20.dp),
                         )
                     }
                     IconButton(onClick = { onDelete(item) }) {
@@ -866,7 +953,7 @@ private fun ConversationSheet(
                             Icons.Filled.Delete,
                             contentDescription = stringResource(R.string.chat_conversation_delete),
                             tint = cs.onSurfaceVariant,
-                            modifier = Modifier.size(18.dp),
+                            modifier = Modifier.size(20.dp),
                         )
                     }
                 }
@@ -965,13 +1052,13 @@ private fun AssistantBubble(
                         IconButton(
                             onClick = { onSelectVariant(selected - 1) },
                             enabled = selected > 0,
-                            modifier = Modifier.size(32.dp),
+                            modifier = Modifier.size(48.dp),
                         ) {
                             Icon(
                                 Icons.AutoMirrored.Filled.KeyboardArrowLeft,
                                 contentDescription = stringResource(R.string.chat_variant_prev),
                                 tint = if (selected > 0) cs.onSurfaceVariant else cs.onSurfaceVariant.copy(alpha = 0.45f),
-                                modifier = Modifier.size(18.dp),
+                                modifier = Modifier.size(20.dp),
                             )
                         }
                     }
@@ -985,13 +1072,13 @@ private fun AssistantBubble(
                         IconButton(
                             onClick = { onSelectVariant(selected + 1) },
                             enabled = selected < variants.lastIndex,
-                            modifier = Modifier.size(32.dp),
+                            modifier = Modifier.size(48.dp),
                         ) {
                             Icon(
                                 Icons.AutoMirrored.Filled.KeyboardArrowRight,
                                 contentDescription = stringResource(R.string.chat_variant_next),
                                 tint = if (selected < variants.lastIndex) cs.onSurfaceVariant else cs.onSurfaceVariant.copy(alpha = 0.45f),
-                                modifier = Modifier.size(18.dp),
+                                modifier = Modifier.size(20.dp),
                             )
                         }
                     }

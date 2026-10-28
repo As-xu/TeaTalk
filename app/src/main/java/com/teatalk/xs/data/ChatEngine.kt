@@ -28,15 +28,25 @@ class ChatEngine(
     private val client: ChatClient,
 ) {
 
-    /** 落用户消息；返回 false 表示内容为空或角色不存在，调用方不应继续生成。 */
-    suspend fun sendUserMessage(conversationId: Long, userText: String): Boolean {
+    /**
+     * 落用户消息，返回它的 id（后续回复以它为锚点落库）；返回 null 表示内容为空/会话不存在。
+     *
+     * 顺带做两件事：
+     * - 会话还没有标题时，用这条消息的前 18 个字自动命名（UI 头部与列表都靠它区分同角色的多条会话）；
+     * - 发消息即 touch 会话，列表按最近活跃排序。
+     */
+    suspend fun sendUserMessage(conversationId: Long, userText: String): Long? {
         val text = userText.trim()
-        if (text.isEmpty()) return false
-        val conversation = characters.conversation(conversationId) ?: return false
-        if (characters.find(conversation.characterId) == null) return false
+        if (text.isEmpty()) return null
+        val conversation = characters.conversation(conversationId) ?: return null
+        if (characters.find(conversation.characterId) == null) return null
         TeaTalkLog.i("Chat", "send.start", "conversationId" to conversationId, "chars" to text.length)
-        characters.addMessage(conversationId, ROLE_USER, text)
-        return true
+        val messageId = characters.addMessage(conversationId, ROLE_USER, text)
+        if (conversation.title.isBlank()) {
+            characters.renameConversation(conversationId, text.take(AUTO_TITLE_CHARS).replace('\n', ' '))
+        }
+        characters.touchConversation(conversationId)
+        return messageId
     }
 
     /**
@@ -63,12 +73,26 @@ class ChatEngine(
      * @param excludeLastAssistant 重试时把最后一条 assistant 从历史里剔除，避免模型看到自己
      * 上一版回复而被带跑。
      */
-    fun streamReply(conversationId: Long, excludeLastAssistant: Boolean = false): Flow<ChatEvent> = flow {
-        TeaTalkLog.i("Chat", "send.retry", "conversationId" to conversationId, "excludeLast" to excludeLastAssistant)
-        emitAll(stream(conversationId, excludeLastAssistant))
+    fun streamReply(
+        conversationId: Long,
+        replyToMessageId: Long,
+        excludeLastAssistant: Boolean = false,
+    ): Flow<ChatEvent> = flow {
+        TeaTalkLog.i(
+            "Chat",
+            "send.retry",
+            "conversationId" to conversationId,
+            "anchor" to replyToMessageId,
+            "excludeLast" to excludeLastAssistant,
+        )
+        emitAll(stream(conversationId, replyToMessageId, excludeLastAssistant))
     }
 
-    private fun stream(conversationId: Long, excludeLastAssistant: Boolean = false): Flow<ChatEvent> = flow {
+    private fun stream(
+        conversationId: Long,
+        replyToMessageId: Long,
+        excludeLastAssistant: Boolean = false,
+    ): Flow<ChatEvent> = flow {
         val conversation = characters.conversation(conversationId)
         val character = conversation?.let { characters.find(it.characterId) }
         if (conversation == null || character == null) {
@@ -92,10 +116,22 @@ class ChatEngine(
         }
         providers.touch(provider.id)
 
-        val card = CardViewParser.parse(character.cardJson)
-        val history = characters.recentMessages(conversationId, HISTORY_LIMIT).let { list ->
-            if (excludeLastAssistant && list.lastOrNull()?.role == ROLE_ASSISTANT) list.dropLast(1) else list
+        // 不拿角色名兜底：模型名打错时服务端会 400/404，比「用角色名当模型」更容易发现。
+        val model = provider.model.trim()
+        if (model.isEmpty()) {
+            TeaTalkLog.w("Chat", "send.no_model", "provider" to provider.id)
+            emit(ChatEvent.Failed(ChatError.NO_MODEL))
+            return@flow
         }
+        emit(ChatEvent.Started(provider.id, provider.name, model))
+
+        val card = CardViewParser.parse(character.cardJson)
+        val history = characters.recentMessages(conversationId, HISTORY_LIMIT)
+            // 以本次用户消息为锚点：只取到它为止的历史，避免停止/并发写让「未来」的消息混进 prompt
+            .filter { it.id <= replyToMessageId }
+            .let { list ->
+                if (excludeLastAssistant && list.lastOrNull()?.role == ROLE_ASSISTANT) list.dropLast(1) else list
+            }
         val messages = buildList {
             add(ROLE_SYSTEM to systemPrompt(card, character.name))
             history.forEach { message ->
@@ -110,14 +146,6 @@ class ChatEngine(
             "sysChars" to messages.first().second.length,
         )
 
-        // 不拿角色名兜底：模型名打错时服务端会 400/404，比「用角色名当模型」更容易发现。
-        val model = provider.model.trim()
-        if (model.isEmpty()) {
-            TeaTalkLog.w("Chat", "send.no_model", "provider" to provider.id)
-            emit(ChatEvent.Failed(ChatError.NO_MODEL))
-            return@flow
-        }
-
         val builder = StringBuilder()
         var firstTokenLogged = false
         client.stream(
@@ -128,6 +156,8 @@ class ChatEngine(
             temperature = provider.temperature,
         ).collect { event ->
             when (event) {
+                is ChatEvent.Started -> emit(event)
+
                 is ChatEvent.Delta -> {
                     if (!firstTokenLogged) {
                         firstTokenLogged = true
@@ -183,5 +213,8 @@ class ChatEngine(
         private const val ROLE_ASSISTANT = "assistant"
         private const val HISTORY_LIMIT = 20
         private const val MAX_SYSTEM_CHARS = 6000
+
+        /** 自动命名时截取的字符数。 */
+        private const val AUTO_TITLE_CHARS = 18
     }
 }

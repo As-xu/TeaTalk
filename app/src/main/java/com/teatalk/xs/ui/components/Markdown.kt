@@ -1,6 +1,7 @@
 package com.teatalk.xs.ui.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -30,6 +31,7 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.teatalk.xs.ui.theme.LocalCodeSurfaces
 
 /**
  * 轻量 Markdown：覆盖角色扮演里真正会出现的写法（标题/粗体/斜体/删除线/行内代码/列表/引用/代码块/分隔线）。
@@ -287,6 +289,8 @@ fun MarkdownText(
     modifier: Modifier = Modifier,
 ) {
     val cs = MaterialTheme.colorScheme
+    // 行内代码与代码块用专用底色：surfaceContainerHighest 与气泡底色几乎同色（审阅实测 ~1.05:1）
+    val code = LocalCodeSurfaces.current
     val blocks = Markdown.parse(text)
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
         for (block in blocks) {
@@ -299,14 +303,14 @@ fun MarkdownText(
                         else -> fontSize
                     }
                     Text(
-                        text = annotatedInline(block.text, color, cs.surfaceContainerHighest, cs.primary, FontWeight.SemiBold),
+                        text = annotatedInline(block.text, color, code.inline, cs.primary, FontWeight.SemiBold),
                         fontSize = size,
                         lineHeight = (size.value + 6).sp,
                         color = color,
                     )
                 }
                 is Markdown.Block.Paragraph -> Text(
-                    text = annotatedInline(block.text, color, cs.surfaceContainerHighest, cs.primary),
+                    text = annotatedInline(block.text, color, code.inline, cs.primary),
                     fontSize = fontSize,
                     lineHeight = lineHeight,
                     color = color,
@@ -316,7 +320,7 @@ fun MarkdownText(
                         Row(Modifier.fillMaxWidth()) {
                             Text("•", fontSize = fontSize, color = color, modifier = Modifier.width(14.dp))
                             Text(
-                                text = annotatedInline(item, color, cs.surfaceContainerHighest, cs.primary),
+                                text = annotatedInline(item, color, code.inline, cs.primary),
                                 fontSize = fontSize,
                                 lineHeight = lineHeight,
                                 color = color,
@@ -335,7 +339,7 @@ fun MarkdownText(
                                 modifier = Modifier.width(22.dp),
                             )
                             Text(
-                                text = annotatedInline(item, color, cs.surfaceContainerHighest, cs.primary),
+                                text = annotatedInline(item, color, code.inline, cs.primary),
                                 fontSize = fontSize,
                                 lineHeight = lineHeight,
                                 color = color,
@@ -353,7 +357,7 @@ fun MarkdownText(
                     )
                     Spacer(Modifier.width(8.dp))
                     Text(
-                        text = annotatedInline(block.text, cs.onSurfaceVariant, cs.surfaceContainerHighest, cs.primary),
+                        text = annotatedInline(block.text, cs.onSurfaceVariant, code.inline, cs.primary),
                         fontSize = fontSize,
                         lineHeight = lineHeight,
                         color = cs.onSurfaceVariant,
@@ -363,7 +367,8 @@ fun MarkdownText(
                 is Markdown.Block.Code -> Column(
                     Modifier
                         .fillMaxWidth()
-                        .background(cs.surfaceContainerHighest, RoundedCornerShape(8.dp))
+                        .background(code.block, RoundedCornerShape(8.dp))
+                        .border(1.dp, cs.outlineVariant, RoundedCornerShape(8.dp))
                         .padding(horizontal = 10.dp, vertical = 8.dp),
                 ) {
                     val language = block.language
