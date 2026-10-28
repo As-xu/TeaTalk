@@ -1,6 +1,7 @@
 package com.teatalk.xs.ui.chats
 
 import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -24,6 +25,15 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Icon
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
+import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.viewModelScope
+import com.teatalk.xs.data.DeletedConversationStore
+import kotlinx.coroutines.launch
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -56,9 +66,22 @@ import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
-class ChatListViewModel(repository: CharacterRepository) : ViewModel() {
+class ChatListViewModel(private val repository: CharacterRepository) : ViewModel() {
     val chats: StateFlow<List<ConversationWithLastMessage>?> = repository.observeChats()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    val deleted: StateFlow<CharacterRepository.DeletedConversation?> = DeletedConversationStore.deleted
+
+    /** 列表页撤销删除（聊天页删当前会话后会跳回这里）。 */
+    fun undoDelete() {
+        val snapshot = DeletedConversationStore.deleted.value ?: return
+        viewModelScope.launch {
+            repository.restoreConversation(snapshot)
+            DeletedConversationStore.clear()
+        }
+    }
+
+    fun clearDeleted() = DeletedConversationStore.clear()
 
     companion object {
         fun factory(app: TeaTalkApp): ViewModelProvider.Factory = viewModelFactory {
@@ -78,7 +101,28 @@ fun ChatListScreen(
     // 只展示真正有消息的会话（迁移会为每个角色建默认会话，空会话不占列表）
     val chats = allChats?.filter { it.lastContent != null }
     val cs = MaterialTheme.colorScheme
+    val deleted by viewModel.deleted.collectAsState()
+    val snackbar = remember { SnackbarHostState() }
+    val context = LocalContext.current
+    LaunchedEffect(deleted) {
+        val snapshot = deleted ?: return@LaunchedEffect
+        val title = snapshot.conversation.title.ifBlank {
+            context.getString(R.string.chat_conversation_untitled)
+        }
+        val message = if (snapshot.messages.size == 1) {
+            context.getString(R.string.chat_conversation_deleted_one, title)
+        } else {
+            context.getString(R.string.chat_conversation_deleted_count, title, snapshot.messages.size)
+        }
+        val result = snackbar.showSnackbar(
+            message = message,
+            actionLabel = context.getString(R.string.chat_undo),
+            duration = SnackbarDuration.Short,
+        )
+        if (result == SnackbarResult.ActionPerformed) viewModel.undoDelete() else viewModel.clearDeleted()
+    }
 
+    Box(Modifier.fillMaxSize()) {
     Column(Modifier.fillMaxSize()) {
         // 顶部：同 QQ 的一行身份区（M0 用 App 身份，M1 接用户设置）
         Row(
@@ -130,6 +174,11 @@ fun ChatListScreen(
                 }
             }
         }
+    }
+        SnackbarHost(
+            hostState = snackbar,
+            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 88.dp),
+        )
     }
 }
 

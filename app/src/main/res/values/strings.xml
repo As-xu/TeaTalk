@@ -261,6 +261,12 @@
     <string name="chat_conversation_delete">删除会话</string>
     <string name="chat_conversation_delete_message">将删除「%1$s」及其全部消息，无法恢复。</string>
     <string name="chat_conversation_created">已新建会话</string>
+    <string name="chat_conversation_deleted_one">已删除「%1$s」（1 条消息）</string>
+    <string name="chat_conversation_delete_message_one">将删除「%1$s」及其 1 条消息，无法恢复。</string>
+    <string name="chat_conversation_deleted_count">已删除「%1$s」（%2$d 条消息）</string>
+    <string name="chat_conversation_restored">已恢复「%1$s」</string>
+    <string name="chat_undo">撤销</string>
+    <string name="chat_conversation_delete_message_count">将删除「%1$s」及其 %2$d 条消息，无法恢复。</string>
     <string name="chat_conversation_deleted">已删除会话</string>
 </resources>
 

@@ -13,8 +13,8 @@ android {
         applicationId = "com.teatalk.xs"
         minSdk = 28
         targetSdk = 34
-        versionCode = 12
-        versionName = "0.7.1"
+        versionCode = 13
+        versionName = "0.7.2"
     }
 
     buildTypes {
@@ -82,6 +82,7 @@ dependencies {
     // android.jar 里的 org.json 是桩实现，单元测试用真实实现
     testImplementation("org.json:json:20240303")
 }
+
 
 
 

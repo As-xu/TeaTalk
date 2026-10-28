@@ -113,6 +113,10 @@ class CharacterRepository(
     }
 
     /** 删除一段会话：先删消息，再删会话行（角色保留）。 */
+    suspend fun countMessages(conversationId: Long): Long = withContext(Dispatchers.IO) {
+        dao.countMessages(conversationId)
+    }
+
     suspend fun deleteConversation(conversationId: Long) = withContext(Dispatchers.IO) {
         dao.deleteMessages(conversationId)
         conversations.deleteById(conversationId)
@@ -388,6 +392,44 @@ class CharacterRepository(
     /** 该角色最后一条 assistant 消息 id（重试入口的守卫：只有在有回复可重生成时才允许重试）。 */
     suspend fun lastAssistantMessageId(conversationId: Long): Long? = withContext(Dispatchers.IO) {
         dao.lastMessage(conversationId)?.takeIf { it.role == ROLE_ASSISTANT }?.id
+    }
+
+    /** 删除会话前的快照：会话行 + 全部消息（用于 5s 内撤销）。 */
+    data class DeletedConversation(
+        val conversation: ConversationEntity,
+        val messages: List<MessageEntity>,
+    )
+
+    /**
+     * 删除会话并返回快照。
+     *
+     * 为什么快照而不是软删除：会话量级小、删除是低频操作；快照足以支撑「撤销」，
+     * 又不需要在每个查询里过滤 `deleted=0`（少一个容易忘的条件）。
+     */
+    suspend fun deleteConversationWithSnapshot(id: Long): DeletedConversation? = withContext(Dispatchers.IO) {
+        val conversation = conversations.find(id) ?: return@withContext null
+        val messages = dao.allMessages(id)
+        conversations.deleteById(id)
+        dao.deleteMessages(id)
+        TeaTalkLog.i(
+            "Chat",
+            "conversation.delete",
+            "conversationId" to id,
+            "messages" to messages.size,
+        )
+        DeletedConversation(conversation, messages)
+    }
+
+    /** 撤销删除：按原 id 写回会话与消息。 */
+    suspend fun restoreConversation(snapshot: DeletedConversation) = withContext(Dispatchers.IO) {
+        conversations.insertExact(snapshot.conversation)
+        if (snapshot.messages.isNotEmpty()) dao.insertMessagesExact(snapshot.messages)
+        TeaTalkLog.i(
+            "Chat",
+            "conversation.restore",
+            "conversationId" to snapshot.conversation.id,
+            "messages" to snapshot.messages.size,
+        )
     }
 
     /** 删除一条消息（用户/assistant 都允许）。 */

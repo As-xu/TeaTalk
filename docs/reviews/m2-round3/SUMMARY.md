@@ -12,7 +12,18 @@
 | 视觉（分层/字阶/对比） | 文字对比度 AAA；层分离度与行高需修：P0×3 |
 | 证据（文档 vs 工件） | NEEDS WORK：文档有 3 处夸大/过期，需修订 + 补测 |
 
-## P0（去重后 6 条）
+## P0 修复状态（2026-10-29，0.7.2）
+
+| # | 项 | 状态 |
+|---|---|---|
+| 1 | 停止/完成双写同一变体 | ✅ 0.7.1（`ChatEvent.Completed` 单次落库 + mutex） |
+| 2 | `job=null` 早于 join | ✅ 0.7.1（Started 事件 + 锚点写库） |
+| 3 | 聊天页看不到当前会话 | ✅ 0.7.2（头部会话名 + 自动命名） |
+| 4 | 流式无出口守卫 | ✅ 0.7.2（BackHandler=停止；新建/删除/切换生成中拒绝） |
+| 5 | 删除不可撤销、回执丢 | ✅ 0.7.2（条数确认 + 列表页 Undo + 快照恢复） |
+| 6 | 视觉层差/行高/点击区 | ✅ 0.7.1（CodeSurfaces、LocalTextStyle、48dp） |
+
+## P0（原始 6 条）
 
 1. **停止与完成双写同一变体槽**：`Completed` 落库与 `stop()` 的 `appendReply(stopped)` 竞争，取消点落在写库内 → 完整回复被截断版覆盖或产生重复变体。根因：`appendAssistantReply` 非事务 RMW + `job` 提前置空。`ChatScreen.kt:262-278,326-346` / `CharacterRepository.kt:314-334`
 2. **`job = null` 早于 `join()`**：单飞闸门失效，陈旧 stopped 回复插到新一轮 user 消息之后，且 `pendingProvider` 跨轮共享会写错来源。`ChatScreen.kt:265-277,188`

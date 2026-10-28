@@ -52,8 +52,10 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -90,6 +92,7 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import com.teatalk.xs.R
 import com.teatalk.xs.TeaTalkApp
 import com.teatalk.xs.data.CharacterRepository
+import com.teatalk.xs.data.DeletedConversationStore
 import com.teatalk.xs.data.MessageVariants
 import com.teatalk.xs.data.ChatEngine
 import com.teatalk.xs.data.UiText
@@ -326,14 +329,65 @@ class ChatViewModel(
         viewModelScope.launch { repository.renameConversation(id, title) }
     }
 
-    /** 删除会话；当前会话被删时回调 onDeleted 让页面退出。生成中先拒绝。 */
-    fun deleteConversation(id: Long, isCurrent: Boolean, onDeleted: () -> Unit) {
+    /** 删除确认所需的信息（会话 + 消息条数）。 */
+    data class ConversationDeleteInfo(val conversation: ConversationEntity, val messageCount: Long)
+
+    private val _deleteInfo = MutableStateFlow<ConversationDeleteInfo?>(null)
+    val deleteInfo: StateFlow<ConversationDeleteInfo?> = _deleteInfo.asStateFlow()
+
+    /** 最近删除的会话（5s 内可撤销）。 */
+    private val _deletedConversation = MutableStateFlow<CharacterRepository.DeletedConversation?>(null)
+    val deletedConversation: StateFlow<CharacterRepository.DeletedConversation?> = _deletedConversation.asStateFlow()
+
+    /** 删除前先取条数：确认框写清「几条消息」，避免误删长会话。 */
+    fun requestDeleteConversation(conversation: ConversationEntity) {
         if (guardStreaming()) return
         viewModelScope.launch {
-            repository.deleteConversation(id)
-            _notice.value = UiText.of(R.string.chat_conversation_deleted)
-            if (isCurrent) onDeleted()
+            val count = repository.countMessages(conversation.id)
+            _deleteInfo.value = ConversationDeleteInfo(conversation, count)
         }
+    }
+
+    fun cancelDeleteConversation() {
+        _deleteInfo.value = null
+    }
+
+    /** 删除会话；当前会话被删时回调 onDeleted 让页面退出。生成中先拒绝。 */
+    fun confirmDeleteConversation(isCurrent: Boolean, onDeleted: () -> Unit) {
+        val info = _deleteInfo.value ?: return
+        _deleteInfo.value = null
+        viewModelScope.launch {
+            val snapshot = repository.deleteConversationWithSnapshot(info.conversation.id)
+            if (snapshot == null) return@launch
+            val title = info.conversation.title.ifBlank {
+                character.value?.name ?: info.conversation.title
+            }
+            if (isCurrent) {
+                // 当前会话删掉后本页会立刻退出，撤销入口交给列表页
+                DeletedConversationStore.put(snapshot)
+                onDeleted()
+            } else {
+                _deletedConversation.value = snapshot
+                _notice.value = UiText.conversationDeleted(title, info.messageCount)
+            }
+        }
+    }
+
+    /** 撤销删除（Snackbar 上的「撤销」）。 */
+    fun undoDeleteConversation() {
+        val snapshot = _deletedConversation.value ?: return
+        _deletedConversation.value = null
+        viewModelScope.launch {
+            repository.restoreConversation(snapshot)
+            val title = snapshot.conversation.title.ifBlank {
+                character.value?.name ?: snapshot.conversation.title
+            }
+            _notice.value = UiText.conversationRestored(title)
+        }
+    }
+
+    fun consumeDeletedConversation() {
+        _deletedConversation.value = null
     }
 
     /**
@@ -465,7 +519,8 @@ fun ChatScreen(
     var menuOpen by remember { mutableStateOf(false) }
     var showConversations by remember { mutableStateOf(false) }
     var renameTarget by remember { mutableStateOf<ConversationEntity?>(null) }
-    var deleteConversationTarget by remember { mutableStateOf<ConversationEntity?>(null) }
+    val deleteInfo by viewModel.deleteInfo.collectAsState()
+    val deletedConversation by viewModel.deletedConversation.collectAsState()
     val lastAssistantId = remember(messages) {
         messages.lastOrNull()?.takeIf { it.role == "assistant" }?.id
     }
@@ -504,6 +559,27 @@ fun ChatScreen(
         LaunchedEffect(text) {
             snackbar.showSnackbar(text.resolve(context))
             viewModel.consumeNotice()
+        }
+    }
+
+    // 删除会话后的 5s 撤销入口（Snackbar 带 action）
+    deletedConversation?.let { snapshot ->
+        LaunchedEffect(snapshot) {
+            val title = snapshot.conversation.title.ifBlank {
+                character?.name ?: snapshot.conversation.title
+            }
+            val message = if (snapshot.messages.size == 1) {
+                context.getString(R.string.chat_conversation_deleted_one, title)
+            } else {
+                context.getString(R.string.chat_conversation_deleted_count, title, snapshot.messages.size)
+            }
+            val result = snackbar.showSnackbar(
+                message = message,
+                actionLabel = context.getString(R.string.chat_undo),
+                duration = SnackbarDuration.Short,
+            )
+            if (result == SnackbarResult.ActionPerformed) viewModel.undoDeleteConversation()
+            viewModel.consumeDeletedConversation()
         }
     }
 
@@ -752,7 +828,7 @@ fun ChatScreen(
                     }
                 },
                 onRename = { renameTarget = it },
-                onDelete = { deleteConversationTarget = it },
+                onDelete = { viewModel.requestDeleteConversation(it) },
             )
         }
         renameTarget?.let { target ->
@@ -790,28 +866,37 @@ fun ChatScreen(
                 },
             )
         }
-        deleteConversationTarget?.let { target ->
+        deleteInfo?.let { info ->
+            val target = info.conversation
             AlertDialog(
-                onDismissRequest = { deleteConversationTarget = null },
+                onDismissRequest = { viewModel.cancelDeleteConversation() },
                 confirmButton = {
                     TextButton(onClick = {
-                        deleteConversationTarget = null
-                        viewModel.deleteConversation(target.id, isCurrent = target.id == (viewModel.conversation.value?.id ?: 0L)) {
-                            onBack()
-                        }
+                        val isCurrent = target.id == (viewModel.conversation.value?.id ?: 0L)
+                        viewModel.confirmDeleteConversation(isCurrent = isCurrent) { onBack() }
                         showConversations = false
                     }) { Text(stringResource(R.string.delete), color = cs.error) }
                 },
                 dismissButton = {
-                    TextButton(onClick = { deleteConversationTarget = null }) { Text(stringResource(R.string.cancel)) }
+                    TextButton(onClick = { viewModel.cancelDeleteConversation() }) {
+                        Text(stringResource(R.string.cancel))
+                    }
                 },
                 title = { Text(stringResource(R.string.chat_conversation_delete)) },
                 text = {
                     Text(
-                        stringResource(
-                            R.string.chat_conversation_delete_message,
-                            target.title.ifBlank { stringResource(R.string.chat_conversation_untitled) },
-                        ),
+                        if (info.messageCount == 1L) {
+                            stringResource(
+                                R.string.chat_conversation_delete_message_one,
+                                target.title.ifBlank { stringResource(R.string.chat_conversation_untitled) },
+                            )
+                        } else {
+                            stringResource(
+                                R.string.chat_conversation_delete_message_count,
+                                target.title.ifBlank { stringResource(R.string.chat_conversation_untitled) },
+                                info.messageCount,
+                            )
+                        },
                     )
                 },
             )

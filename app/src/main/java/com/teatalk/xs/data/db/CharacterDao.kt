@@ -3,6 +3,7 @@ package com.teatalk.xs.data.db
 import androidx.room.Dao
 import androidx.room.Delete
 import androidx.room.Insert
+import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Transaction
 import kotlinx.coroutines.flow.Flow
@@ -98,6 +99,14 @@ interface CharacterDao {
 
     @Query("DELETE FROM messages WHERE conversationId = :conversationId")
     suspend fun deleteMessages(conversationId: Long)
+
+    /** 会话的全部消息（删除会话前做快照，用于撤销）。 */
+    @Query("SELECT * FROM messages WHERE conversationId = :conversationId ORDER BY id ASC")
+    suspend fun allMessages(conversationId: Long): List<MessageEntity>
+
+    /** 按原 id 批量写回（撤销删除）。 */
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertMessagesExact(messages: List<MessageEntity>)
 
     /** 删角色时连带清空其所有会话的消息（会话行由 ConversationDao 删）。 */
     @Query("DELETE FROM messages WHERE characterId = :characterId")

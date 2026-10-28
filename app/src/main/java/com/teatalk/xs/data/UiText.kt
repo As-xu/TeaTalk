@@ -75,6 +75,10 @@ data class UiText(
         }
 
         fun chatStopped(): UiText = of(R.string.chat_stopped)
+fun conversationDeleted(title: String, messageCount: Long): UiText =
+    if (messageCount == 1L) of(R.string.chat_conversation_deleted_one, title)
+    else of(R.string.chat_conversation_deleted_count, title, messageCount)
+fun conversationRestored(title: String): UiText = of(R.string.chat_conversation_restored, title)
 
         fun chatTruncated(): UiText = of(R.string.chat_truncated)
     }

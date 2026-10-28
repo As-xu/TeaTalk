@@ -2,6 +2,7 @@ package com.teatalk.xs.data.db
 
 import androidx.room.Dao
 import androidx.room.Insert
+import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import kotlinx.coroutines.flow.Flow
 
@@ -24,6 +25,10 @@ interface ConversationDao {
 
     @Insert
     suspend fun insert(conversation: ConversationEntity): Long
+
+    /** 撤销删除时按原 id 写回（REPLACE 防止并发下撞主键）。 */
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertExact(conversation: ConversationEntity): Long
 
     @Query("UPDATE conversations SET title = :title, updatedAt = :at WHERE id = :id")
     suspend fun rename(id: Long, title: String, at: Long)

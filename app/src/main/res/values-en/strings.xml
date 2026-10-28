@@ -252,6 +252,12 @@
     <string name="chat_conversation_delete">Delete chat</string>
     <string name="chat_conversation_delete_message">This removes “%1$s” and all its messages. This cannot be undone.</string>
     <string name="chat_conversation_created">Chat created</string>
+    <string name="chat_conversation_deleted_one">Deleted “%1$s” (1 message)</string>
+    <string name="chat_conversation_delete_message_one">This removes “%1$s” and its 1 message. This cannot be undone.</string>
+    <string name="chat_conversation_deleted_count">Deleted “%1$s” (%2$d messages)</string>
+    <string name="chat_conversation_restored">Restored “%1$s”</string>
+    <string name="chat_undo">Undo</string>
+    <string name="chat_conversation_delete_message_count">This removes “%1$s” and its %2$d messages. This cannot be undone.</string>
     <string name="chat_conversation_deleted">Chat deleted</string>
 </resources>
 
