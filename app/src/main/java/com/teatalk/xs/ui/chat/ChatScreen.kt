@@ -90,6 +90,7 @@ import com.teatalk.xs.data.db.CharacterEntity
 import com.teatalk.xs.data.db.MessageEntity
 import com.teatalk.xs.data.net.ChatEvent
 import com.teatalk.xs.ui.components.CharacterAvatar
+import com.teatalk.xs.ui.components.MarkdownText
 import com.teatalk.xs.ui.components.Hairline
 import java.time.Instant
 import java.time.ZoneId
@@ -704,7 +705,7 @@ private fun AssistantBubble(
                 if (thinking) {
                     Text(stringResource(R.string.chat_thinking), fontSize = 14.5.sp, color = cs.onSurfaceVariant)
                 } else {
-                    Text(text, fontSize = 14.5.sp, lineHeight = 22.sp, color = cs.onSurface)
+                    MarkdownText(text = text, color = cs.onSurface)
                 }
             }
             val status = variantStatuses.getOrNull(selected) ?: MessageEntity.STATUS_COMPLETE

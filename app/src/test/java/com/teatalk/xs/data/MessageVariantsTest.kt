@@ -69,7 +69,16 @@ class MessageVariantsTest {
         val statuses = MessageVariants.encodeStatuses(
             listOf(MessageEntity.STATUS_COMPLETE, MessageEntity.STATUS_STOPPED, MessageEntity.STATUS_FAILED),
         )
-        val m = MessageEntity(1L, 1L, "assistant", "v3", 0L, variants, statuses, 2, MessageEntity.STATUS_FAILED)
+        val m = MessageEntity(
+            id = 1L,
+            characterId = 1L,
+            role = "assistant",
+            content = "v3",
+            variantsJson = variants,
+            variantStatusJson = statuses,
+            selectedVariant = 2,
+            status = MessageEntity.STATUS_FAILED,
+        )
         assertEquals(
             listOf(MessageEntity.STATUS_COMPLETE, MessageEntity.STATUS_STOPPED, MessageEntity.STATUS_FAILED),
             MessageVariants.statuses(m),
