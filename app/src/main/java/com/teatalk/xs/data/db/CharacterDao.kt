@@ -141,4 +141,7 @@ interface CharacterDao {
 
     @Query("DELETE FROM messages WHERE id = :id")
     suspend fun deleteMessage(id: Long)
+/** 是否存在任何消息（列表口径 = 至少一条消息），用于启动落点，避免扫全表。 */
+    @Query("SELECT EXISTS(SELECT 1 FROM messages LIMIT 1)")
+    suspend fun anyMessageExists(): Boolean
 }

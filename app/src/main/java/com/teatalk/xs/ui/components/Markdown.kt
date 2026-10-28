@@ -17,6 +17,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -291,7 +292,7 @@ fun MarkdownText(
     val cs = MaterialTheme.colorScheme
     // 行内代码与代码块用专用底色：surfaceContainerHighest 与气泡底色几乎同色（审阅实测 ~1.05:1）
     val code = LocalCodeSurfaces.current
-    val blocks = Markdown.parse(text)
+    val blocks = remember(text) { Markdown.parse(text) }
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
         for (block in blocks) {
             when (block) {

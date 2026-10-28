@@ -42,6 +42,7 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.outlined.SentimentSatisfied
 import androidx.compose.material3.AlertDialog
@@ -403,6 +404,10 @@ class ChatViewModel(
         return false
     }
 
+    fun dismissError() {
+        _error.value = null
+    }
+
     fun consumeNotice() {
         _notice.value = null
     }
@@ -548,6 +553,15 @@ fun ChatScreen(
         }
     }
 
+    // IME 弹起会把输入条抬高、可视区变矮：此时强制滚到底，避免刚打的字被键盘顶出视野。
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    val imeVisible = androidx.compose.foundation.layout.WindowInsets.ime.getBottom(density) > 0
+    LaunchedEffect(imeVisible) {
+        if (imeVisible && messages.isNotEmpty()) {
+            listState.scrollToItem(messages.size + if (streaming) 1 else 0)
+        }
+    }
+
     LaunchedEffect(restoreText) {
         restoreText?.let {
             input = it
@@ -651,7 +665,18 @@ fun ChatScreen(
             }
 
             error?.let { err ->
-                ErrorBanner(text = err.resolve(context), onRetry = viewModel::retry)
+                // 配置类错误（没 Provider/没 key/没 model）重试必然再失败：只给「关闭」。
+                val retryable = err.res !in setOf(
+                    R.string.chat_error_no_provider,
+                    R.string.chat_error_no_key,
+                    R.string.chat_error_no_model,
+                )
+                ErrorBanner(
+                    text = err.resolve(context),
+                    showRetry = retryable,
+                    onRetry = viewModel::retry,
+                    onDismiss = viewModel::dismissError,
+                )
             }
 
             // 输入条：+ / 输入框 / 表情 / 发送·停止
@@ -1048,9 +1073,14 @@ private fun ConversationSheet(
     }
 }
 
-/** 错误条：「重试」用 TextButton（含最小点击区），文字用权重收缩，长文案不会把按钮挤成 14dp。 */
+/** 错误条：可关闭；配置类错误不提供「重试」，避免点了必然再失败。 */
 @Composable
-private fun ErrorBanner(text: String, onRetry: () -> Unit) {
+private fun ErrorBanner(
+    text: String,
+    showRetry: Boolean,
+    onRetry: () -> Unit,
+    onDismiss: () -> Unit,
+) {
     val cs = MaterialTheme.colorScheme
     Row(
         Modifier

@@ -75,7 +75,7 @@ class CharacterRepository(
     suspend fun find(id: Long): CharacterEntity? = dao.find(id)
 
     /** 首屏决策：有过会话就直接进「聊天」Tab（否则进「角色」）。 */
-    suspend fun hasAnyChat(): Boolean = withContext(Dispatchers.IO) { conversations.countAll() > 0 }
+    suspend fun hasAnyChat(): Boolean = withContext(Dispatchers.IO) { dao.anyMessageExists() }
 
     /**
      * 「开始聊天」入口：有会话就回到最近一条，没有就建一条并插入开场白。

@@ -217,7 +217,7 @@ private fun ChatRow(chat: ConversationWithLastMessage, onClick: () -> Unit) {
                 }
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    chat.lastContent ?: stringResource(R.string.chatlist_last_placeholder),
+                    chat.lastContent?.let { previewText(it) } ?: stringResource(R.string.chatlist_last_placeholder),
                     fontSize = 12.5.sp,
                     color = cs.onSurfaceVariant,
                     maxLines = 1,
@@ -277,5 +277,20 @@ private fun formatChatTime(millis: Long): String {
     }
 }
 
-
-
+/** 列表预览：去掉 Markdown 标记，只留第一段可读文本（审阅 P1：列表不该露出 ** 和 #）。 */
+private fun previewText(raw: String, maxChars: Int = 80): String {
+    val firstLine = raw.lineSequence()
+        .map { it.trim() }
+        .firstOrNull { it.isNotEmpty() && !it.startsWith("```") }
+        ?: return raw.take(maxChars)
+    val cleaned = firstLine
+        .replace(Regex("^#{1,6}\\s*"), "")
+        .replace(Regex("^\\s*[>*+-]\\s+"), "")
+        .replace(Regex("^\\s*\\d+\\.\\s+"), "")
+        .replace("**", "")
+        .replace("*", "")
+        .replace("`", "")
+        .replace("~~", "")
+        .trim()
+    return if (cleaned.length <= maxChars) cleaned else cleaned.take(maxChars).trimEnd() + "…"
+}

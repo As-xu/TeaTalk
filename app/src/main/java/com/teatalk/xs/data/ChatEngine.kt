@@ -8,7 +8,9 @@ import com.teatalk.xs.data.net.ChatClient
 import com.teatalk.xs.data.net.ChatError
 import com.teatalk.xs.data.net.ChatEvent
 import com.teatalk.xs.data.net.label
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
 
@@ -125,18 +127,21 @@ class ChatEngine(
         }
         emit(ChatEvent.Started(provider.id, provider.name, model))
 
-        val card = CardViewParser.parse(character.cardJson)
+        // 整张卡 JSON 解析 + system prompt 拼装都在后台线程：聊天路径此前在 Main 上做（审阅 P1）。
+        val card = withContext(Dispatchers.Default) { CardViewParser.parse(character.cardJson) }
         val history = characters.recentMessages(conversationId, HISTORY_LIMIT)
             // 以本次用户消息为锚点：只取到它为止的历史，避免停止/并发写让「未来」的消息混进 prompt
             .filter { it.id <= replyToMessageId }
             .let { list ->
                 if (excludeLastAssistant && list.lastOrNull()?.role == ROLE_ASSISTANT) list.dropLast(1) else list
             }
-        val messages = buildList {
-            add(ROLE_SYSTEM to systemPrompt(card, character.name))
-            history.forEach { message ->
-                val role = if (message.role == ROLE_USER) ROLE_USER else ROLE_ASSISTANT
-                add(role to message.content)
+        val messages = withContext(Dispatchers.Default) {
+            buildList {
+                add(ROLE_SYSTEM to systemPrompt(card, character.name))
+                history.forEach { message ->
+                    val role = if (message.role == ROLE_USER) ROLE_USER else ROLE_ASSISTANT
+                    add(role to message.content)
+                }
             }
         }
         TeaTalkLog.i(
