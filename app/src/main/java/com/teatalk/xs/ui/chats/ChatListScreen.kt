@@ -45,7 +45,7 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import com.teatalk.xs.R
 import com.teatalk.xs.TeaTalkApp
 import com.teatalk.xs.data.CharacterRepository
-import com.teatalk.xs.data.db.CharacterWithLastMessage
+import com.teatalk.xs.data.db.ConversationWithLastMessage
 import com.teatalk.xs.ui.components.CharacterAvatar
 import com.teatalk.xs.ui.components.Hairline
 import com.teatalk.xs.ui.components.SearchPill
@@ -57,7 +57,7 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
 class ChatListViewModel(repository: CharacterRepository) : ViewModel() {
-    val chats: StateFlow<List<CharacterWithLastMessage>?> = repository.observeChats()
+    val chats: StateFlow<List<ConversationWithLastMessage>?> = repository.observeChats()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     companion object {
@@ -74,7 +74,9 @@ fun ChatListScreen(
     onOpenChat: (Long) -> Unit,
     onGoCharacters: () -> Unit,
 ) {
-    val chats by viewModel.chats.collectAsState()
+    val allChats by viewModel.chats.collectAsState()
+    // 只展示真正有消息的会话（迁移会为每个角色建默认会话，空会话不占列表）
+    val chats = allChats?.filter { it.lastContent != null }
     val cs = MaterialTheme.colorScheme
 
     Column(Modifier.fillMaxSize()) {
@@ -122,8 +124,8 @@ fun ChatListScreen(
                     Text(pluralStringResource(R.plurals.chatlist_waiting, list.size, list.size), fontSize = 12.sp, color = cs.onSurfaceVariant)
                 }
                 LazyColumn(Modifier.fillMaxSize()) {
-                    items(list, key = { it.character.id }) { chat ->
-                        ChatRow(chat, onClick = { onOpenChat(chat.character.id) })
+                    items(list, key = { it.conversation.id }) { chat ->
+                        ChatRow(chat, onClick = { onOpenChat(chat.conversation.id) })
                     }
                 }
             }
@@ -132,7 +134,7 @@ fun ChatListScreen(
 }
 
 @Composable
-private fun ChatRow(chat: CharacterWithLastMessage, onClick: () -> Unit) {
+private fun ChatRow(chat: ConversationWithLastMessage, onClick: () -> Unit) {
     val cs = MaterialTheme.colorScheme
     Column(Modifier.fillMaxWidth().clickable(onClick = onClick)) {
         Row(
@@ -140,8 +142,8 @@ private fun ChatRow(chat: CharacterWithLastMessage, onClick: () -> Unit) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             CharacterAvatar(
-                avatarPath = chat.character.avatarPath,
-                name = chat.character.name,
+                avatarPath = chat.characterAvatar,
+                name = chat.characterName,
                 size = 52.dp,
                 corner = 16.dp,
             )
@@ -149,7 +151,7 @@ private fun ChatRow(chat: CharacterWithLastMessage, onClick: () -> Unit) {
             Column(Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        chat.character.name,
+                        chat.conversation.title.ifBlank { chat.characterName },
                         fontSize = 15.sp,
                         fontWeight = FontWeight.Medium,
                         color = cs.onBackground,

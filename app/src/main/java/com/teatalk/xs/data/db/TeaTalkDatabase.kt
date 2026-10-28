@@ -12,17 +12,19 @@ import com.teatalk.core.log.TeaTalkLog
         MessageEntity::class,
         WorldBookEntity::class,
         ModelProviderEntity::class,
+        ConversationEntity::class,
     ],
-    version = 6,
+    version = 7,
     exportSchema = false,
 )
 abstract class TeaTalkDatabase : RoomDatabase() {
     abstract fun characterDao(): CharacterDao
     abstract fun worldBookDao(): WorldBookDao
     abstract fun modelProviderDao(): ModelProviderDao
+    abstract fun conversationDao(): ConversationDao
 
     companion object {
-        const val VERSION = 6
+        const val VERSION = 7
 
         /**
          * v1（M0）→ v2（D6 卡库）：
@@ -117,6 +119,53 @@ abstract class TeaTalkDatabase : RoomDatabase() {
          * v5 → v6（M2 B2 Provider 切换兜底）：记录每条回复由哪个接口/模型生成。
          * 可空列，老数据为 null（UI 不显示来源提示）。
          */
+
+        /**
+         * v6 → v7（M2 多会话）：会话成为消息的归属单位。
+         *
+         * 迁移策略（不丢历史）：
+         * 1. 每个角色建一条默认会话（标题留空，UI 回退角色名）；
+         * 2. 旧消息先加 `conversationId` 列（默认 0），再回填到该角色的默认会话；
+         * 3. `characterId` 保留在消息上作为冗余外键，列表查询不 join 会话表。
+         */
+        val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                val started = System.currentTimeMillis()
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `conversations` (
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `characterId` INTEGER NOT NULL,
+                        `title` TEXT NOT NULL,
+                        `createdAt` INTEGER NOT NULL,
+                        `updatedAt` INTEGER NOT NULL
+                    )
+                    """.trimIndent(),
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_conversations_characterId` ON `conversations` (`characterId`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_conversations_characterId_updatedAt` ON `conversations` (`characterId`, `updatedAt`)")
+                db.execSQL("ALTER TABLE messages ADD COLUMN conversationId INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_messages_conversationId` ON `messages` (`conversationId`)")
+                db.execSQL(
+                    """
+                    INSERT INTO conversations (characterId, title, createdAt, updatedAt)
+                    SELECT id, '', createdAt, CASE WHEN updatedAt > 0 THEN updatedAt ELSE createdAt END
+                    FROM characters
+                    """.trimIndent(),
+                )
+                db.execSQL(
+                    """
+                    UPDATE messages SET conversationId = (
+                        SELECT cv.id FROM conversations cv
+                        WHERE cv.characterId = messages.characterId
+                        ORDER BY cv.id ASC LIMIT 1
+                    ) WHERE conversationId = 0
+                    """.trimIndent(),
+                )
+                TeaTalkLog.i("Db", "db.migrate", "from" to 6, "to" to 7, "ms" to (System.currentTimeMillis() - started))
+            }
+        }
+
         val MIGRATION_5_6 = object : Migration(5, 6) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 val started = System.currentTimeMillis()

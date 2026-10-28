@@ -11,7 +11,9 @@ import com.teatalk.core.log.Redact
 import com.teatalk.core.log.TeaTalkLog
 import com.teatalk.xs.data.db.CharacterDao
 import com.teatalk.xs.data.db.CharacterEntity
-import com.teatalk.xs.data.db.CharacterWithLastMessage
+import com.teatalk.xs.data.db.ConversationDao
+import com.teatalk.xs.data.db.ConversationEntity
+import com.teatalk.xs.data.db.ConversationWithLastMessage
 import com.teatalk.xs.data.db.MessageEntity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -39,20 +41,76 @@ sealed interface ImportOutcome {
 class CharacterRepository(
     private val appContext: Context,
     private val dao: CharacterDao,
+    private val conversations: ConversationDao,
 ) {
 
     fun observeCharacters(): Flow<List<CharacterEntity>> = dao.observeAll()
 
     fun observeCharacter(id: Long): Flow<CharacterEntity?> = dao.observeById(id)
 
-    fun observeMessages(characterId: Long): Flow<List<MessageEntity>> = dao.observeMessages(characterId)
+    fun observeMessages(conversationId: Long): Flow<List<MessageEntity>> = dao.observeMessages(conversationId)
 
-    fun observeChats(): Flow<List<CharacterWithLastMessage>> = dao.observeChats()
+    fun observeChats(): Flow<List<ConversationWithLastMessage>> = conversations.observeChats()
+
+    /** 某角色下的所有会话（会话切换面板用），按最近活跃排序。 */
+    fun observeConversations(characterId: Long): Flow<List<ConversationEntity>> =
+        conversations.observeByCharacter(characterId)
+
+    suspend fun conversation(id: Long): ConversationEntity? = withContext(Dispatchers.IO) { conversations.find(id) }
+
+    /** 聊天页订阅会话本身（会话 → 角色 id → 角色）。 */
+    fun observeConversation(id: Long): Flow<ConversationEntity?> = conversations.observeById(id)
 
     suspend fun find(id: Long): CharacterEntity? = dao.find(id)
 
     /** 首屏决策：有过会话就直接进「聊天」Tab（否则进「角色」）。 */
-    suspend fun hasAnyChat(): Boolean = withContext(Dispatchers.IO) { dao.countChats() > 0 }
+    suspend fun hasAnyChat(): Boolean = withContext(Dispatchers.IO) { conversations.countAll() > 0 }
+
+    /**
+     * 「开始聊天」入口：有会话就回到最近一条，没有就建一条并插入开场白。
+     *
+     * @return 会话 id；角色不存在返回 null。
+     */
+    suspend fun ensureConversation(characterId: Long): Long? = withContext(Dispatchers.IO) {
+        val character = dao.find(characterId) ?: return@withContext null
+        val existing = conversations.latest(characterId)
+        val id = existing?.id ?: createConversationInternal(character)
+        TeaTalkLog.i("Chat", "conversation.ensure", "characterId" to characterId, "conversationId" to id, "created" to (existing == null))
+        id
+    }
+
+    /** 显式新建会话（「新建会话」按钮）：总是新建并插入开场白。 */
+    suspend fun createConversation(characterId: Long, title: String = ""): Long? = withContext(Dispatchers.IO) {
+        val character = dao.find(characterId) ?: return@withContext null
+        val id = createConversationInternal(character, title)
+        TeaTalkLog.i("Chat", "conversation.create", "characterId" to characterId, "conversationId" to id)
+        id
+    }
+
+    private suspend fun createConversationInternal(character: CharacterEntity, title: String = ""): Long {
+        val now = System.currentTimeMillis()
+        val id = conversations.insert(
+            ConversationEntity(characterId = character.id, title = title, createdAt = now, updatedAt = now),
+        )
+        val greeting = character.firstMes.ifBlank { appContext.getString(R.string.greeting_fallback) }
+        dao.insertGreetingIfEmpty(conversationId = id, characterId = character.id, content = greeting, createdAt = now)
+        return id
+    }
+
+    suspend fun renameConversation(conversationId: Long, title: String) = withContext(Dispatchers.IO) {
+        conversations.rename(conversationId, title.trim(), System.currentTimeMillis())
+    }
+
+    /** 删除一段会话：先删消息，再删会话行（角色保留）。 */
+    suspend fun deleteConversation(conversationId: Long) = withContext(Dispatchers.IO) {
+        dao.deleteMessages(conversationId)
+        conversations.deleteById(conversationId)
+        TeaTalkLog.i("Chat", "conversation.delete", "conversationId" to conversationId)
+    }
+
+    private suspend fun touchConversation(conversationId: Long) {
+        conversations.touch(conversationId, System.currentTimeMillis())
+    }
 
     suspend fun importCard(uri: Uri): ImportOutcome = withContext(Dispatchers.IO) {
         val started = System.currentTimeMillis()
@@ -121,7 +179,8 @@ class CharacterRepository(
     }
 
     suspend fun delete(character: CharacterEntity) = withContext(Dispatchers.IO) {
-        dao.deleteMessages(character.id)
+        dao.deleteMessagesForCharacter(character.id)
+        conversations.deleteByCharacter(character.id)
         dao.delete(character)
         character.avatarPath?.let { runCatching { File(appContext.filesDir, it).delete() } }
         TeaTalkLog.i("Card", "delete.ok", "id" to character.id)
@@ -195,37 +254,43 @@ class CharacterRepository(
     }
 
     /** 首次进聊天页：插入开场白（原子判空插入，重复进入不会插两条）。 */
-    suspend fun ensureGreeting(characterId: Long) = withContext(Dispatchers.IO) {
-        val character = dao.find(characterId) ?: return@withContext
+    suspend fun ensureGreeting(conversationId: Long) = withContext(Dispatchers.IO) {
+        val conversation = conversations.find(conversationId) ?: return@withContext
+        val character = dao.find(conversation.characterId) ?: return@withContext
         val inserted = dao.insertGreetingIfEmpty(
-            characterId = characterId,
+            conversationId = conversationId,
+            characterId = character.id,
             content = character.firstMes.ifBlank { appContext.getString(R.string.greeting_fallback) },
             createdAt = System.currentTimeMillis(),
         )
-        TeaTalkLog.i("Chat", "greeting.ensure", "characterId" to characterId, "inserted" to inserted)
+        TeaTalkLog.i("Chat", "greeting.ensure", "conversationId" to conversationId, "inserted" to inserted)
     }
 
     /**
      * 落一条消息。M1 起由 [ChatEngine] 在流式前后分别写 user / assistant 两条，
      * 老的「离线假回复」已移除。
      */
-    suspend fun addMessage(characterId: Long, role: String, content: String): Long =
+    suspend fun addMessage(conversationId: Long, role: String, content: String): Long =
         withContext(Dispatchers.IO) {
             val body = content.trim()
             if (body.isEmpty()) return@withContext -1L
-            dao.insertMessage(
+            val conversation = conversations.find(conversationId) ?: return@withContext -1L
+            val id = dao.insertMessage(
                 MessageEntity(
-                    characterId = characterId,
+                    characterId = conversation.characterId,
+                    conversationId = conversationId,
                     role = role,
                     content = body,
                     createdAt = System.currentTimeMillis(),
                 ),
             )
+            touchConversation(conversationId)
+            id
         }
 
     /** 组装 prompt 用：最近 [limit] 条，按时间正序。 */
-    suspend fun recentMessages(characterId: Long, limit: Int): List<MessageEntity> =
-        withContext(Dispatchers.IO) { dao.recentMessages(characterId, limit) }
+    suspend fun recentMessages(conversationId: Long, limit: Int): List<MessageEntity> =
+        withContext(Dispatchers.IO) { dao.recentMessages(conversationId, limit) }
 
     // —— M2：多版本回复 / 切换版本 / 删除消息 ——
 
@@ -235,7 +300,7 @@ class CharacterRepository(
      * 返回消息 id（-1 表示空文本 / 角色不存在）。状态用 [MessageEntity.STATUS_COMPLETE] 等。
      */
     suspend fun appendAssistantReply(
-        characterId: Long,
+        conversationId: Long,
         text: String,
         status: String,
         providerId: String? = null,
@@ -244,8 +309,9 @@ class CharacterRepository(
     ): Long = withContext(Dispatchers.IO) {
         val body = text.trim()
         if (body.isEmpty()) return@withContext -1L
-        if (dao.find(characterId) == null) return@withContext -1L
-        val last = dao.lastMessage(characterId)
+        val conversation = conversations.find(conversationId) ?: return@withContext -1L
+        if (dao.find(conversation.characterId) == null) return@withContext -1L
+        val last = dao.lastMessage(conversationId)
         if (last != null && last.role == ROLE_ASSISTANT) {
             val (variantsJson, statusJson) = MessageVariants.append(
                 variantsJson = last.variantsJson,
@@ -271,7 +337,8 @@ class CharacterRepository(
         } else {
             val id = dao.insertMessage(
                 MessageEntity(
-                    characterId = characterId,
+                    characterId = conversation.characterId,
+                    conversationId = conversationId,
                     role = ROLE_ASSISTANT,
                     content = body,
                     createdAt = System.currentTimeMillis(),
@@ -286,7 +353,7 @@ class CharacterRepository(
             )
             TeaTalkLog.i("Chat", "reply.insert", "messageId" to id, "chars" to body.length)
             id
-        }
+        }.also { touchConversation(conversationId) }
     }
 
     /** 切换某条消息的版本；返回切换后的文本（null 表示下标无效）。 */
@@ -302,8 +369,8 @@ class CharacterRepository(
     }
 
     /** 该角色最后一条 assistant 消息 id（重试入口的守卫：只有在有回复可重生成时才允许重试）。 */
-    suspend fun lastAssistantMessageId(characterId: Long): Long? = withContext(Dispatchers.IO) {
-        dao.lastMessage(characterId)?.takeIf { it.role == ROLE_ASSISTANT }?.id
+    suspend fun lastAssistantMessageId(conversationId: Long): Long? = withContext(Dispatchers.IO) {
+        dao.lastMessage(conversationId)?.takeIf { it.role == ROLE_ASSISTANT }?.id
     }
 
     /** 删除一条消息（用户/assistant 都允许）。 */

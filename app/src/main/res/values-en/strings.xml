@@ -29,8 +29,7 @@
     <string name="chatlist_search_hint">Search characters / chats</string>
     <string name="chatlist_section_title">Chats</string>
     <plurals name="chatlist_waiting">
-        <item quantity="one">%1$d character is waiting</item>
-        <item quantity="other">%1$d characters are waiting</item>
+        <item quantity="other">%d chats</item>
     </plurals>
     <string name="chatlist_last_placeholder">No messages yet — say hi</string>
     <string name="chatlist_empty_title">No chats yet</string>
@@ -241,5 +240,17 @@
     <string name="chat_variant_status_stopped">Stopped</string>
     <string name="chat_variant_status_failed">Failed</string>
     <string name="chat_generated_by">Generated with %1$s · %2$s (not the current provider)</string>
+
+    <!-- M2 conversations -->
+    <string name="chat_conversation_new">New chat</string>
+    <string name="chat_conversations_title">All chats</string>
+    <string name="chat_conversation_untitled">Untitled chat</string>
+    <string name="chat_conversation_updated">Updated %1$s</string>
+    <string name="chat_conversation_rename">Rename chat</string>
+    <string name="chat_conversation_title_hint">Chat name</string>
+    <string name="chat_conversation_delete">Delete chat</string>
+    <string name="chat_conversation_delete_message">This removes “%1$s” and all its messages. This cannot be undone.</string>
+    <string name="chat_conversation_created">Chat created</string>
+    <string name="chat_conversation_deleted">Chat deleted</string>
 </resources>
 

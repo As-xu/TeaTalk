@@ -44,6 +44,8 @@ import com.teatalk.xs.ui.characters.CharactersScreen
 import com.teatalk.xs.ui.characters.CharactersViewModel
 import com.teatalk.xs.ui.chat.ChatScreen
 import com.teatalk.xs.ui.chat.ChatViewModel
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 import com.teatalk.xs.ui.chats.ChatListScreen
 import com.teatalk.xs.ui.chats.ChatListViewModel
 import com.teatalk.xs.ui.components.AppBottomBar
@@ -78,6 +80,7 @@ fun HomeScreen(
 
     val start = startRoute ?: return
     val navController = rememberNavController()
+    val scope = rememberCoroutineScope()
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route
     val showBottomBar = currentRoute == null || currentRoute in TAB_ROUTES
@@ -201,20 +204,31 @@ fun HomeScreen(
                             factory = CharacterDetailViewModel.factory(app, id),
                         ),
                         onBack = { navController.popBackStack() },
-                        onStartChat = { navController.navigate("chat/$id") { launchSingleTop = true } },
+                        onStartChat = {
+                            scope.launch {
+                                val conversationId = repository.ensureConversation(id) ?: return@launch
+                                navController.navigate("chat/$conversationId") { launchSingleTop = true }
+                            }
+                        },
                     )
                 }
                 composable(
                     route = Routes.CHAT,
-                    arguments = listOf(navArgument(ARG_ID) { type = NavType.LongType }),
+                    arguments = listOf(navArgument(ARG_CONVERSATION_ID) { type = NavType.LongType }),
                 ) { entry ->
-                    val id = entry.arguments?.getLong(ARG_ID) ?: 0L
+                    val conversationId = entry.arguments?.getLong(ARG_CONVERSATION_ID) ?: 0L
                     ChatScreen(
                         viewModel = viewModel(
-                            key = "chat-$id",
-                            factory = ChatViewModel.factory(app, id),
+                            key = "chat-$conversationId",
+                            factory = ChatViewModel.factory(app, conversationId),
                         ),
                         onBack = { navController.popBackStack() },
+                        onOpenConversation = { other ->
+                            navController.navigate("chat/$other") {
+                                launchSingleTop = true
+                                popUpTo(Routes.CHAT) { inclusive = true }
+                            }
+                        },
                     )
                 }
             }
@@ -227,13 +241,14 @@ private object Routes {
     const val CHARACTERS = "characters"
     const val PROFILE = "profile"
     const val CHARACTER_DETAIL = "character/{id}"
-    const val CHAT = "chat/{id}"
+    const val CHAT = "chat/{conversationId}"
     const val WORLD_BOOKS = "worldbooks"
     const val PROVIDERS = "providers"
         const val ABOUT = "about"
 }
 
 private const val ARG_ID = "id"
+private const val ARG_CONVERSATION_ID = "conversationId"
 
 private val TAB_ROUTES = setOf(Routes.CHATS, Routes.CHARACTERS, Routes.PROFILE)
 

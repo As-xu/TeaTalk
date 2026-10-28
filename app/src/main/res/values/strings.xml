@@ -33,8 +33,7 @@
     <string name="chatlist_search_hint">搜索角色 / 会话</string>
     <string name="chatlist_section_title">会话</string>
     <plurals name="chatlist_waiting">
-        <item quantity="one">%1$d 位角色在等你</item>
-        <item quantity="other">%1$d 位角色在等你</item>
+        <item quantity="other">%d 个会话</item>
     </plurals>
     <string name="chatlist_last_placeholder">还没有消息，点开聊一句吧</string>
     <string name="chatlist_empty_title">还没有会话</string>
@@ -250,5 +249,17 @@
     <string name="chat_variant_status_stopped">已停止</string>
     <string name="chat_variant_status_failed">生成失败</string>
     <string name="chat_generated_by">由 %1$s · %2$s 生成，与当前接口不同</string>
+
+    <!-- M2 多会话 -->
+    <string name="chat_conversation_new">新建会话</string>
+    <string name="chat_conversations_title">全部会话</string>
+    <string name="chat_conversation_untitled">未命名会话</string>
+    <string name="chat_conversation_updated">更新于 %1$s</string>
+    <string name="chat_conversation_rename">重命名会话</string>
+    <string name="chat_conversation_title_hint">会话名称</string>
+    <string name="chat_conversation_delete">删除会话</string>
+    <string name="chat_conversation_delete_message">将删除「%1$s」及其全部消息，无法恢复。</string>
+    <string name="chat_conversation_created">已新建会话</string>
+    <string name="chat_conversation_deleted">已删除会话</string>
 </resources>
 

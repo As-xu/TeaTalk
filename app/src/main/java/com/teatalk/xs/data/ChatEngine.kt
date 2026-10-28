@@ -29,12 +29,13 @@ class ChatEngine(
 ) {
 
     /** 落用户消息；返回 false 表示内容为空或角色不存在，调用方不应继续生成。 */
-    suspend fun sendUserMessage(characterId: Long, userText: String): Boolean {
+    suspend fun sendUserMessage(conversationId: Long, userText: String): Boolean {
         val text = userText.trim()
         if (text.isEmpty()) return false
-        if (characters.find(characterId) == null) return false
-        TeaTalkLog.i("Chat", "send.start", "characterId" to characterId, "chars" to text.length)
-        characters.addMessage(characterId, ROLE_USER, text)
+        val conversation = characters.conversation(conversationId) ?: return false
+        if (characters.find(conversation.characterId) == null) return false
+        TeaTalkLog.i("Chat", "send.start", "conversationId" to conversationId, "chars" to text.length)
+        characters.addMessage(conversationId, ROLE_USER, text)
         return true
     }
 
@@ -62,22 +63,23 @@ class ChatEngine(
      * @param excludeLastAssistant 重试时把最后一条 assistant 从历史里剔除，避免模型看到自己
      * 上一版回复而被带跑。
      */
-    fun streamReply(characterId: Long, excludeLastAssistant: Boolean = false): Flow<ChatEvent> = flow {
-        TeaTalkLog.i("Chat", "send.retry", "characterId" to characterId, "excludeLast" to excludeLastAssistant)
-        emitAll(stream(characterId, excludeLastAssistant))
+    fun streamReply(conversationId: Long, excludeLastAssistant: Boolean = false): Flow<ChatEvent> = flow {
+        TeaTalkLog.i("Chat", "send.retry", "conversationId" to conversationId, "excludeLast" to excludeLastAssistant)
+        emitAll(stream(conversationId, excludeLastAssistant))
     }
 
-    private fun stream(characterId: Long, excludeLastAssistant: Boolean = false): Flow<ChatEvent> = flow {
-        val character = characters.find(characterId)
-        if (character == null) {
-            emit(ChatEvent.Failed(ChatError.BAD_RESPONSE, "character not found"))
+    private fun stream(conversationId: Long, excludeLastAssistant: Boolean = false): Flow<ChatEvent> = flow {
+        val conversation = characters.conversation(conversationId)
+        val character = conversation?.let { characters.find(it.characterId) }
+        if (conversation == null || character == null) {
+            emit(ChatEvent.Failed(ChatError.BAD_RESPONSE, "conversation or character not found"))
             return@flow
         }
 
         val provider = when (val resolved = providers.resolve()) {
             is ProviderResolution.Ok -> resolved.provider
             ProviderResolution.NoProvider -> {
-                TeaTalkLog.w("Chat", "send.no_provider", "characterId" to characterId)
+                TeaTalkLog.w("Chat", "send.no_provider", "conversationId" to conversationId)
                 emit(ChatEvent.Failed(ChatError.NO_PROVIDER))
                 return@flow
             }
@@ -91,7 +93,7 @@ class ChatEngine(
         providers.touch(provider.id)
 
         val card = CardViewParser.parse(character.cardJson)
-        val history = characters.recentMessages(characterId, HISTORY_LIMIT).let { list ->
+        val history = characters.recentMessages(conversationId, HISTORY_LIMIT).let { list ->
             if (excludeLastAssistant && list.lastOrNull()?.role == ROLE_ASSISTANT) list.dropLast(1) else list
         }
         val messages = buildList {

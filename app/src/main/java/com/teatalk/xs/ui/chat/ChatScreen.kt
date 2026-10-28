@@ -38,13 +38,20 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.outlined.SentimentSatisfied
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
@@ -87,7 +94,11 @@ import com.teatalk.xs.data.ChatEngine
 import com.teatalk.xs.data.UiText
 import com.teatalk.xs.data.model.ActiveProvider
 import com.teatalk.xs.data.db.CharacterEntity
+import com.teatalk.xs.data.db.ConversationEntity
 import com.teatalk.xs.data.db.MessageEntity
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import com.teatalk.xs.data.net.ChatEvent
 import com.teatalk.xs.ui.components.CharacterAvatar
 import com.teatalk.xs.ui.components.MarkdownText
@@ -108,13 +119,25 @@ import kotlinx.coroutines.launch
 class ChatViewModel(
     private val repository: CharacterRepository,
     private val engine: ChatEngine,
-    private val characterId: Long,
+    private val conversationId: Long,
 ) : ViewModel() {
 
-    val character: StateFlow<CharacterEntity?> = repository.observeCharacter(characterId)
+    /** 当前会话（用于拿 characterId 与标题）。 */
+    val conversation: StateFlow<ConversationEntity?> = repository.observeConversation(conversationId)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
-    val messages: StateFlow<List<MessageEntity>> = repository.observeMessages(characterId)
+    val character: StateFlow<CharacterEntity?> = conversation
+        .map { it?.characterId }
+        .flatMapLatest { id -> if (id == null) flowOf(null) else repository.observeCharacter(id) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    /** 该角色下的全部会话（切换面板）。 */
+    val conversations: StateFlow<List<ConversationEntity>> = conversation
+        .map { it?.characterId }
+        .flatMapLatest { id -> if (id == null) flowOf(emptyList()) else repository.observeConversations(id) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    val messages: StateFlow<List<MessageEntity>> = repository.observeMessages(conversationId)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     private val _streaming = MutableStateFlow(false)
@@ -157,7 +180,7 @@ class ChatViewModel(
     private var generation = 0
 
     init {
-        viewModelScope.launch { repository.ensureGreeting(characterId) }
+        viewModelScope.launch { repository.ensureGreeting(conversationId) }
     }
 
     fun send(text: String) {
@@ -176,9 +199,8 @@ class ChatViewModel(
                 } else {
                     pendingProvider = engine.activeProvider()
                     _activeProviderId.value = pendingProvider?.id
-                    if (!engine.sendUserMessage(characterId, trimmed)) return@launch
-                    
-                    collectStream(engine.streamReply(characterId), gen)
+                    if (!engine.sendUserMessage(conversationId, trimmed)) return@launch
+                    collectStream(engine.streamReply(conversationId), gen)
                 }
             } finally {
                 finishIfCurrent(gen)
@@ -205,14 +227,14 @@ class ChatViewModel(
                     return@launch
                 }
                 // 只有「最后一条是 assistant」才谈得上重试；否则（例如只有开场白）直接提示
-                if (repository.lastAssistantMessageId(characterId) == null) {
+                if (repository.lastAssistantMessageId(conversationId) == null) {
                     _notice.value = UiText.of(R.string.chat_nothing_to_retry)
                     return@launch
                 }
                 pendingProvider = engine.activeProvider()
                 _activeProviderId.value = pendingProvider?.id
                 // 重试 = 重新生成最后一条回复：把它从 prompt 历史里剔除，结果作为新版本追加
-                collectStream(engine.streamReply(characterId, excludeLastAssistant = true), gen)
+                collectStream(engine.streamReply(conversationId, excludeLastAssistant = true), gen)
             } finally {
                 finishIfCurrent(gen)
             }
@@ -259,13 +281,36 @@ class ChatViewModel(
     private suspend fun appendReply(text: String, status: String) {
         val provider = pendingProvider
         repository.appendAssistantReply(
-            characterId = characterId,
+            conversationId = conversationId,
             text = text,
             status = status,
             providerId = provider?.id,
             providerName = provider?.name,
             model = provider?.model,
         )
+    }
+
+    /** 新建会话；成功后由 UI 导航到新会话。 */
+    fun createConversation(onCreated: (Long) -> Unit) {
+        viewModelScope.launch {
+            val characterId = character.value?.id ?: conversation.value?.characterId ?: return@launch
+            val id = repository.createConversation(characterId) ?: return@launch
+            _notice.value = UiText.of(R.string.chat_conversation_created)
+            onCreated(id)
+        }
+    }
+
+    fun renameConversation(id: Long, title: String) {
+        viewModelScope.launch { repository.renameConversation(id, title) }
+    }
+
+    /** 删除会话；当前会话被删时回调 onDeleted 让页面退出。 */
+    fun deleteConversation(id: Long, isCurrent: Boolean, onDeleted: () -> Unit) {
+        viewModelScope.launch {
+            repository.deleteConversation(id)
+            _notice.value = UiText.of(R.string.chat_conversation_deleted)
+            if (isCurrent) onDeleted()
+        }
     }
 
     fun consumeNotice() {
@@ -311,12 +356,12 @@ class ChatViewModel(
     }
 
     companion object {
-        fun factory(app: TeaTalkApp, characterId: Long): ViewModelProvider.Factory = viewModelFactory {
+        fun factory(app: TeaTalkApp, conversationId: Long): ViewModelProvider.Factory = viewModelFactory {
             initializer {
                 ChatViewModel(
                     repository = app.container.characterRepository,
                     engine = app.container.chatEngine,
-                    characterId = characterId,
+                    conversationId = conversationId,
                 )
             }
         }
@@ -328,8 +373,11 @@ class ChatViewModel(
 fun ChatScreen(
     viewModel: ChatViewModel,
     onBack: () -> Unit,
+    onOpenConversation: (Long) -> Unit = {},
 ) {
     val character by viewModel.character.collectAsState()
+    val conversation by viewModel.conversation.collectAsState()
+    val conversations by viewModel.conversations.collectAsState()
     val messages by viewModel.messages.collectAsState()
     val streaming by viewModel.streaming.collectAsState()
     val activeProviderId by viewModel.activeProviderId.collectAsState()
@@ -343,6 +391,11 @@ fun ChatScreen(
     // 长按气泡：弹层看全文 + 复制 / 重试 / 删除（气泡 max 268dp，长回复会被截在可视区里）
     var preview by remember { mutableStateOf<MessageEntity?>(null) }
     var deleteTarget by remember { mutableStateOf<MessageEntity?>(null) }
+    // 会话管理（M2 多会话）：菜单 → 新建 / 切换面板（面板内可重命名、删除）
+    var menuOpen by remember { mutableStateOf(false) }
+    var showConversations by remember { mutableStateOf(false) }
+    var renameTarget by remember { mutableStateOf<ConversationEntity?>(null) }
+    var deleteConversationTarget by remember { mutableStateOf<ConversationEntity?>(null) }
     val lastAssistantId = remember(messages) {
         messages.lastOrNull()?.takeIf { it.role == "assistant" }?.id
     }
@@ -383,7 +436,20 @@ fun ChatScreen(
 
     Box(Modifier.fillMaxSize().background(cs.background)) {
         Column(Modifier.fillMaxSize().statusBarsPadding()) {
-            ChatHeader(character, onBack)
+            ChatHeader(
+                character = character,
+                onBack = onBack,
+                menuOpen = menuOpen,
+                onMenuOpenChange = { menuOpen = it },
+                onNewConversation = {
+                    menuOpen = false
+                    viewModel.createConversation { onOpenConversation(it) }
+                },
+                onShowConversations = {
+                    menuOpen = false
+                    showConversations = true
+                },
+            )
             Hairline()
             LazyColumn(
                 state = listState,
@@ -599,6 +665,80 @@ fun ChatScreen(
                 },
             )
         }
+        if (showConversations) {
+            ConversationSheet(
+                conversations = conversations,
+                currentId = viewModel.conversation.value?.id ?: 0L,
+                onDismiss = { showConversations = false },
+                onSelect = { id ->
+                    showConversations = false
+                    if (id != (viewModel.conversation.value?.id ?: 0L)) onOpenConversation(id)
+                },
+                onRename = { renameTarget = it },
+                onDelete = { deleteConversationTarget = it },
+            )
+        }
+        renameTarget?.let { target ->
+            var title by remember(target) { mutableStateOf(target.title) }
+            AlertDialog(
+                onDismissRequest = { renameTarget = null },
+                confirmButton = {
+                    TextButton(onClick = {
+                        viewModel.renameConversation(target.id, title)
+                        renameTarget = null
+                    }) { Text(stringResource(R.string.edit_save)) }
+                },
+                dismissButton = {
+                    TextButton(onClick = { renameTarget = null }) { Text(stringResource(R.string.cancel)) }
+                },
+                title = { Text(stringResource(R.string.chat_conversation_rename)) },
+                text = {
+                    BasicTextField(
+                        value = title,
+                        onValueChange = { title = it },
+                        textStyle = TextStyle(fontSize = 14.5.sp, color = cs.onSurface),
+                        cursorBrush = SolidColor(cs.primary),
+                        decorationBox = { inner ->
+                            Box(
+                                Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp))
+                                    .background(cs.surfaceContainerHigh).padding(horizontal = 12.dp, vertical = 10.dp),
+                            ) {
+                                if (title.isEmpty()) {
+                                    Text(stringResource(R.string.chat_conversation_title_hint), fontSize = 14.5.sp, color = cs.onSurfaceVariant)
+                                }
+                                inner()
+                            }
+                        },
+                    )
+                },
+            )
+        }
+        deleteConversationTarget?.let { target ->
+            AlertDialog(
+                onDismissRequest = { deleteConversationTarget = null },
+                confirmButton = {
+                    TextButton(onClick = {
+                        deleteConversationTarget = null
+                        viewModel.deleteConversation(target.id, isCurrent = target.id == (viewModel.conversation.value?.id ?: 0L)) {
+                            onBack()
+                        }
+                        showConversations = false
+                    }) { Text(stringResource(R.string.delete), color = cs.error) }
+                },
+                dismissButton = {
+                    TextButton(onClick = { deleteConversationTarget = null }) { Text(stringResource(R.string.cancel)) }
+                },
+                title = { Text(stringResource(R.string.chat_conversation_delete)) },
+                text = {
+                    Text(
+                        stringResource(
+                            R.string.chat_conversation_delete_message,
+                            target.title.ifBlank { stringResource(R.string.chat_conversation_untitled) },
+                        ),
+                    )
+                },
+            )
+        }
         SnackbarHost(
             hostState = snackbar,
             modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 88.dp).imePadding(),
@@ -607,7 +747,14 @@ fun ChatScreen(
 }
 
 @Composable
-private fun ChatHeader(character: CharacterEntity?, onBack: () -> Unit) {
+private fun ChatHeader(
+    character: CharacterEntity?,
+    onBack: () -> Unit,
+    menuOpen: Boolean,
+    onMenuOpenChange: (Boolean) -> Unit,
+    onNewConversation: () -> Unit,
+    onShowConversations: () -> Unit,
+) {
     val cs = MaterialTheme.colorScheme
     Row(
         Modifier.fillMaxWidth().padding(start = 4.dp, end = 4.dp, top = 6.dp, bottom = 6.dp),
@@ -633,12 +780,98 @@ private fun ChatHeader(character: CharacterEntity?, onBack: () -> Unit) {
             )
             Text(stringResource(R.string.chat_online_status), fontSize = 11.sp, color = cs.onSurfaceVariant)
         }
-        IconButton(onClick = {}) {
-            Icon(
-                Icons.Filled.MoreVert,
-                contentDescription = stringResource(R.string.more),
-                tint = cs.onSurfaceVariant,
+        Box {
+            IconButton(onClick = { onMenuOpenChange(true) }) {
+                Icon(
+                    Icons.Filled.MoreVert,
+                    contentDescription = stringResource(R.string.more),
+                    tint = cs.onSurfaceVariant,
+                )
+            }
+            DropdownMenu(expanded = menuOpen, onDismissRequest = { onMenuOpenChange(false) }) {
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.chat_conversation_new)) },
+                    onClick = onNewConversation,
+                )
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.chat_conversations_title)) },
+                    onClick = onShowConversations,
+                )
+            }
+        }
+    }
+}
+
+/** 会话切换面板：列出该角色的全部会话，点击切换；行尾可重命名/删除。 */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ConversationSheet(
+    conversations: List<ConversationEntity>,
+    currentId: Long,
+    onDismiss: () -> Unit,
+    onSelect: (Long) -> Unit,
+    onRename: (ConversationEntity) -> Unit,
+    onDelete: (ConversationEntity) -> Unit,
+) {
+    val cs = MaterialTheme.colorScheme
+    ModalBottomSheet(onDismissRequest = onDismiss) {
+        Column(Modifier.fillMaxWidth().padding(bottom = 12.dp)) {
+            Text(
+                stringResource(R.string.chat_conversations_title),
+                fontSize = 16.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = cs.onBackground,
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 10.dp),
             )
+            conversations.forEach { item ->
+                val current = item.id == currentId
+                Row(
+                    Modifier.fillMaxWidth().clickable { onSelect(item.id) }
+                        .padding(start = 20.dp, end = 6.dp, top = 10.dp, bottom = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            item.title.ifBlank { stringResource(R.string.chat_conversation_untitled) },
+                            fontSize = 14.5.sp,
+                            color = cs.onBackground,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        Text(
+                            stringResource(R.string.chat_conversation_updated, timeOf(item.updatedAt)),
+                            fontSize = 11.5.sp,
+                            color = cs.onSurfaceVariant,
+                        )
+                    }
+                    if (current) {
+                        Icon(
+                            Icons.Filled.Check,
+                            contentDescription = null,
+                            tint = cs.primary,
+                            modifier = Modifier.size(18.dp),
+                        )
+                        Spacer(Modifier.width(8.dp))
+                    }
+                    IconButton(onClick = { onRename(item) }) {
+                        Icon(
+                            Icons.Filled.Edit,
+                            contentDescription = stringResource(R.string.chat_conversation_rename),
+                            tint = cs.onSurfaceVariant,
+                            modifier = Modifier.size(18.dp),
+                        )
+                    }
+                    IconButton(onClick = { onDelete(item) }) {
+                        Icon(
+                            Icons.Filled.Delete,
+                            contentDescription = stringResource(R.string.chat_conversation_delete),
+                            tint = cs.onSurfaceVariant,
+                            modifier = Modifier.size(18.dp),
+                        )
+                    }
+                }
+                Hairline(insetStart = 20)
+            }
         }
     }
 }

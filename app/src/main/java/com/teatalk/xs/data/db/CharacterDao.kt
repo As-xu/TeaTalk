@@ -49,22 +49,24 @@ interface CharacterDao {
     @Query("SELECT * FROM characters WHERE tagsJson = '[]' OR tagsJson = ''")
     suspend fun charactersWithoutTags(): List<CharacterEntity>
 
-    @Query("SELECT * FROM messages WHERE characterId = :characterId ORDER BY createdAt ASC, id ASC")
-    fun observeMessages(characterId: Long): Flow<List<MessageEntity>>
+    // —— 消息（M2 起按会话归属） ——
+
+    @Query("SELECT * FROM messages WHERE conversationId = :conversationId ORDER BY createdAt ASC, id ASC")
+    fun observeMessages(conversationId: Long): Flow<List<MessageEntity>>
 
     /** 一次性取最近 N 条（组装 prompt 用），按时间正序返回。 */
     @Query(
         """
         SELECT * FROM (
-            SELECT * FROM messages WHERE characterId = :characterId
+            SELECT * FROM messages WHERE conversationId = :conversationId
             ORDER BY createdAt DESC, id DESC LIMIT :limit
         ) ORDER BY createdAt ASC, id ASC
         """,
     )
-    suspend fun recentMessages(characterId: Long, limit: Int): List<MessageEntity>
+    suspend fun recentMessages(conversationId: Long, limit: Int): List<MessageEntity>
 
-    @Query("SELECT COUNT(*) FROM messages WHERE characterId = :characterId")
-    suspend fun countMessages(characterId: Long): Long
+    @Query("SELECT COUNT(*) FROM messages WHERE conversationId = :conversationId")
+    suspend fun countMessages(conversationId: Long): Long
 
     @Insert
     suspend fun insertMessage(message: MessageEntity): Long
@@ -75,25 +77,40 @@ interface CharacterDao {
      * 用 @Transaction 消除 count→insert 竞态（详情页连点两次「开始聊天」不会再插两条）。
      */
     @Transaction
-    suspend fun insertGreetingIfEmpty(characterId: Long, content: String, createdAt: Long): Boolean {
-        if (countMessages(characterId) > 0L) return false
+    suspend fun insertGreetingIfEmpty(
+        conversationId: Long,
+        characterId: Long,
+        content: String,
+        createdAt: Long,
+    ): Boolean {
+        if (countMessages(conversationId) > 0L) return false
         insertMessage(
-            MessageEntity(characterId = characterId, role = "assistant", content = content, createdAt = createdAt),
+            MessageEntity(
+                characterId = characterId,
+                conversationId = conversationId,
+                role = "assistant",
+                content = content,
+                createdAt = createdAt,
+            ),
         )
         return true
     }
 
+    @Query("DELETE FROM messages WHERE conversationId = :conversationId")
+    suspend fun deleteMessages(conversationId: Long)
+
+    /** 删角色时连带清空其所有会话的消息（会话行由 ConversationDao 删）。 */
     @Query("DELETE FROM messages WHERE characterId = :characterId")
-    suspend fun deleteMessages(characterId: Long)
+    suspend fun deleteMessagesForCharacter(characterId: Long)
 
     // —— M2 多版本 / 重试 / 删除 ——
 
     @Query("SELECT * FROM messages WHERE id = :id LIMIT 1")
     suspend fun findMessage(id: Long): MessageEntity?
 
-    /** 某角色最后一条消息（按时间倒序），用于「重试上一条回复」。 */
-    @Query("SELECT * FROM messages WHERE characterId = :characterId ORDER BY createdAt DESC, id DESC LIMIT 1")
-    suspend fun lastMessage(characterId: Long): MessageEntity?
+    /** 某会话最后一条消息（按时间倒序），用于「重试上一条回复」。 */
+    @Query("SELECT * FROM messages WHERE conversationId = :conversationId ORDER BY createdAt DESC, id DESC LIMIT 1")
+    suspend fun lastMessage(conversationId: Long): MessageEntity?
 
     @Query(
         "UPDATE messages SET content = :content, variantsJson = :variantsJson, variantStatusJson = :variantStatusJson, selectedVariant = :selectedVariant, status = :status, providerId = :providerId, providerName = :providerName, model = :model WHERE id = :id",
@@ -115,21 +132,4 @@ interface CharacterDao {
 
     @Query("DELETE FROM messages WHERE id = :id")
     suspend fun deleteMessage(id: Long)
-
-    /** 是否有任何会话（决定首屏进「聊天」还是「角色」）。 */
-    @Query("SELECT COUNT(DISTINCT characterId) FROM messages")
-    suspend fun countChats(): Int
-
-    /** 聊天列表：只列有过消息的角色，按最后一条消息时间倒序。 */
-    @Query(
-        """
-        SELECT c.*,
-            (SELECT m.content FROM messages m WHERE m.characterId = c.id ORDER BY m.createdAt DESC, m.id DESC LIMIT 1) AS lastContent,
-            (SELECT m.createdAt FROM messages m WHERE m.characterId = c.id ORDER BY m.createdAt DESC, m.id DESC LIMIT 1) AS lastAt
-        FROM characters c
-        WHERE EXISTS (SELECT 1 FROM messages m2 WHERE m2.characterId = c.id)
-        ORDER BY lastAt DESC
-        """,
-    )
-    fun observeChats(): Flow<List<CharacterWithLastMessage>>
 }

@@ -32,11 +32,18 @@ data class CharacterEntity(
     val updatedAt: Long = 0L,
 )
 
-/** 消息表：按角色归档，`createdAt` 升序即对话顺序。 */
-@Entity(tableName = "messages", indices = [Index("characterId")])
+/**
+ * 消息表：按**会话**归档（`conversationId`），`createdAt` 升序即对话顺序。
+ *
+ * M2 多会话起，消息不再直接挂在角色上：一个角色可以有多条会话，
+ * `characterId` 保留为冗余外键——列表/搜索按角色取数时不必再 join 会话表。
+ */
+@Entity(tableName = "messages", indices = [Index("characterId"), Index("conversationId")])
 data class MessageEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0L,
     val characterId: Long,
+    /** 所属会话；0 仅出现在「迁移前的旧行」——迁移会把它们回填到角色默认会话。 */
+    val conversationId: Long = 0L,
     /** user / assistant / system */
     val role: String,
     /** 当前展示的文本（= variants[selectedVariant] 的镜像，老代码/列表预览都用它）。 */
