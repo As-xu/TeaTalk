@@ -1020,7 +1020,9 @@ private fun ConversationSheet(
                 color = cs.onBackground,
                 modifier = Modifier.padding(horizontal = 20.dp, vertical = 10.dp),
             )
-            conversations.forEach { item ->
+            // 会话可能很多：用 LazyColumn 而不是 forEach，面板自身可滚动（审阅 P1）。
+            LazyColumn(Modifier.fillMaxWidth().heightIn(max = 420.dp)) {
+                items(conversations, key = { it.id }) { item ->
                 val current = item.id == currentId
                 Row(
                     Modifier.fillMaxWidth().clickable { onSelect(item.id) }
@@ -1068,6 +1070,7 @@ private fun ConversationSheet(
                     }
                 }
                 Hairline(insetStart = 20)
+                }
             }
         }
     }
