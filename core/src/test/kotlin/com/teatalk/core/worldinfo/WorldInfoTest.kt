@@ -257,4 +257,41 @@ class WorldInfoTest {
         assertEquals(0, engine.activated("夜晚的码头").size)
         assertEquals(1, engine.activated("夜晚有雾的码头").size)
     }
+
+    @Test
+    fun fromAny_reads_standalone_world_object_same_as_fromStandalone() {
+        val file = """
+            { "entries": {
+                "0": { "uid": 0, "comment": "茶馆", "content": "雨夜茶馆。", "position": 4, "depth": 0, "insertion_order": 10 },
+                "1": { "uid": 1, "comment": "老板娘", "content": "阿箬。", "position": 1, "insertion_order": 20 }
+            } }
+        """.trimIndent()
+        val viaStandalone = WorldInfoParser.fromStandalone(file)
+        val viaAny = WorldInfoParser.fromAny(file)
+        assertEquals(viaStandalone, viaAny)
+        assertEquals(2, viaAny.size)
+        assertEquals(0, viaAny[0].depth)
+        assertEquals(4, viaAny[0].position)
+    }
+
+    @Test
+    fun fromAny_reads_root_array_form() {
+        val file = """
+            [ { "uid": 7, "comment": "王城", "keys": ["王城"], "content": "三百年前建立。", "position": 0 } ]
+        """.trimIndent()
+        val entries = WorldInfoParser.fromAny(file)
+        assertEquals(1, entries.size)
+        assertEquals(7, entries[0].uid)
+    }
+
+    @Test
+    fun unknown_position_string_maps_to_unsupported() {
+        val card = """
+            { "data": { "character_book": { "entries": [
+                { "uid": 3, "comment": "x", "content": "y", "position": "author_note_weird" }
+            ] } } }
+        """.trimIndent()
+        val entries = WorldInfoParser.fromCard(card)
+        assertEquals(WorldInfoParser.UNSUPPORTED_POSITION, entries.single().position)
+    }
 }

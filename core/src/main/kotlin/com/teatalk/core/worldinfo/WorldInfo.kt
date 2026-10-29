@@ -58,18 +58,33 @@ object WorldInfoParser {
 
     private val json = Json { ignoreUnknownKeys = true; isLenient = true }
 
-    /** 从角色卡原始 JSON 抽世界书：优先 `data.character_book`，其次顶层 `entries`（ST 世界书文件）。 */
-    fun fromCard(cardJson: String): List<WorldInfoEntry> = runCatching {
-        val root = json.parseToJsonElement(cardJson) as? JsonObject ?: return@runCatching emptyList()
-        val book = (root["data"] as? JsonObject)?.get("character_book") as? JsonObject
-        if (book != null) parseCharacterBook(book) else parseWorldInfoFile(root)
+    /** 解析出的未知 position 值（不受支持，注入时丢弃）。 */
+    const val UNSUPPORTED_POSITION = -1
+
+    /**
+     * 统一入口：角色卡 / 独立世界书文件 / 根数组三种形态都吃。
+     *
+     * 顺序：`data.character_book` → 顶层 `entries`（对象或数组）→ 根数组。
+     * 卡片与独立文件共用同一套解析，避免「显示 N 条、注入 0 条」。
+     */
+    fun fromAny(json: String): List<WorldInfoEntry> = runCatching {
+        when (val root = this.json.parseToJsonElement(json)) {
+            is JsonArray -> entriesOf(root).mapIndexed { index, (key, entry) ->
+                normalize(entry, isCard = false, fallbackUid = key?.toIntOrNull() ?: index)
+            }
+            is JsonObject -> {
+                val book = (root["data"] as? JsonObject)?.get("character_book") as? JsonObject
+                if (book != null) parseCharacterBook(book) else parseWorldInfoFile(root)
+            }
+            else -> emptyList()
+        }
     }.getOrDefault(emptyList())
 
+    /** 从角色卡原始 JSON 抽世界书（同 [fromAny]）。 */
+    fun fromCard(cardJson: String): List<WorldInfoEntry> = fromAny(cardJson)
+
     /** 独立世界书文件（ST 世界书 JSON：`{entries:{…}}` 或根数组）——D6 导入的 `world_books.entriesJson` 走这里。 */
-    fun fromStandalone(json: String): List<WorldInfoEntry> = runCatching {
-        val root = this.json.parseToJsonElement(json) as? JsonObject ?: return@runCatching emptyList()
-        parseWorldInfoFile(root)
-    }.getOrDefault(emptyList())
+    fun fromStandalone(json: String): List<WorldInfoEntry> = fromAny(json)
 
     /** V2 角色卡内嵌世界书（`isCard=true`：ST 导出默认 selective=false）。 */
     fun parseCharacterBook(book: JsonObject): List<WorldInfoEntry> =
@@ -123,6 +138,8 @@ object WorldInfoParser {
     }
 
     private fun parsePosition(element: JsonElement?): Int = when (element) {
+        // 字段缺失 / null：ST 默认 0（before_char），不能当“不受支持”丢弃。
+        null -> 0
         is JsonPrimitive -> when {
             element.isString -> when (element.content.lowercase()) {
                 "before_char" -> 0
@@ -130,7 +147,9 @@ object WorldInfoParser {
                 "an_top" -> 2
                 "an_bottom" -> 3
                 "at_depth" -> 4
-                else -> element.content.toIntOrNull() ?: 0
+                // 未知字符串：返回 -1（不受支持），由 WorldInfoInjector.select 丢弃；
+                // 不能回落 0，否则会跑到 system prompt 最前。
+                else -> element.content.toIntOrNull() ?: UNSUPPORTED_POSITION
             }
             else -> element.content.toIntOrNull() ?: 0
         }

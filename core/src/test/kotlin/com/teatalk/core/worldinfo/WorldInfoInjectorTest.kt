@@ -43,10 +43,16 @@ class WorldInfoInjectorTest {
         assertEquals(listOf(after), WorldInfoInjector.afterCharacter(listOf(before, after, anTop, anBottom, deep)))
         val insertions = WorldInfoInjector.historyInsertions(listOf(before, after, anTop, anBottom, deep))
         assertEquals(3, insertions.size)
-        // AN 顶部 = 最前面（depth 很大），AN 底部 = 紧贴本次用户消息前（0）。
-        assertTrue(insertions.first { it.content.contains("AN顶") }.depthFromEnd > 1000)
-        assertEquals(0, insertions.first { it.content.contains("AN底") }.depthFromEnd)
+        // AN 顶部/底部都锚在 AN_DEPTH，靠 slot 决定先后（顶 → at-depth → 底）。
+        val top = insertions.first { it.content.contains("AN顶") }
+        val bottom = insertions.first { it.content.contains("AN底") }
+        assertEquals(WorldInfoInjector.AN_DEPTH, top.depthFromEnd)
+        assertEquals(WorldInfoInjector.SLOT_AN_TOP, top.slot)
+        assertEquals(WorldInfoInjector.AN_DEPTH, bottom.depthFromEnd)
+        assertEquals(WorldInfoInjector.SLOT_AN_BOTTOM, bottom.slot)
+        // at-depth 用条目自己的 depth。
         assertEquals(2, insertions.first { it.content.contains("深度") }.depthFromEnd)
+        assertEquals(WorldInfoInjector.SLOT_AT_DEPTH, insertions.first { it.content.contains("深度") }.slot)
     }
 
     @Test
@@ -67,26 +73,26 @@ class WorldInfoInjectorTest {
             "assistant" to "第二句",
             "user" to "第三句",
         )
-        // depth=0 表示插在最后一条（第三句）之前。
+        // ST 语义：depth=0 表示插在最后一条消息【之后】。
         val injected = WorldInfoInjector.injectHistory(
             history,
             listOf(WorldInfoInjector.Insertion("system", "贴底", 0, 100)),
         )
         assertEquals(4, injected.size)
-        assertEquals("system" to "贴底", injected[2])
-        assertEquals("user" to "第三句", injected[3])
+        assertEquals("user" to "第三句", injected[2])
+        assertEquals("system" to "贴底", injected[3])
 
-        // depth=1 表示插在倒数第二条之前。
+        // depth=1 表示插在倒数第 1 条（第三句）之前。
         val injected2 = WorldInfoInjector.injectHistory(
             history,
             listOf(WorldInfoInjector.Insertion("system", "倒数第二", 1, 100)),
         )
-        assertEquals("system" to "倒数第二", injected2[1])
-        assertEquals("assistant" to "第二句", injected2[2])
+        assertEquals("assistant" to "第二句", injected2[1])
+        assertEquals("system" to "倒数第二", injected2[2])
     }
 
     @Test
-    fun inject_history_orders_same_depth_by_engine_order_desc() {
+    fun inject_history_orders_same_depth_by_engine_order_asc() {
         val history = listOf("user" to "hi")
         val injected = WorldInfoInjector.injectHistory(
             history,
@@ -95,7 +101,49 @@ class WorldInfoInjectorTest {
                 WorldInfoInjector.Insertion("system", "高", 0, 99),
             ),
         )
-        assertEquals(listOf("system" to "高", "system" to "低", "user" to "hi"), injected)
+        // ST 以 order 999→1 循环 + unshift，最终文本里 order 小的在前。
+        assertEquals(listOf("user" to "hi", "system" to "低", "system" to "高"), injected)
+    }
+
+    @Test
+    fun inject_history_clamps_out_of_range_depth() {
+        val history = listOf("user" to "a", "assistant" to "b")
+        // depth 超大 → 夹到最前；负 depth（防御）→ 夹到最后。
+        val injected = WorldInfoInjector.injectHistory(
+            history,
+            listOf(
+                WorldInfoInjector.Insertion("system", "最前", 99, 1),
+                WorldInfoInjector.Insertion("system", "最后", -3, 1),
+            ),
+        )
+        assertEquals("system" to "最前", injected[0])
+        assertEquals("system" to "最后", injected.last())
+    }
+
+    @Test
+    fun inject_history_works_on_empty_history() {
+        val injected = WorldInfoInjector.injectHistory(
+            emptyList(),
+            listOf(WorldInfoInjector.Insertion("system", "只有设定", 0, 1)),
+        )
+        assertEquals(listOf("system" to "只有设定"), injected)
+    }
+
+    @Test
+    fun block_orders_entries_ascending_like_st() {
+        val low = entry("低", order = 5)
+        val high = entry("高", order = 500)
+        val text = WorldInfoInjector.block(listOf(high, low))
+        assertTrue(text.indexOf("【低】") < text.indexOf("【高】"))
+    }
+
+    @Test
+    fun select_drops_unsupported_positions() {
+        val supported = entry("支持", position = 4, depth = 0)
+        val unsupported = entry("示例", position = 5)
+        val selected = WorldInfoInjector.select(listOf(supported, unsupported), "支持")
+        assertEquals(listOf(supported), selected)
+        assertEquals(1, WorldInfoInjector.unsupportedCount(listOf(supported, unsupported)))
     }
 
     @Test

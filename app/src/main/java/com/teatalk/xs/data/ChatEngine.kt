@@ -140,11 +140,15 @@ class ChatEngine(
         // M3：世界书注入。角色卡内嵌 + 角色默认绑定 + 会话覆盖三层合并；同 uid 以内嵌为准。
         val boundIds = characters.effectiveWorldBookIds(character.id, conversationId)
         val externalEntries = characters.worldBookEntries(boundIds)
-        val allEntries = (card.worldBook + externalEntries).distinctBy { it.uid to it.comment }
+        // uid 只是「书内」命名空间（卡内嵌与每本库书都从 0/1 起），不能跨源当身份用。
+        // 策略：源内按 (uid, comment) 去重；跨源按 content 去重（同一段文本只注入一次）。
+        val cardEntries = card.worldBook.distinctBy { it.uid to it.comment.trim() }
+        val libraryEntries = externalEntries.distinctBy { it.uid to it.comment.trim() }
+        val allEntries = (cardEntries + libraryEntries).distinctBy { it.content.trim() }
         // 扫描文本：本次用户消息 + 最近两条，兼顾 ST 的「最近 N 条」默认行为。
         val scanText = history.takeLast(3).joinToString("\n") { it.content }
         val activated = withContext(Dispatchers.Default) {
-            WorldInfoInjector.select(allEntries, scanText)
+            WorldInfoInjector.select(allEntries, scanText, MAX_WORLD_BOOK_CHARS)
         }
         val beforeWorld = WorldInfoInjector.beforeCharacter(activated)
         val afterWorld = WorldInfoInjector.afterCharacter(activated)
@@ -166,6 +170,7 @@ class ChatEngine(
             "entries" to allEntries.size,
             "activated" to activated.size,
             "chars" to WorldInfoInjector.cost(activated),
+                    "unsupported" to WorldInfoInjector.unsupportedCount(allEntries),
             "bound" to boundIds.size,
         )
         TeaTalkLog.i(
@@ -231,7 +236,7 @@ class ChatEngine(
         return buildString {
             if (beforeWorld.isNotEmpty()) {
                 append("[世界书·角色前]\n")
-                append(WorldInfoInjector.block(beforeWorld).take(MAX_SYSTEM_CHARS))
+                append(WorldInfoInjector.block(beforeWorld))
                 append("\n\n")
             }
             append("你正在扮演「").append(name).append("」。")
@@ -249,7 +254,7 @@ class ChatEngine(
             }
             if (afterWorld.isNotEmpty()) {
                 append("\n\n[世界书·角色后]\n")
-                append(WorldInfoInjector.block(afterWorld).take(MAX_SYSTEM_CHARS))
+                append(WorldInfoInjector.block(afterWorld))
             }
             append("\n\n要求：始终以该角色第一人称回应，保持语气与人格，不要跳出角色、不要解释设定或输出分析过程。")
         }
@@ -260,7 +265,11 @@ class ChatEngine(
         private const val ROLE_USER = "user"
         private const val ROLE_ASSISTANT = "assistant"
         private const val HISTORY_LIMIT = 20
-        private const val MAX_SYSTEM_CHARS = 6000
+        /** 角色卡各段系统提示的单段上限（世界书另用 [MAX_WORLD_BOOK_CHARS]）。 */
+private const val MAX_SYSTEM_CHARS = 6000
+
+/** 世界书字符预算：`select` 内单点裁决，system prompt 里不再二次截断。 */
+private const val MAX_WORLD_BOOK_CHARS = 8000
 
         /** 自动命名时截取的字符数。 */
         private const val AUTO_TITLE_CHARS = 18

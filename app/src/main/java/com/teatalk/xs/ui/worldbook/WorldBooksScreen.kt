@@ -46,6 +46,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -128,7 +129,7 @@ fun WorldBooksScreen(
                                 Text(book.name, fontSize = TypeScale.s15, fontWeight = FontWeight.Medium, color = cs.onBackground, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                 Spacer(Modifier.height(2.dp))
                                 Text(
-                                    stringResource(R.string.worldbook_entry_count, book.entryCount),
+                                    pluralStringResource(R.plurals.worldbook_entry_count, book.entryCount, book.entryCount),
                                     fontSize = TypeScale.s12,
                                     color = cs.onSurfaceVariant,
                                 )
@@ -194,7 +195,7 @@ private fun WorldBookDetailSheet(
                     Text(book.name, fontSize = TypeScale.s16, fontWeight = FontWeight.SemiBold, color = cs.onBackground)
                     Spacer(Modifier.height(2.dp))
                     Text(
-                        stringResource(R.string.worldbook_entry_count, book.entryCount),
+                        pluralStringResource(R.plurals.worldbook_entry_count, book.entryCount, book.entryCount),
                         fontSize = TypeScale.s12,
                         color = cs.onSurfaceVariant,
                     )

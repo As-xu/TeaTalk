@@ -124,14 +124,6 @@ class CharacterRepository(
         parseIds(character.linkedWorldBookIdsJson)
     }
 
-    /**
-     * 会话级覆盖；`null` 表示继承角色，`[]` 表示显式不启用。
-     */
-    suspend fun conversationWorldBookOverride(conversationId: Long): List<Long>? = withContext(Dispatchers.IO) {
-        val conversation = conversations.find(conversationId) ?: return@withContext null
-        conversation.worldBookIdsJson?.let { parseIds(it) }
-    }
-
     /** 实际生效的世界书 id：会话覆盖优先，否则角色默认。 */
     suspend fun effectiveWorldBookIds(characterId: Long, conversationId: Long?): List<Long> =
         withContext(Dispatchers.IO) {
@@ -144,7 +136,7 @@ class CharacterRepository(
         }
 
     suspend fun setCharacterWorldBooks(characterId: Long, ids: List<Long>) = withContext(Dispatchers.IO) {
-        dao.setLinkedWorldBooks(characterId, encodeIds(ids), System.currentTimeMillis())
+        dao.setLinkedWorldBooks(characterId, encodeIds(ids))
         TeaTalkLog.i("Prompt", "worldbook.bind", "scope" to "character", "count" to ids.size)
     }
 
@@ -521,13 +513,9 @@ class CharacterRepository(
         const val ROLE_ASSISTANT = "assistant"
     }
 
-    private fun encodeIds(ids: List<Long>): String =
-        ids.distinct().sorted().joinToString(prefix = "[", postfix = "]", separator = ",")
+    private fun encodeIds(ids: List<Long>): String = WorldBookIds.encode(ids)
 
-    private fun parseIds(json: String?): List<Long> = runCatching {
-        val array = Json.parseToJsonElement(json ?: "[]") as JsonArray
-        array.mapNotNull { (it as? JsonPrimitive)?.content?.toLongOrNull() }
-    }.getOrDefault(emptyList())
+    private fun parseIds(json: String?): List<Long> = WorldBookIds.parse(json)
 }
 
 

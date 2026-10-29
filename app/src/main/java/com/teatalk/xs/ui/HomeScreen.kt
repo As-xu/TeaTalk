@@ -210,6 +210,7 @@ fun HomeScreen(
                                 navController.navigate("chat/$conversationId") { launchSingleTop = true }
                             }
                         },
+                        onOpenWorldBooks = { navController.navigate(Routes.WORLD_BOOKS) },
                     )
                 }
                 composable(

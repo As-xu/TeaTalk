@@ -125,7 +125,7 @@ class MigrationTest {
     }
 
     @Test
-    fun migrate_1_to_7_keeps_characters_and_messages() {
+    fun migrate_1_to_current_keeps_characters_and_messages() {
         // v1 存量数据：2 个角色、3 条消息（char 1 两条，char 2 一条）。
         db.execSQL("INSERT INTO characters (name, avatarPath, cardJson, cardSource, tagsJson, firstMes, createdAt) VALUES ('A', NULL, '{}', 'JSON_V2', '[]', 'hi', 1000)")
         db.execSQL("INSERT INTO characters (name, avatarPath, cardJson, cardSource, tagsJson, firstMes, createdAt) VALUES ('B', NULL, '{}', 'JSON_V2', '[]', 'yo', 2000)")
@@ -174,10 +174,25 @@ class MigrationTest {
             }
         }
 
-        // 4) 没有消息指向 conversationId=0 的孤儿。
+        // 4) 没有消息指向 conversationId=0 的孤儿，也没有指向不存在会话的消息。
         db.query("SELECT COUNT(*) FROM messages WHERE conversationId = 0").use { c ->
             assertTrue(c.moveToFirst())
             assertEquals(0, c.getInt(0))
+        }
+        db.query("SELECT COUNT(*) FROM messages WHERE conversationId NOT IN (SELECT id FROM conversations)").use { c ->
+            assertTrue(c.moveToFirst())
+            assertEquals(0, c.getInt(0))
+        }
+        // 4b) 回填必须按「角色」归属：角色 1 的两条消息落在同一个会话，且该会话属于角色 1。
+        db.query(
+            """
+            SELECT m.content, cv.characterId
+            FROM messages m JOIN conversations cv ON cv.id = m.conversationId
+            WHERE m.characterId = 1 ORDER BY m.id
+            """.trimIndent(),
+        ).use { c ->
+            assertEquals(2, c.count)
+            while (c.moveToNext()) assertEquals(1, c.getInt(1))
         }
 
         // 5) v5→v6 的 Provider 来源列存在且老数据为 NULL。
@@ -208,7 +223,7 @@ class MigrationTest {
     }
 
     @Test
-    fun migrate_1_to_7_with_empty_tables() {
+    fun migrate_1_to_current_with_empty_tables() {
         migrateTo(TeaTalkDatabase.VERSION)
 
         db.query("SELECT COUNT(*) FROM conversations").use { c ->

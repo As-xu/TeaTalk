@@ -66,7 +66,19 @@
     <string name="source_local">本地导入</string>
 
     <!-- 角色详情 -->
-    <string name="detail_world_book">世界书 %1$d</string>
+    <string name="detail_world_book_entries">世界书 · %1$d 条</string>
+<string name="detail_world_book_summary">生效 %1$d 条 · %2$s</string>
+<string name="detail_world_book_import">去导入世界书</string>
+<plurals name="detail_books_bound">
+    <item quantity="other">已绑定 %d 本</item>
+</plurals>
+<plurals name="detail_books_total">
+    <item quantity="other">%d 本</item>
+</plurals>
+<plurals name="detail_books_selected">
+    <item quantity="other">已勾选 %d</item>
+</plurals>
+<string name="detail_world_book_saved">世界书绑定已保存</string>
     <string name="detail_section_desc">简介</string>
     <string name="detail_section_first_mes">开场白</string>
     <string name="detail_section_details">设定</string>
@@ -74,10 +86,12 @@
     <string name="detail_field_scenario">场景</string>
     <string name="detail_section_notes">创作者注释</string>
         <string name="detail_world_book_builtin">角色卡内嵌（%1$d 条，随卡生效）</string>
-    <string name="detail_world_book_library">世界书库（%1$d 本，勾选后绑定到该角色）</string>
+    <string name="detail_world_book_library">世界书库（%1$s · %2$s）</string>
     <string name="detail_world_book_empty">世界书库还是空的，先到「我的 → 世界书」导入。</string>
-    <string name="detail_world_book_count">%1$d 条</string>
-<string name="detail_world_book_dialog">世界书（%1$d 条）</string>
+    <plurals name="worldbook_entry_count">
+    <item quantity="other">%d 条</item>
+</plurals>
+<!-- 旧「世界书（%1$d 条）」标题已由 detail_world_book_summary 取代 -->
     <string name="detail_delete_character">删除角色</string>
     <string name="detail_start_chat">开始聊天</string>
     <string name="list_separator">、</string>
@@ -174,7 +188,7 @@
     <string name="worldbook_import_cta">导入世界书</string>
     <string name="worldbook_default_name">未命名世界书</string>
     <string name="worldbook_empty">没有找到有效条目</string>
-    <string name="worldbook_entry_count">%1$d 条</string>
+    
     <string name="worldbook_imported">已导入「%1$s」（%2$d 条）</string>
     <string name="worldbook_deleted">已删除「%1$s」</string>
     <string name="worldbook_delete_title">删除世界书</string>

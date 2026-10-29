@@ -60,7 +60,22 @@
     <string name="source_charx">CHARX</string>
     <string name="source_local">Imported locally</string>
 
-    <string name="detail_world_book">World book %1$d</string>
+    <string name="detail_world_book_entries">World book · %1$d entries</string>
+<string name="detail_world_book_summary">%1$d entries active · %2$s</string>
+<string name="detail_world_book_import">Import world books</string>
+<plurals name="detail_books_bound">
+    <item quantity="one">%d book bound</item>
+    <item quantity="other">%d books bound</item>
+</plurals>
+<plurals name="detail_books_total">
+    <item quantity="one">%d book</item>
+    <item quantity="other">%d books</item>
+</plurals>
+<plurals name="detail_books_selected">
+    <item quantity="one">%d selected</item>
+    <item quantity="other">%d selected</item>
+</plurals>
+<string name="detail_world_book_saved">World book binding saved</string>
     <string name="detail_section_desc">Description</string>
     <string name="detail_section_first_mes">First message</string>
     <string name="detail_section_details">Details</string>
@@ -68,10 +83,13 @@
     <string name="detail_field_scenario">Scenario</string>
     <string name="detail_section_notes">Creator\'s note</string>
         <string name="detail_world_book_builtin">Built into card (%1$d entries)</string>
-    <string name="detail_world_book_library">World book library (%1$d books; check to bind)</string>
+    <string name="detail_world_book_library">Library (%1$s · %2$s)</string>
     <string name="detail_world_book_empty">Library is empty. Import books in Me → World books.</string>
-    <string name="detail_world_book_count">%1$d entries</string>
-<string name="detail_world_book_dialog">World book (%1$d entries)</string>
+    <plurals name="worldbook_entry_count">
+    <item quantity="one">%d entry</item>
+    <item quantity="other">%d entries</item>
+</plurals>
+<!-- replaced by detail_world_book_summary -->
     <string name="detail_delete_character">Delete character</string>
     <string name="detail_start_chat">Start chat</string>
     <string name="list_separator">", "</string>
@@ -165,7 +183,7 @@
     <string name="worldbook_import_cta">Import world book</string>
     <string name="worldbook_default_name">Untitled world book</string>
     <string name="worldbook_empty">No valid entries found</string>
-    <string name="worldbook_entry_count">%1$d entries</string>
+    
     <string name="worldbook_imported">Imported “%1$s” (%2$d entries)</string>
     <string name="worldbook_deleted">Deleted “%1$s”</string>
     <string name="worldbook_delete_title">Delete world book</string>
