@@ -15,7 +15,7 @@ import com.teatalk.core.log.TeaTalkLog
         ConversationEntity::class,
     ],
     version = 7,
-    exportSchema = false,
+    exportSchema = true,
 )
 abstract class TeaTalkDatabase : RoomDatabase() {
     abstract fun characterDao(): CharacterDao

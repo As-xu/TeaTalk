@@ -13,8 +13,8 @@ android {
         applicationId = "com.teatalk.xs"
         minSdk = 28
         targetSdk = 34
-        versionCode = 16
-        versionName = "0.7.5"
+        versionCode = 17
+        versionName = "0.7.6"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -90,17 +90,7 @@ dependencies {
     testImplementation("org.json:json:20240303")
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
+ksp {
+    arg("room.schemaLocation", "$projectDir/schemas")
+}
 

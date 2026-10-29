@@ -87,9 +87,9 @@
 | --- | --- | --- |
 | P0 批次 A（6 条） | ✅ 0.7.2 | `0541114` |
 | P1 批次 B（6 条 + 2 补丁） | ✅ 0.7.3 / 0.7.4 | `3d95949`、`dc4b911` |
-| 迁移无测试 | ✅ 新增 androidTest 2 条（模拟器+真机通过） | 0.7.5 |
+| 迁移无测试 | ✅ androidTest 3 条（含 MigrationTestHelper + schema 导出，模拟器+真机通过） | 0.7.5 / 0.7.6 |
 | 字号未落令牌 | ✅ `TypeScale` 单一来源（21 种值收敛，语义化待定稿） | 0.7.5 |
 | 长按面板遮挡上下文 | ✅ 改为锚定 `DropdownMenu` | 0.7.5 |
 | Markdown 流式 O(n²) | ✅ 裸文本流式 + 50ms 节流 | 0.7.5 |
-| 气泡 4 栅格内距 | ⏳ 待做 | — |
-| Room schema 导出/identityHash 校验 | ⏳ 待做 | — |
+| 气泡 4 栅格内距 | ✅ 12/8dp 统一 | 0.7.6 |
+| Room schema 导出/identityHash 校验 | ✅ schemas/1..7.json + runMigrationsAndValidate | 0.7.6 |

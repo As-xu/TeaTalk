@@ -1151,7 +1151,7 @@ private fun AssistantBubble(
                     .pointerInput(text) { detectTapGestures(onLongPress = { actionsOpen = true }) }
                     .clip(RoundedCornerShape(16.dp, 16.dp, 16.dp, 6.dp))
                     .background(cs.surfaceContainerHigh)
-                    .padding(horizontal = 13.dp, vertical = 10.dp),
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
             ) {
                 if (thinking) {
                     Text(stringResource(R.string.chat_thinking), fontSize = TypeScale.s14_5, color = cs.onSurfaceVariant)
@@ -1270,7 +1270,7 @@ private fun UserBubble(text: String, onLongPress: (String) -> Unit = {}) {
                 .pointerInput(text) { detectTapGestures(onLongPress = { onLongPress(text) }) }
                 .clip(RoundedCornerShape(16.dp, 16.dp, 6.dp, 16.dp))
                 .background(cs.primary)
-                .padding(horizontal = 13.dp, vertical = 10.dp),
+                .padding(horizontal = 12.dp, vertical = 8.dp),
         ) {
             Text(text, fontSize = TypeScale.s14_5, lineHeight = 22.sp, color = cs.onPrimary)
         }

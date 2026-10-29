@@ -2,7 +2,9 @@ package com.teatalk.xs.data.db
 
 import android.database.sqlite.SQLiteDatabase
 import androidx.test.core.app.ApplicationProvider
+import androidx.room.testing.MigrationTestHelper
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.platform.app.InstrumentationRegistry
 import androidx.sqlite.db.SupportSQLiteOpenHelper
 import androidx.sqlite.db.framework.FrameworkSQLiteOpenHelperFactory
 import org.junit.After
@@ -11,6 +13,7 @@ import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
+import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 
@@ -207,5 +210,54 @@ class MigrationTest {
         }
         assertTrue(columnNames("characters").containsAll(listOf("favorite", "pinned", "updatedAt")))
         assertTrue(columnNames("messages").containsAll(listOf("variantsJson", "selectedVariant", "status", "variantStatusJson", "conversationId")))
+    }
+
+    // ---- Room MigrationTestHelper：校验迁移后的结构 == 当前实体结构（含 identityHash 的最终 schema） ----
+
+    @get:Rule
+    val migrations = MigrationTestHelper(
+        InstrumentationRegistry.getInstrumentation(),
+        TeaTalkDatabase::class.java,
+    )
+
+    @Test
+    fun migrationTestHelper_migrates_1_to_7_and_validates_schema() {
+        val name = "migration-helper.db"
+        context.deleteDatabase(name)
+        migrations.createDatabase(name, 1).apply {
+            execSQL("INSERT INTO characters (name, avatarPath, cardJson, cardSource, tagsJson, firstMes, createdAt) VALUES ('A', NULL, '{}', 'JSON_V2', '[]', 'hi', 1000)")
+            execSQL("INSERT INTO messages (characterId, role, content, createdAt) VALUES (1, 'assistant', 'hi', 1001)")
+            close()
+        }
+
+        val db = migrations.runMigrationsAndValidate(
+            name,
+            TeaTalkDatabase.VERSION,
+            true,
+            TeaTalkDatabase.MIGRATION_1_2,
+            TeaTalkDatabase.MIGRATION_2_3,
+            TeaTalkDatabase.MIGRATION_3_4,
+            TeaTalkDatabase.MIGRATION_4_5,
+            TeaTalkDatabase.MIGRATION_5_6,
+            TeaTalkDatabase.MIGRATION_6_7,
+        )
+        try {
+            // 数据保留（helper 已校验 schema，这里只看语义）。
+            db.query("SELECT COUNT(*) FROM messages").use { c ->
+                assertTrue(c.moveToFirst())
+                assertEquals(1, c.getInt(0))
+            }
+            db.query("SELECT conversationId FROM messages").use { c ->
+                assertTrue(c.moveToFirst())
+                assertTrue(c.getLong(0) > 0)
+            }
+            db.query("SELECT COUNT(*) FROM conversations").use { c ->
+                assertTrue(c.moveToFirst())
+                assertEquals(1, c.getInt(0))
+            }
+        } finally {
+            db.close()
+            context.deleteDatabase(name)
+        }
     }
 }
