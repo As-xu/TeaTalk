@@ -44,6 +44,9 @@ data class UiText(
 
         fun cardSaved(name: String): UiText = of(R.string.toast_card_saved, name)
 
+        /** 卡 JSON 损坏/无法写回时明确报错，不再「假保存」（评审 P0-1）。 */
+        fun cardSaveFailed(): UiText = of(R.string.toast_card_save_failed)
+
         /** 世界书：导入/删除提示。 */
         fun worldBookImported(name: String, entryCount: Int): UiText =
             of(R.string.worldbook_imported, name, entryCount)

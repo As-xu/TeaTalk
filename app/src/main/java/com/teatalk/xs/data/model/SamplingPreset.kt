@@ -83,12 +83,14 @@ object SamplingPresetStore {
             (obj[key] as? JsonPrimitive)?.takeIf { it.isString }?.content
         }
         fun num(vararg keys: String): Double? = keys.firstNotNullOfOrNull { key -> obj.double(key) }
+        // ST 里 -1 表示「不限制」，temperature/top_p 也可能被写成越界值：
+        // 直接在解析层夹取，避免下游 400/422（评审 P1-5）。
         val preset = SamplingPreset(
-            temperature = num("temp_openai", "temperature")?.toFloat(),
-            topP = num("top_p_openai", "top_p")?.toFloat(),
-            maxTokens = num("openai_max_tokens", "max_tokens")?.toInt(),
-            frequencyPenalty = num("freq_pen_openai", "frequency_penalty")?.toFloat(),
-            presencePenalty = num("pres_pen_openai", "presence_penalty")?.toFloat(),
+            temperature = num("temp_openai", "temperature")?.toFloat()?.coerceIn(0f, 2f),
+            topP = num("top_p_openai", "top_p")?.toFloat()?.coerceIn(0f, 1f),
+            maxTokens = num("openai_max_tokens", "max_tokens")?.toInt()?.takeIf { it > 0 },
+            frequencyPenalty = num("freq_pen_openai", "frequency_penalty")?.toFloat()?.coerceIn(-2f, 2f),
+            presencePenalty = num("pres_pen_openai", "presence_penalty")?.toFloat()?.coerceIn(-2f, 2f),
         )
         return preset.takeUnless { it.isEmpty }
     }

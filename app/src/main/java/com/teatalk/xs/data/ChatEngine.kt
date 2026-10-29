@@ -182,9 +182,17 @@ class ChatEngine(
             "sysChars" to messages.first().second.length,
         )
         // M3 步骤 2：把这次请求的可读快照放到内存里，供「查看本次请求」面板展示（不落盘、不导出）。
+        // 预设需在快照之前解析，面板才能显示本次请求的真实采样值。
+        val preset = samplingPreset()
+        val presetLabel = preset?.let {
+            "temp ${it.temperature} · top_p ${it.topP} · max ${it.maxTokens}" +
+                " · freq ${it.frequencyPenalty} · pres ${it.presencePenalty}"
+        }
         PromptDebugStore.publish(
+            conversationId = conversationId,
             providerName = provider.name,
             model = model,
+            sampling = presetLabel,
             system = messages.first().second,
             messages = messages.drop(1),
             activated = activated,
@@ -193,7 +201,6 @@ class ChatEngine(
 
         val builder = StringBuilder()
         var firstTokenLogged = false
-        val preset = samplingPreset()
         TeaTalkLog.i(
             "Prompt",
             "sampling.preset",
@@ -201,6 +208,8 @@ class ChatEngine(
             "temperature" to (preset?.temperature ?: provider.temperature),
             "topP" to (preset?.topP ?: -1f),
             "maxTokens" to (preset?.maxTokens ?: -1),
+            "freqPenalty" to (preset?.frequencyPenalty ?: -1f),
+            "presPenalty" to (preset?.presencePenalty ?: -1f),
         )
         client.stream(
             baseUrl = provider.baseUrl,

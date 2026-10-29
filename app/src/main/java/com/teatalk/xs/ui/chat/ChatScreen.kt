@@ -1,5 +1,10 @@
 package com.teatalk.xs.ui.chat
 
+import kotlinx.serialization.json.putJsonArray
+import kotlinx.serialization.json.put
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.addJsonObject
+import androidx.compose.foundation.layout.fillMaxHeight
 import android.os.SystemClock
 
 import androidx.compose.foundation.background
@@ -55,6 +60,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -131,7 +137,7 @@ import com.teatalk.xs.ui.theme.TypeScale
 class ChatViewModel(
     private val repository: CharacterRepository,
     private val engine: ChatEngine,
-    private val conversationId: Long,
+    val conversationId: Long,
 ) : ViewModel() {
 
     /** 当前会话（用于拿 characterId 与标题）。 */
@@ -857,7 +863,11 @@ fun ChatScreen(
             )
         }
         if (showPrompt) {
-            PromptSheet(snapshot = promptSnapshot, onDismiss = { showPrompt = false })
+            PromptSheet(
+                snapshot = promptSnapshot,
+                conversationId = viewModel.conversationId,
+                onDismiss = { showPrompt = false },
+            )
         }
         if (showConversations) {
             ConversationSheet(
@@ -1306,15 +1316,26 @@ private fun timeOf(millis: Long): String =
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun PromptSheet(snapshot: PromptSnapshot?, onDismiss: () -> Unit) {
+private fun PromptSheet(
+    snapshot: PromptSnapshot?,
+    conversationId: Long,
+    onDismiss: () -> Unit,
+) {
     val cs = MaterialTheme.colorScheme
     val clipboard = LocalClipboardManager.current
     val context = androidx.compose.ui.platform.LocalContext.current
     val scope = rememberCoroutineScope()
-    ModalBottomSheet(onDismissRequest = onDismiss) {
+    // 快照是进程级内存单例：必须按会话过滤，否则切到 B 会看到 A 的角色设定（评审 P1-3）。
+    val visible = snapshot?.takeIf { it.conversationId == conversationId }
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+    ) {
         Column(
-            Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, bottom = 24.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
+            Modifier
+                .fillMaxWidth()
+                .fillMaxHeight(0.9f)
+                .padding(start = 20.dp, end = 20.dp, bottom = 16.dp),
         ) {
             Text(
                 stringResource(R.string.prompt_debug_title),
@@ -1322,72 +1343,112 @@ private fun PromptSheet(snapshot: PromptSnapshot?, onDismiss: () -> Unit) {
                 fontWeight = FontWeight.SemiBold,
                 color = cs.onSurface,
             )
-            if (snapshot == null) {
+            if (visible == null) {
+                Spacer(Modifier.height(8.dp))
                 Text(
                     stringResource(R.string.prompt_debug_empty),
                     fontSize = TypeScale.s13,
                     color = cs.onSurfaceVariant,
                 )
             } else {
+                Spacer(Modifier.height(4.dp))
                 Text(
-                    stringResource(R.string.prompt_debug_provider, snapshot.providerName, snapshot.model),
+                    stringResource(R.string.prompt_debug_provider, visible.providerName, visible.model),
                     fontSize = TypeScale.s12,
                     color = cs.onSurfaceVariant,
                 )
+                visible.sampling?.let { sampling ->
+                    Text(
+                        stringResource(R.string.prompt_debug_sampling, sampling),
+                        fontSize = TypeScale.s12,
+                        color = cs.primary,
+                    )
+                }
                 Text(
                     stringResource(R.string.prompt_debug_copy_hint),
                     fontSize = TypeScale.s11,
                     color = cs.onSurfaceVariant.copy(alpha = 0.8f),
                 )
+                // 中段可滚：权重占满，Open/Close 按钮固定在底部（评审 A2）。
                 Column(
                     Modifier
+                        .weight(1f)
                         .fillMaxWidth()
-                        .heightIn(max = 360.dp)
                         .verticalScroll(rememberScrollState()),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
-                    SectionTitle(stringResource(R.string.prompt_debug_system), snapshot.system.length)
+                    SectionTitle(stringResource(R.string.prompt_debug_system), visible.system.length)
                     Text(
-                        snapshot.system,
+                        visible.system,
                         fontSize = TypeScale.s12,
                         lineHeight = 18.sp,
                         color = cs.onSurface,
                     )
                     SectionTitle(
-                        stringResource(R.string.prompt_debug_worldbook, snapshot.worldEntries.size, snapshot.worldChars),
+                        stringResource(
+                            R.string.prompt_debug_worldbook,
+                            visible.worldEntries.size,
+                            visible.worldChars,
+                        ),
                         null,
                     )
-                    if (snapshot.worldEntries.isEmpty()) {
+                    if (visible.worldEntries.isEmpty()) {
                         Text("—", fontSize = TypeScale.s12, color = cs.onSurfaceVariant)
                     } else {
-                        snapshot.worldEntries.forEach { entry ->
-                            Text(
-                                "${entry.comment} · ${entry.position} · ${entry.chars}",
-                                fontSize = TypeScale.s12,
-                                color = cs.onSurfaceVariant,
-                            )
+                        visible.worldEntries.forEach { entry ->
+                            Column {
+                                Text(
+                                    "${entry.comment} · ${entry.position} · ${entry.chars}",
+                                    fontSize = TypeScale.s12,
+                                    color = cs.onSurfaceVariant,
+                                )
+                                Text(
+                                    entry.content,
+                                    fontSize = TypeScale.s11,
+                                    lineHeight = 16.sp,
+                                    color = cs.onSurfaceVariant.copy(alpha = 0.75f),
+                                    maxLines = 3,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
                         }
                     }
                     SectionTitle(
-                        stringResource(R.string.prompt_debug_messages, snapshot.messages.size),
+                        stringResource(R.string.prompt_debug_messages, visible.messages.size),
                         null,
                     )
-                    snapshot.messages.forEachIndexed { index, message ->
-                        Text(
-                            "${index + 1}. ${message.role} · ${message.content.length}",
-                            fontSize = TypeScale.s12,
-                            color = cs.onSurfaceVariant,
-                        )
+                    visible.messages.forEachIndexed { index, message ->
+                        Column {
+                            Text(
+                                "${index + 1}. ${message.role} · ${message.content.length}",
+                                fontSize = TypeScale.s12,
+                                color = cs.onSurfaceVariant,
+                            )
+                            Text(
+                                message.content,
+                                fontSize = TypeScale.s11,
+                                lineHeight = 16.sp,
+                                color = cs.onSurface,
+                                maxLines = 8,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
                     }
                 }
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    TextButton(onClick = onDismiss) { Text(stringResource(R.string.close)) }
+            }
+            Spacer(Modifier.height(8.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                TextButton(onClick = onDismiss) { Text(stringResource(R.string.close)) }
+                if (visible != null) {
                     TextButton(
                         onClick = {
-                            val json = buildPromptJson(snapshot)
-                            clipboard.setText(AnnotatedString(json))
+                            clipboard.setText(AnnotatedString(buildPromptJson(visible)))
                             scope.launch {
-                                android.widget.Toast.makeText(context, context.getString(R.string.common_copied), android.widget.Toast.LENGTH_SHORT).show()
+                                android.widget.Toast.makeText(
+                                    context,
+                                    context.getString(R.string.common_copied),
+                                    android.widget.Toast.LENGTH_SHORT,
+                                ).show()
                             }
                         },
                     ) { Text(stringResource(R.string.common_copy)) }
@@ -1404,42 +1465,34 @@ private fun SectionTitle(title: String, chars: Int?) {
         Text(title, fontSize = TypeScale.s13, fontWeight = FontWeight.SemiBold, color = cs.onSurface)
         if (chars != null) {
             Spacer(Modifier.width(6.dp))
-            Text("$chars chars", fontSize = TypeScale.s11, color = cs.onSurfaceVariant)
+            Text(stringResource(R.string.prompt_debug_chars, chars), fontSize = TypeScale.s11, color = cs.onSurfaceVariant)
         }
     }
 }
 
 /** 复制用的 JSON：字段固定，避免把整张消息数组之外的东西带出去。 */
-private fun buildPromptJson(snapshot: PromptSnapshot): String {
-    fun esc(s: String): String = buildString {
-        s.forEach { c ->
-            when (c) {
-                '\\' -> append("\\\\")
-                '"' -> append("\\\"")
-                '\n' -> append("\\n")
-                '\r' -> append("\\r")
-                '\t' -> append("\\t")
-                else -> append(c)
+private fun buildPromptJson(snapshot: PromptSnapshot): String = buildJsonObject {
+    put("provider", snapshot.providerName)
+    put("model", snapshot.model)
+    snapshot.sampling?.let { put("sampling", it) }
+    put("systemChars", snapshot.system.length)
+    put("system", snapshot.system)
+    putJsonArray("worldBook") {
+        snapshot.worldEntries.forEach { entry ->
+            addJsonObject {
+                put("comment", entry.comment)
+                put("position", entry.position)
+                put("chars", entry.chars)
+                put("content", entry.content)
             }
         }
     }
-    val sb = StringBuilder()
-    sb.append("{\"provider\":\"").append(esc(snapshot.providerName)).append("\",")
-    sb.append("\"model\":\"").append(esc(snapshot.model)).append("\",")
-    sb.append("\"systemChars\":").append(snapshot.system.length).append(',')
-    sb.append("\"system\":\"").append(esc(snapshot.system)).append("\",")
-    sb.append("\"worldBook\":[")
-    snapshot.worldEntries.forEachIndexed { i, e ->
-        if (i > 0) sb.append(',')
-        sb.append("{\"comment\":\"").append(esc(e.comment)).append("\",\"position\":\"")
-            .append(esc(e.position)).append("\",\"chars\":").append(e.chars).append('}')
+    putJsonArray("messages") {
+        snapshot.messages.forEach { message ->
+            addJsonObject {
+                put("role", message.role)
+                put("content", message.content)
+            }
+        }
     }
-    sb.append("],\"messages\":[")
-    snapshot.messages.forEachIndexed { i, m ->
-        if (i > 0) sb.append(',')
-        sb.append("{\"role\":\"").append(esc(m.role)).append("\",\"content\":\"")
-            .append(esc(m.content)).append("\"}")
-    }
-    sb.append("]}")
-    return sb.toString()
-}
+}.toString()

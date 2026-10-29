@@ -137,8 +137,8 @@ class CharactersViewModel(
 
     fun saveCard(character: CharacterEntity, edit: CardEdit) {
         viewModelScope.launch {
-            repository.updateCard(character, edit)
-            _message.value = UiText.cardSaved(edit.name)
+            val saved = repository.updateCard(character, edit)
+            _message.value = if (saved) UiText.cardSaved(edit.name) else UiText.cardSaveFailed()
         }
     }
 

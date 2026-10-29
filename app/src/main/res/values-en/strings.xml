@@ -317,5 +317,9 @@
     <string name="preset_imported">Preset imported</string>
     <string name="preset_import_failed">Unrecognized preset file</string>
     <string name="preset_cleared">Preset cleared</string>
+    <string name="prompt_debug_sampling">Sampling · %1$s</string>
+    <string name="prompt_debug_chars">%1$d chars</string>
+    <string name="toast_card_save_failed">Could not save: card data is corrupted</string>
+    <string name="edit_section_advanced">Advanced</string>
 </resources>
 

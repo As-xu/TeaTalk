@@ -268,24 +268,8 @@ class CharacterRepository(
      * - V1 平铺：写回根对象
      * 三个索引列（name / tagsJson / firstMes）同步更新，避免列表搜索与聊天开场白读到旧值。
      */
-    suspend fun updateCard(character: CharacterEntity, edit: CardEdit) = withContext(Dispatchers.IO) {
-        val root = runCatching { Json.parseToJsonElement(character.cardJson) as? JsonObject }.getOrNull()
-        val dataObject = root?.get("data") as? JsonObject
-        val target = dataObject ?: root ?: JsonObject(emptyMap())
-        val updated = target.toMutableMap().apply {
-            put("name", JsonPrimitive(edit.name))
-            put("description", JsonPrimitive(edit.description))
-            put("personality", JsonPrimitive(edit.personality))
-            put("scenario", JsonPrimitive(edit.scenario))
-            put("first_mes", JsonPrimitive(edit.firstMes))
-            put("creator_notes", JsonPrimitive(edit.creatorNotes))
-            put("tags", JsonArray(edit.tags.map(::JsonPrimitive)))
-        }
-        val newCardJson = when {
-            dataObject != null -> JsonObject(root!!.toMutableMap().apply { put("data", JsonObject(updated)) })
-            root != null -> JsonObject(updated)
-            else -> return@withContext
-        }.toString()
+    suspend fun updateCard(character: CharacterEntity, edit: CardEdit): Boolean = withContext(Dispatchers.IO) {
+        val newCardJson = applyCardEdit(character.cardJson, edit) ?: return@withContext false
         dao.updateCard(
             id = character.id,
             name = edit.name,
@@ -294,6 +278,7 @@ class CharacterRepository(
             cardJson = newCardJson,
             updatedAt = System.currentTimeMillis(),
         )
+        true
     }
 
     /**

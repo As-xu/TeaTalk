@@ -12,8 +12,10 @@ import kotlinx.coroutines.flow.asStateFlow
  * 只是「这一次到底发了什么」的可读视图，避免把角色卡正文/聊天原文落盘。
  */
 data class PromptSnapshot(
+    val conversationId: Long,
     val providerName: String,
     val model: String,
+    val sampling: String?,
     val system: String,
     val messages: List<PromptMessageSnapshot>,
     val worldEntries: List<WorldEntrySnapshot>,
@@ -27,6 +29,7 @@ data class WorldEntrySnapshot(
     val comment: String,
     val position: String,
     val chars: Int,
+    val content: String,
 ) {
     companion object {
         fun of(entry: WorldInfoEntry): WorldEntrySnapshot = WorldEntrySnapshot(
@@ -42,6 +45,7 @@ data class WorldEntrySnapshot(
                 else -> "position-${entry.position}"
             },
             chars = entry.content.length,
+            content = entry.content,
         )
     }
 }
@@ -51,16 +55,20 @@ object PromptDebugStore {
     val snapshot: StateFlow<PromptSnapshot?> = _snapshot.asStateFlow()
 
     fun publish(
+        conversationId: Long,
         providerName: String,
         model: String,
+        sampling: String?,
         system: String,
         messages: List<Pair<String, String>>,
         activated: List<WorldInfoEntry>,
         worldChars: Int,
     ) {
         _snapshot.value = PromptSnapshot(
+            conversationId = conversationId,
             providerName = providerName,
             model = model,
+            sampling = sampling,
             system = system,
             messages = messages.map { (role, content) -> PromptMessageSnapshot(role, content) },
             worldEntries = activated.map(WorldEntrySnapshot::of),
