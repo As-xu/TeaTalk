@@ -530,6 +530,10 @@ data class CardEdit(
     val scenario: String,
     val firstMes: String,
     val creatorNotes: String,
+    val systemPrompt: String = "",
+    val postHistoryInstructions: String = "",
+    val mesExample: String = "",
+    val alternateGreetings: List<String> = emptyList(),
 )
 
 /** 单卡超过上限时抛这个，好让上层给出本地化提示（:core 里的异常文案是中文诊断信息）。 */

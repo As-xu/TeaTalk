@@ -297,5 +297,30 @@
         <item quantity="other">角色卡内嵌（%d 条，随卡生效）</item>
     </plurals>
 
+
+    <string name="chat_menu_prompt">查看本次请求</string>
+    <string name="prompt_debug_title">本次请求</string>
+    <string name="prompt_debug_empty">本次会话还没有发出过请求</string>
+    <string name="prompt_debug_system">系统提示词</string>
+    <string name="prompt_debug_messages">消息（%1$d 条）</string>
+    <string name="prompt_debug_worldbook">世界书（%1$d 条激活 / %2$d 字符）</string>
+    <string name="prompt_debug_provider">%1$s · %2$s</string>
+    <string name="prompt_debug_copy_hint">只读快照，不落盘、不导出；可复制为 JSON</string>
+
+    <string name="edit_field_system_prompt">系统提示词（system prompt）</string>
+    <string name="edit_field_post_history">历史后指令（post-history instructions）</string>
+    <string name="edit_field_mes_example">示例对话（mes example）</string>
+    <string name="edit_field_alternate_greetings">备选开场白（每行一条）</string>
+
+    <string name="profile_preset">生成参数（ST 预设）</string>
+    <string name="profile_preset_sub">抽样参数：temperature / top_p 等</string>
+    <string name="preset_dialog_title">生成参数</string>
+    <string name="preset_dialog_hint">从 SillyTavern 预设 JSON 导入 temperature / top_p / max_tokens / 频率/存在惩罚。未导入时使用接口自身默认值。</string>
+    <string name="preset_none">未导入</string>
+    <string name="preset_import">导入 ST 预设…</string>
+    <string name="preset_clear">清除预设</string>
+    <string name="preset_imported">已导入预设</string>
+    <string name="preset_import_failed">无法识别该预设文件</string>
+    <string name="preset_cleared">已清除预设</string>
 </resources>
 

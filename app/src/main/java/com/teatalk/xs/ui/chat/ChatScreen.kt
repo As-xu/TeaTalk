@@ -97,6 +97,8 @@ import com.teatalk.xs.TeaTalkApp
 import com.teatalk.xs.data.CharacterRepository
 import com.teatalk.xs.data.DeletedConversationStore
 import com.teatalk.xs.data.MessageVariants
+import com.teatalk.xs.data.PromptDebugStore
+import com.teatalk.xs.data.PromptSnapshot
 import com.teatalk.xs.data.ChatEngine
 import com.teatalk.xs.data.UiText
 import com.teatalk.xs.data.db.CharacterEntity
@@ -538,6 +540,9 @@ fun ChatScreen(
     // 会话管理（M2 多会话）：菜单 → 新建 / 切换面板（面板内可重命名、删除）
     var menuOpen by remember { mutableStateOf(false) }
     var showConversations by remember { mutableStateOf(false) }
+    // M3 步骤 2：本次请求快照（只读面板；Store 在 Engine 里写入）
+    var showPrompt by remember { mutableStateOf(false) }
+    val promptSnapshot by PromptDebugStore.snapshot.collectAsState()
     var renameTarget by remember { mutableStateOf<ConversationEntity?>(null) }
     val deleteInfo by viewModel.deleteInfo.collectAsState()
     val deletedConversation by viewModel.deletedConversation.collectAsState()
@@ -628,6 +633,10 @@ fun ChatScreen(
                 onShowConversations = {
                     menuOpen = false
                     showConversations = true
+                },
+                onShowPrompt = {
+                    menuOpen = false
+                    showPrompt = true
                 },
             )
             Hairline()
@@ -847,6 +856,9 @@ fun ChatScreen(
                 },
             )
         }
+        if (showPrompt) {
+            PromptSheet(snapshot = promptSnapshot, onDismiss = { showPrompt = false })
+        }
         if (showConversations) {
             ConversationSheet(
                 conversations = conversations,
@@ -949,6 +961,7 @@ private fun ChatHeader(
     onMenuOpenChange: (Boolean) -> Unit,
     onNewConversation: () -> Unit,
     onShowConversations: () -> Unit,
+    onShowPrompt: () -> Unit,
 ) {
     val cs = MaterialTheme.colorScheme
     Row(
@@ -1000,6 +1013,10 @@ private fun ChatHeader(
                 DropdownMenuItem(
                     text = { Text(stringResource(R.string.chat_conversations_title)) },
                     onClick = onShowConversations,
+                )
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.chat_menu_prompt)) },
+                    onClick = onShowPrompt,
                 )
             }
         }
@@ -1280,3 +1297,149 @@ private fun UserBubble(text: String, onLongPress: (String) -> Unit = {}) {
 private fun timeOf(millis: Long): String =
     Instant.ofEpochMilli(millis).atZone(ZoneId.systemDefault())
         .format(DateTimeFormatter.ofPattern("HH:mm"))
+
+/**
+ * 本次请求面板（M3 步骤 2）：只读展示 system prompt / 消息数组 / 世界书激活情况。
+ *
+ * 为什么只放内存、只允许复制：卡正文与聊天原文属于用户私有内容，
+ * 调试需要看到它们，但导出/落盘会让「日志不记正文」的约定失效。
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun PromptSheet(snapshot: PromptSnapshot?, onDismiss: () -> Unit) {
+    val cs = MaterialTheme.colorScheme
+    val clipboard = LocalClipboardManager.current
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val scope = rememberCoroutineScope()
+    ModalBottomSheet(onDismissRequest = onDismiss) {
+        Column(
+            Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Text(
+                stringResource(R.string.prompt_debug_title),
+                fontSize = TypeScale.s17,
+                fontWeight = FontWeight.SemiBold,
+                color = cs.onSurface,
+            )
+            if (snapshot == null) {
+                Text(
+                    stringResource(R.string.prompt_debug_empty),
+                    fontSize = TypeScale.s13,
+                    color = cs.onSurfaceVariant,
+                )
+            } else {
+                Text(
+                    stringResource(R.string.prompt_debug_provider, snapshot.providerName, snapshot.model),
+                    fontSize = TypeScale.s12,
+                    color = cs.onSurfaceVariant,
+                )
+                Text(
+                    stringResource(R.string.prompt_debug_copy_hint),
+                    fontSize = TypeScale.s11,
+                    color = cs.onSurfaceVariant.copy(alpha = 0.8f),
+                )
+                Column(
+                    Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 360.dp)
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    SectionTitle(stringResource(R.string.prompt_debug_system), snapshot.system.length)
+                    Text(
+                        snapshot.system,
+                        fontSize = TypeScale.s12,
+                        lineHeight = 18.sp,
+                        color = cs.onSurface,
+                    )
+                    SectionTitle(
+                        stringResource(R.string.prompt_debug_worldbook, snapshot.worldEntries.size, snapshot.worldChars),
+                        null,
+                    )
+                    if (snapshot.worldEntries.isEmpty()) {
+                        Text("—", fontSize = TypeScale.s12, color = cs.onSurfaceVariant)
+                    } else {
+                        snapshot.worldEntries.forEach { entry ->
+                            Text(
+                                "${entry.comment} · ${entry.position} · ${entry.chars}",
+                                fontSize = TypeScale.s12,
+                                color = cs.onSurfaceVariant,
+                            )
+                        }
+                    }
+                    SectionTitle(
+                        stringResource(R.string.prompt_debug_messages, snapshot.messages.size),
+                        null,
+                    )
+                    snapshot.messages.forEachIndexed { index, message ->
+                        Text(
+                            "${index + 1}. ${message.role} · ${message.content.length}",
+                            fontSize = TypeScale.s12,
+                            color = cs.onSurfaceVariant,
+                        )
+                    }
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    TextButton(onClick = onDismiss) { Text(stringResource(R.string.close)) }
+                    TextButton(
+                        onClick = {
+                            val json = buildPromptJson(snapshot)
+                            clipboard.setText(AnnotatedString(json))
+                            scope.launch {
+                                android.widget.Toast.makeText(context, context.getString(R.string.common_copied), android.widget.Toast.LENGTH_SHORT).show()
+                            }
+                        },
+                    ) { Text(stringResource(R.string.common_copy)) }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SectionTitle(title: String, chars: Int?) {
+    val cs = MaterialTheme.colorScheme
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(title, fontSize = TypeScale.s13, fontWeight = FontWeight.SemiBold, color = cs.onSurface)
+        if (chars != null) {
+            Spacer(Modifier.width(6.dp))
+            Text("$chars chars", fontSize = TypeScale.s11, color = cs.onSurfaceVariant)
+        }
+    }
+}
+
+/** 复制用的 JSON：字段固定，避免把整张消息数组之外的东西带出去。 */
+private fun buildPromptJson(snapshot: PromptSnapshot): String {
+    fun esc(s: String): String = buildString {
+        s.forEach { c ->
+            when (c) {
+                '\\' -> append("\\\\")
+                '"' -> append("\\\"")
+                '\n' -> append("\\n")
+                '\r' -> append("\\r")
+                '\t' -> append("\\t")
+                else -> append(c)
+            }
+        }
+    }
+    val sb = StringBuilder()
+    sb.append("{\"provider\":\"").append(esc(snapshot.providerName)).append("\",")
+    sb.append("\"model\":\"").append(esc(snapshot.model)).append("\",")
+    sb.append("\"systemChars\":").append(snapshot.system.length).append(',')
+    sb.append("\"system\":\"").append(esc(snapshot.system)).append("\",")
+    sb.append("\"worldBook\":[")
+    snapshot.worldEntries.forEachIndexed { i, e ->
+        if (i > 0) sb.append(',')
+        sb.append("{\"comment\":\"").append(esc(e.comment)).append("\",\"position\":\"")
+            .append(esc(e.position)).append("\",\"chars\":").append(e.chars).append('}')
+    }
+    sb.append("],\"messages\":[")
+    snapshot.messages.forEachIndexed { i, m ->
+        if (i > 0) sb.append(',')
+        sb.append("{\"role\":\"").append(esc(m.role)).append("\",\"content\":\"")
+            .append(esc(m.content)).append("\"}")
+    }
+    sb.append("]}")
+    return sb.toString()
+}

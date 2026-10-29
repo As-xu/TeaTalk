@@ -90,6 +90,10 @@ class ChatClient(
         model: String,
         messages: List<Pair<String, String>>,
         temperature: Double = 0.8,
+        topP: Double? = null,
+        maxTokens: Int? = null,
+        frequencyPenalty: Double? = null,
+        presencePenalty: Double? = null,
     ): Flow<ChatEvent> = flow {
         val url = baseUrl.trimEnd('/') + "/chat/completions"
         val host = Redact.url(url)
@@ -98,6 +102,11 @@ class ChatClient(
             put("model", model)
             put("stream", true)
             put("temperature", temperature)
+            // 可选采样参数：null 不发送，交给服务端默认，避免把本机预设强加给所有接口。
+            topP?.let { put("top_p", it) }
+            maxTokens?.let { put("max_tokens", it) }
+            frequencyPenalty?.let { put("frequency_penalty", it) }
+            presencePenalty?.let { put("presence_penalty", it) }
             put("messages", JSONArray().apply {
                 messages.forEach { (role, content) ->
                     put(JSONObject().put("role", role).put("content", content))

@@ -82,6 +82,11 @@ class AppContainer(context: Context) {
     val chatClient: com.teatalk.xs.data.net.ChatClient by lazy { com.teatalk.xs.data.net.ChatClient() }
 
     val chatEngine: ChatEngine by lazy {
-        ChatEngine(characterRepository, providerRepository, chatClient)
+        ChatEngine(
+                characterRepository,
+                providerRepository,
+                chatClient,
+                samplingPreset = { com.teatalk.xs.data.model.SamplingPresetStore.read(appContext) },
+            )
     }
 }

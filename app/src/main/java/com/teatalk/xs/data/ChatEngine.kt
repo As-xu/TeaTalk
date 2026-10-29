@@ -4,6 +4,7 @@ import com.teatalk.core.log.TeaTalkLog
 import com.teatalk.core.worldinfo.WorldInfoEntry
 import com.teatalk.core.worldinfo.WorldInfoInjector
 import com.teatalk.xs.data.model.ProviderRepository
+import com.teatalk.xs.data.model.SamplingPreset
 import com.teatalk.xs.data.model.ActiveProvider
 import com.teatalk.xs.data.model.ProviderResolution
 import com.teatalk.xs.data.net.ChatClient
@@ -30,6 +31,8 @@ class ChatEngine(
     private val characters: CharacterRepository,
     private val providers: ProviderRepository,
     private val client: ChatClient,
+    /** M3 步骤 4：ST 预设（可选采样参数）。返回 null 表示未导入。 */
+    private val samplingPreset: () -> SamplingPreset? = { null },
 ) {
 
     /**
@@ -178,15 +181,38 @@ class ChatEngine(
             "msgs" to messages.size,
             "sysChars" to messages.first().second.length,
         )
+        // M3 步骤 2：把这次请求的可读快照放到内存里，供「查看本次请求」面板展示（不落盘、不导出）。
+        PromptDebugStore.publish(
+            providerName = provider.name,
+            model = model,
+            system = messages.first().second,
+            messages = messages.drop(1),
+            activated = activated,
+            worldChars = WorldInfoInjector.cost(activated),
+        )
 
         val builder = StringBuilder()
         var firstTokenLogged = false
+        val preset = samplingPreset()
+        TeaTalkLog.i(
+            "Prompt",
+            "sampling.preset",
+            "present" to (preset != null),
+            "temperature" to (preset?.temperature ?: provider.temperature),
+            "topP" to (preset?.topP ?: -1f),
+            "maxTokens" to (preset?.maxTokens ?: -1),
+        )
         client.stream(
             baseUrl = provider.baseUrl,
             apiKey = provider.apiKey,
             model = model,
             messages = messages,
-            temperature = provider.temperature,
+            // 预设优先于接口自带的 temperature（用户显式导入的意图更强）。
+            temperature = preset?.temperature?.toDouble() ?: provider.temperature,
+            topP = preset?.topP?.toDouble(),
+            maxTokens = preset?.maxTokens,
+            frequencyPenalty = preset?.frequencyPenalty?.toDouble(),
+            presencePenalty = preset?.presencePenalty?.toDouble(),
         ).collect { event ->
             when (event) {
                 is ChatEvent.Started -> emit(event)
@@ -250,6 +276,14 @@ class ChatEngine(
             }
             if (card.systemPrompt.isNotBlank()) {
                 append("\n\n[额外指示]\n").append(card.systemPrompt.take(MAX_SYSTEM_CHARS))
+            }
+            // ST 的 post_history_instructions：在历史之后、模型回复之前插入的指令。
+            // 这里的管线是「system + history」，所以把它并进 system 末尾，位置语义最接近。
+            if (card.postHistoryInstructions.isNotBlank()) {
+                append("\n\n[历史后指令]\n").append(card.postHistoryInstructions.take(MAX_SYSTEM_CHARS))
+            }
+            if (card.mesExample.isNotBlank()) {
+                append("\n\n[示例对话]\n").append(card.mesExample.take(MAX_SYSTEM_CHARS))
             }
             if (afterWorld.isNotEmpty()) {
                 append("\n\n[世界书·角色后]\n")

@@ -54,6 +54,10 @@ fun EditCardDialog(
     var scenario by rememberSaveable { mutableStateOf(card.scenario) }
     var firstMes by rememberSaveable { mutableStateOf(card.firstMes) }
     var creatorNotes by rememberSaveable { mutableStateOf(card.creatorNotes) }
+    var systemPrompt by rememberSaveable { mutableStateOf(card.systemPrompt) }
+    var postHistory by rememberSaveable { mutableStateOf(card.postHistoryInstructions) }
+    var mesExample by rememberSaveable { mutableStateOf(card.mesExample) }
+    var alternateGreetings by rememberSaveable { mutableStateOf(card.alternateGreetings.joinToString("\n")) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -72,6 +76,10 @@ fun EditCardDialog(
                 EditField(R.string.edit_field_scenario, scenario, minLines = 3) { scenario = it }
                 EditField(R.string.edit_field_first_mes, firstMes, minLines = 4) { firstMes = it }
                 EditField(R.string.edit_field_creator_notes, creatorNotes, minLines = 2) { creatorNotes = it }
+                EditField(R.string.edit_field_system_prompt, systemPrompt, minLines = 3) { systemPrompt = it }
+                EditField(R.string.edit_field_post_history, postHistory, minLines = 2) { postHistory = it }
+                EditField(R.string.edit_field_mes_example, mesExample, minLines = 4) { mesExample = it }
+                EditField(R.string.edit_field_alternate_greetings, alternateGreetings, minLines = 3) { alternateGreetings = it }
             }
         },
         confirmButton = {
@@ -88,6 +96,12 @@ fun EditCardDialog(
                         scenario = scenario.trim(),
                         firstMes = firstMes.trim(),
                         creatorNotes = creatorNotes.trim(),
+                        systemPrompt = systemPrompt.trim(),
+                        postHistoryInstructions = postHistory.trim(),
+                        mesExample = mesExample.trim(),
+                        alternateGreetings = alternateGreetings.split('\n')
+                            .map { it.trim() }
+                            .filter { it.isNotEmpty() },
                     ),
                 )
             }) { Text(stringResource(R.string.edit_save)) }

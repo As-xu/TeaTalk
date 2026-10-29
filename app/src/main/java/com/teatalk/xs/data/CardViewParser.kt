@@ -21,6 +21,7 @@ data class CardView(
     val creatorNotes: String = "",
     val systemPrompt: String = "",
     val postHistoryInstructions: String = "",
+    val alternateGreetings: List<String> = emptyList(),
     val worldBook: List<WorldInfoEntry> = emptyList(),
 )
 
@@ -50,6 +51,7 @@ object CardViewParser {
             creatorNotes = data.string("creator_notes"),
             systemPrompt = data.string("system_prompt"),
             postHistoryInstructions = data.string("post_history_instructions"),
+            alternateGreetings = data.stringList("alternate_greetings"),
             worldBook = WorldInfoParser.fromCard(cardJson),
         )
     }.getOrDefault(CardView())

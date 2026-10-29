@@ -1,5 +1,8 @@
 package com.teatalk.xs.ui.profile
 
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -24,6 +27,7 @@ import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.SystemUpdateAlt
 import androidx.compose.material.icons.filled.UploadFile
 import androidx.compose.material3.AlertDialog
@@ -41,12 +45,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.teatalk.xs.R
+import com.teatalk.xs.data.model.SamplingPreset
+import com.teatalk.xs.data.model.SamplingPresetStore
 import com.teatalk.xs.ui.components.Hairline
 import com.teatalk.xs.ui.theme.TypeScale
 
@@ -70,6 +77,25 @@ fun ProfileScreen(
 ) {
     val cs = MaterialTheme.colorScheme
     var showLanguageDialog by remember { mutableStateOf(false) }
+    // M3 步骤 4：ST 预设（采样参数）
+    val context = LocalContext.current
+    var preset by remember { mutableStateOf(SamplingPresetStore.read(context)) }
+    var showPresetDialog by remember { mutableStateOf(false) }
+    val importPreset = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) {
+            val raw = runCatching {
+                context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
+            }.getOrNull()
+            val parsed = raw?.let { SamplingPresetStore.parseStPreset(it) }
+            if (parsed != null) {
+                SamplingPresetStore.write(context, parsed)
+                preset = parsed
+                Toast.makeText(context, context.getString(R.string.preset_imported), Toast.LENGTH_SHORT).show()
+            } else {
+                Toast.makeText(context, context.getString(R.string.preset_import_failed), Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
     val currentLabel = stringResource(
         LANGUAGE_OPTIONS.firstOrNull { it.tag == currentLanguageTag }?.labelRes ?: R.string.language_system,
     )
@@ -127,6 +153,13 @@ fun ProfileScreen(
             SettingRow(Icons.Filled.Language, R.string.profile_language, null, { showLanguageDialog = true }, trailing = currentLabel)
             SettingRow(Icons.Filled.UploadFile, R.string.profile_import, R.string.profile_import_sub, {})
             SettingRow(Icons.Filled.MenuBook, R.string.profile_worldbook, R.string.profile_worldbook_sub, onOpenWorldBooks)
+            SettingRow(
+                Icons.Filled.Tune,
+                R.string.profile_preset,
+                null,
+                { showPresetDialog = true },
+                trailing = preset?.let { SamplingPresetStore.summary(it) } ?: stringResource(R.string.preset_none),
+            )
         }
         Spacer(Modifier.height(12.dp))
         SettingsGroup {
@@ -148,6 +181,51 @@ fun ProfileScreen(
             modifier = Modifier.fillMaxWidth(),
         )
         Spacer(Modifier.height(24.dp))
+    }
+
+    if (showPresetDialog) {
+        AlertDialog(
+            onDismissRequest = { showPresetDialog = false },
+            title = { Text(stringResource(R.string.preset_dialog_title)) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        stringResource(R.string.preset_dialog_hint),
+                        fontSize = TypeScale.s12,
+                        color = cs.onSurfaceVariant,
+                    )
+                    Text(
+                        preset?.let { SamplingPresetStore.summary(it) } ?: stringResource(R.string.preset_none),
+                        fontSize = TypeScale.s13,
+                        fontWeight = FontWeight.Medium,
+                        color = cs.onSurface,
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showPresetDialog = false
+                        importPreset.launch(arrayOf("application/json", "text/*"))
+                    },
+                ) { Text(stringResource(R.string.preset_import)) }
+            },
+            dismissButton = {
+                Row {
+                    if (preset != null) {
+                        TextButton(
+                            onClick = {
+                                SamplingPresetStore.clear(context)
+                                preset = null
+                                showPresetDialog = false
+                                Toast.makeText(context, context.getString(R.string.preset_cleared), Toast.LENGTH_SHORT).show()
+                            },
+                        ) { Text(stringResource(R.string.preset_clear), color = cs.error) }
+                    }
+                    TextButton(onClick = { showPresetDialog = false }) { Text(stringResource(R.string.close)) }
+                }
+            },
+        )
     }
 
     if (showLanguageDialog) {

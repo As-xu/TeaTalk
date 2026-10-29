@@ -292,5 +292,30 @@
         <item quantity="other">Built into card (%d entries)</item>
     </plurals>
 
+
+    <string name="chat_menu_prompt">View last request</string>
+    <string name="prompt_debug_title">Last request</string>
+    <string name="prompt_debug_empty">No request yet in this chat</string>
+    <string name="prompt_debug_system">System prompt</string>
+    <string name="prompt_debug_messages">Messages (%1$d)</string>
+    <string name="prompt_debug_worldbook">World book (%1$d active / %2$d chars)</string>
+    <string name="prompt_debug_provider">%1$s · %2$s</string>
+    <string name="prompt_debug_copy_hint">Read-only snapshot; not persisted, copy as JSON only</string>
+
+    <string name="edit_field_system_prompt">System prompt</string>
+    <string name="edit_field_post_history">Post-history instructions</string>
+    <string name="edit_field_mes_example">Example dialogue</string>
+    <string name="edit_field_alternate_greetings">Alternate greetings (one per line)</string>
+
+    <string name="profile_preset">Sampling (ST preset)</string>
+    <string name="profile_preset_sub">temperature / top_p and friends</string>
+    <string name="preset_dialog_title">Sampling</string>
+    <string name="preset_dialog_hint">Import temperature / top_p / max_tokens / frequency &amp; presence penalties from a SillyTavern preset JSON. Without a preset, the provider defaults apply.</string>
+    <string name="preset_none">Not imported</string>
+    <string name="preset_import">Import ST preset…</string>
+    <string name="preset_clear">Clear preset</string>
+    <string name="preset_imported">Preset imported</string>
+    <string name="preset_import_failed">Unrecognized preset file</string>
+    <string name="preset_cleared">Preset cleared</string>
 </resources>
 
