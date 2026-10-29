@@ -61,9 +61,7 @@
     <string name="source_charx">CHARX</string>
     <string name="source_local">Imported locally</string>
 
-    <string name="detail_world_book_entries">World book · %1$d entries</string>
-<string name="detail_world_book_summary">%1$d entries active · %2$s</string>
-<string name="detail_world_book_import">Import world books</string>
+    <string name="detail_world_book_import">Import world books</string>
 <plurals name="detail_books_bound">
     <item quantity="one">%d book bound</item>
     <item quantity="other">%d books bound</item>
@@ -83,8 +81,7 @@
     <string name="detail_field_personality">Personality</string>
     <string name="detail_field_scenario">Scenario</string>
     <string name="detail_section_notes">Creator\'s note</string>
-        <string name="detail_world_book_builtin">Built into card (%1$d entries)</string>
-    <string name="detail_world_book_library">Library (%1$s · %2$s)</string>
+            <string name="detail_world_book_library">Library (%1$s · %2$s)</string>
     <string name="detail_world_book_empty">Library is empty. Import books in Me → World books.</string>
     <plurals name="worldbook_entry_count">
     <item quantity="one">%d entry</item>
@@ -282,5 +279,18 @@
     <string name="chat_undo">Undo</string>
     <string name="chat_conversation_delete_message_count">This removes “%1$s” and its %2$d messages. This cannot be undone.</string>
     <string name="chat_conversation_deleted">Chat deleted</string>
+<plurals name="detail_world_book_entries">
+        <item quantity="one">World book · %d entry</item>
+        <item quantity="other">World book · %d entries</item>
+    </plurals>
+<plurals name="detail_world_book_summary">
+        <item quantity="one">%1$d entry in scope · %2$s</item>
+        <item quantity="other">%1$d entries in scope · %2$s</item>
+    </plurals>
+<plurals name="detail_world_book_builtin">
+        <item quantity="one">Built into card (%d entry)</item>
+        <item quantity="other">Built into card (%d entries)</item>
+    </plurals>
+
 </resources>
 

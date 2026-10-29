@@ -40,6 +40,9 @@ interface CharacterDao {
      *
      * 故意不写 `updatedAt`：绑定不是「用户对卡片内容/使用顺序」的修改，不应改变「最近」排序。
      */
+    @Query("SELECT * FROM characters")
+    suspend fun allOnce(): List<CharacterEntity>
+
     @Query("UPDATE characters SET linkedWorldBookIdsJson = :json WHERE id = :id")
     suspend fun setLinkedWorldBooks(id: Long, json: String)
 

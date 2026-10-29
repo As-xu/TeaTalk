@@ -167,6 +167,17 @@ class WorldInfoTest {
     }
 
     @Test
+    fun `单条超预算的条目不因结果为空而被放行`() {
+        val entries = listOf(
+            WorldInfoEntry(uid = 1, constant = true, order = 100, content = "X".repeat(9_000)),
+            WorldInfoEntry(uid = 2, constant = true, order = 10, content = "小条目"),
+        )
+        val engine = WorldInfoEngine(entries, charBudget = 100)
+        // 超预算那条整条跳过；后面的小条目仍可入选（比 ST 更宽松，行为已在 docs 记录）
+        assertEquals(listOf(2), engine.activated("").map { it.uid })
+    }
+
+    @Test
     fun `空内容与禁用条目不参与扫描`() {
         val engine = WorldInfoEngine(
             listOf(

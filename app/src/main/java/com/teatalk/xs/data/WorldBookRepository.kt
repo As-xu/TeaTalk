@@ -8,6 +8,8 @@ import com.teatalk.core.log.TeaTalkLog
 import com.teatalk.core.worldinfo.WorldInfoEntry
 import com.teatalk.core.worldinfo.WorldInfoParser
 import com.teatalk.xs.R
+import com.teatalk.xs.data.db.CharacterDao
+import com.teatalk.xs.data.db.ConversationDao
 import com.teatalk.xs.data.db.WorldBookDao
 import com.teatalk.xs.data.db.WorldBookEntity
 import kotlinx.coroutines.Dispatchers
@@ -30,6 +32,8 @@ sealed interface WorldBookImportOutcome {
 class WorldBookRepository(
     private val appContext: Context,
     private val dao: WorldBookDao,
+    private val characters: CharacterDao,
+    private val conversations: ConversationDao,
 ) {
 
     fun observeAll(): Flow<List<WorldBookEntity>> = dao.observeAll()
@@ -75,7 +79,25 @@ class WorldBookRepository(
 
     suspend fun delete(book: WorldBookEntity) = withContext(Dispatchers.IO) {
         dao.deleteById(book.id)
-        TeaTalkLog.i("Card", "worldbook.delete", "id" to book.id)
+        // 级联清理绑定：书没了但 id 还挂在角色/会话上时，UI 会显示「0 本书却 1 本已绑定」，
+        // 而且该 id 无法通过弹层取消（没有对应行）。这里静默摘除，且不刷新 updatedAt。
+        val id = book.id
+        var cleared = 0
+        characters.allOnce().forEach { character ->
+            val ids = WorldBookIds.parse(character.linkedWorldBookIdsJson)
+            if (id in ids) {
+                characters.setLinkedWorldBooks(character.id, WorldBookIds.encode(ids - id))
+                cleared++
+            }
+        }
+        conversations.allOnce().forEach { conversation ->
+            val ids = WorldBookIds.parse(conversation.worldBookIdsJson)
+            if (id in ids) {
+                conversations.setWorldBooksQuiet(conversation.id, WorldBookIds.encode(ids - id))
+                cleared++
+            }
+        }
+        TeaTalkLog.i("Card", "worldbook.delete", "id" to id, "clearedBindings" to cleared)
     }
 
     /** 从 SAF 的 DISPLAY_NAME 取名字，去掉 .json 后缀。 */

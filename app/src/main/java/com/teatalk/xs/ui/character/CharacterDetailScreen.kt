@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -21,12 +22,14 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -52,7 +55,12 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
@@ -65,6 +73,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import com.teatalk.xs.data.db.WorldBookEntity
 import com.teatalk.xs.data.WorldBookRepository
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.foundation.layout.heightIn
 import com.teatalk.xs.data.db.CharacterEntity
@@ -303,12 +312,18 @@ fun CharacterDetailScreen(
                         fontSize = TypeScale.s15,
                         fontWeight = FontWeight.Medium,
                         color = cs.onPrimary,
+                        maxLines = 1,
                     )
                 }
                 OutlinedPill(
-                    text = stringResource(R.string.detail_world_book_entries, view.worldBook.size + linkedEntryCount),
+                    text = pluralStringResource(
+                        R.plurals.detail_world_book_entries,
+                        view.worldBook.size + linkedEntryCount,
+                        view.worldBook.size + linkedEntryCount,
+                    ),
                     enabled = true,
                     onClick = { viewModel.openWorldBooks() },
+                    modifier = Modifier.weight(1f),
                 )
             }
         }
@@ -354,10 +369,17 @@ fun CharacterDetailScreen(
             onDismissRequest = { viewModel.cancelWorldBooks() },
             sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         ) {
-            Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 24.dp)) {
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp)
+                    .navigationBarsPadding()
+                    .padding(bottom = 24.dp),
+            ) {
                 Text(
-                    stringResource(
-                        R.string.detail_world_book_summary,
+                    pluralStringResource(
+                        R.plurals.detail_world_book_summary,
+                        view.worldBook.size + boundEntries,
                         view.worldBook.size + boundEntries,
                         pluralStringResource(R.plurals.detail_books_bound, draft.size, draft.size),
                     ),
@@ -366,14 +388,30 @@ fun CharacterDetailScreen(
                     color = cs.onSurface,
                 )
                 Spacer(Modifier.height(10.dp))
+                // 空库是「第一优先级出口」：放在滚动区之外，避免被内嵌条目挤到下面。
+                if (booksList.isEmpty()) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            stringResource(R.string.detail_world_book_empty),
+                            fontSize = TypeScale.s12,
+                            color = cs.onSurfaceVariant,
+                            modifier = Modifier.weight(1f),
+                        )
+                        TextButton(onClick = {
+                            viewModel.cancelWorldBooks()
+                            onOpenWorldBooks()
+                        }) { Text(stringResource(R.string.detail_world_book_import)) }
+                    }
+                }
+                // weight(1f, fill=false)：横屏 / 矮视口时列表让出空间，操作行始终可见。
                 LazyColumn(
-                    modifier = Modifier.fillMaxWidth().heightIn(max = 420.dp),
+                    modifier = Modifier.fillMaxWidth().weight(1f, fill = false).heightIn(max = 420.dp),
                     verticalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
                     if (view.worldBook.isNotEmpty()) {
                         item {
                             Text(
-                                stringResource(R.string.detail_world_book_builtin, view.worldBook.size),
+                                pluralStringResource(R.plurals.detail_world_book_builtin, view.worldBook.size, view.worldBook.size),
                                 fontSize = TypeScale.s12,
                                 fontWeight = FontWeight.Medium,
                                 color = cs.onSurfaceVariant,
@@ -409,43 +447,47 @@ fun CharacterDetailScreen(
                             color = cs.onSurfaceVariant,
                         )
                     }
-                    if (booksList.isEmpty()) {
-                        item {
-                            Column(Modifier.padding(vertical = 4.dp)) {
-                                Text(
-                                    stringResource(R.string.detail_world_book_empty),
-                                    fontSize = TypeScale.s12,
-                                    color = cs.onSurfaceVariant,
-                                )
-                                TextButton(onClick = {
-                                    viewModel.cancelWorldBooks()
-                                    onOpenWorldBooks()
-                                }) { Text(stringResource(R.string.detail_world_book_import)) }
-                            }
-                        }
-                    }
                     items(booksList, key = { it.id }) { book ->
-                        // 只让 Checkbox 可点：行本身不 clickable，避免 TalkBack 出现两个「可勾选」节点。
+                        val checked = book.id in draft
+                        val entryCountText = pluralStringResource(
+                            R.plurals.worldbook_entry_count,
+                            book.entryCount,
+                            book.entryCount,
+                        )
+                        // 整行可点 + 单一「复选框」语义节点（Checkbox 自身清空语义，避免 TalkBack 双节点）。
                         Row(
-                            Modifier.fillMaxWidth().padding(vertical = 2.dp),
+                            Modifier
+                                .fillMaxWidth()
+                                .toggleable(
+                                    value = checked,
+                                    role = Role.Checkbox,
+                                    onValueChange = { viewModel.toggleWorldBook(book.id) },
+                                )
+                                // 合并子节点语义：TalkBack 读「书名 + 条目数 + 勾选状态」，而不是空白复选框。
+                                .semantics(mergeDescendants = true) {
+                                    contentDescription = "${'$'}{book.name}，${'$'}entryCountText"
+                                }
+                                .padding(vertical = 2.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Checkbox(
-                                checked = book.id in draft,
-                                onCheckedChange = { viewModel.toggleWorldBook(book.id) },
+                                checked = checked,
+                                onCheckedChange = null,
                             )
                             Text(
                                 book.name,
                                 fontSize = TypeScale.s14,
                                 color = cs.onSurface,
-                                modifier = Modifier.padding(start = 4.dp),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f).padding(start = 4.dp),
                             )
-                            Spacer(Modifier.weight(1f))
                             Text(
                                 pluralStringResource(R.plurals.worldbook_entry_count, book.entryCount, book.entryCount),
                                 fontSize = TypeScale.s11,
                                 color = cs.onSurfaceVariant,
-                                modifier = Modifier.padding(end = 4.dp),
+                                maxLines = 1,
+                                modifier = Modifier.padding(start = 8.dp, end = 4.dp),
                             )
                         }
                     }
@@ -455,7 +497,8 @@ fun CharacterDetailScreen(
                     TextButton(onClick = { viewModel.cancelWorldBooks() }) {
                         Text(stringResource(R.string.cancel))
                     }
-                    TextButton(
+                    Spacer(Modifier.width(8.dp))
+                    Button(
                         onClick = { viewModel.saveWorldBooks() },
                         enabled = dirty,
                     ) { Text(stringResource(R.string.edit_save)) }
@@ -494,10 +537,15 @@ private fun HeroIconButton(onClick: () -> Unit, content: @Composable () -> Unit)
 }
 
 @Composable
-private fun OutlinedPill(text: String, enabled: Boolean, onClick: () -> Unit) {
+private fun OutlinedPill(
+    text: String,
+    enabled: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     val cs = MaterialTheme.colorScheme
     Box(
-        Modifier
+        modifier
             .height(46.dp)
             .clip(RoundedCornerShape(23.dp))
             .border(1.dp, cs.outline, RoundedCornerShape(23.dp))
@@ -509,6 +557,8 @@ private fun OutlinedPill(text: String, enabled: Boolean, onClick: () -> Unit) {
             text,
             fontSize = TypeScale.s14,
             color = if (enabled) cs.onSurfaceVariant else cs.onSurfaceVariant.copy(alpha = 0.45f),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
         )
     }
 }

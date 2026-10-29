@@ -213,7 +213,9 @@ class WorldInfoEngine(entries: List<WorldInfoEntry>, private val charBudget: Int
         for (entry in active) {
             if (!matches(entry, text)) continue
             val cost = entry.content.length + 2
-            if (result.isNotEmpty() && used + cost > charBudget) continue
+            // 单条就超预算：整条跳过，不因「结果还为空」而放行（审阅 round 2 P1）。
+            if (cost > charBudget) continue
+            if (used + cost > charBudget) continue
             result += entry
             used += cost
         }

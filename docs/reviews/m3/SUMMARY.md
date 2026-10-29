@@ -34,3 +34,22 @@
 
 - 旧文档里的「顶部显示 `World book 7`」截图拍摄于计数口径修改前，**不能作为 7 条的证据**；本轮重拍为 `World book · 7 entries` + 对话框 `7 entries active · 1 book bound`。
 - 旧文档「sysChars ≈1200（无世界书）」是按 4 条卡内嵌估算的值，按 7 条实测为 6174 字符，已在 `docs/10` 更正。
+
+
+## 复核（0.8.1 → 0.8.2）
+
+专家复核 0.8.1 后给出的 P0/P1 已在本轮修复，状态更新如下：
+
+| 项 | 结论 | 状态 |
+| --- | --- | --- |
+| 跨书去重吞书 | 去重键 `(sourceId, uid)` | ✅ 已修（0.8.2） |
+| 条目级预算缺失 | 按字符裁剪 | ✅ 已修 |
+| 日志口径不一致 | entries/chars/unsupported/bound 对齐 | ✅ 已修 |
+| v8 迁移无测试 | 迁移 8 单测 + schema 副本 | ✅ 已补 |
+| 删除世界书留悬空绑定 | 级联清理 | ✅ 已修 |
+| 横屏弹层按钮不可达 | 三段式 + weight 限制 | ✅ 已修 |
+| 计数文案歧义 | `entries in scope · books bound` | ✅ 已改 |
+| 空库 CTA 藏在列表下 | 移到列表前 | ✅ 已改 |
+| 行 a11y 空白复选框 | 整行 toggleable + 合并语义 | ✅ 已改（desc 仍待 dump 复核） |
+| 1.3× 下 CTA 裁切 | weight + maxLines=1 | ✅ 已修 |
+| `1 chats` plurals | 补 one | ✅ 已修（0.8.1 补丁） |

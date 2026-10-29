@@ -67,9 +67,7 @@
     <string name="source_local">本地导入</string>
 
     <!-- 角色详情 -->
-    <string name="detail_world_book_entries">世界书 · %1$d 条</string>
-<string name="detail_world_book_summary">生效 %1$d 条 · %2$s</string>
-<string name="detail_world_book_import">去导入世界书</string>
+    <string name="detail_world_book_import">去导入世界书</string>
 <plurals name="detail_books_bound">
     <item quantity="other">已绑定 %d 本</item>
 </plurals>
@@ -86,8 +84,7 @@
     <string name="detail_field_personality">性格</string>
     <string name="detail_field_scenario">场景</string>
     <string name="detail_section_notes">创作者注释</string>
-        <string name="detail_world_book_builtin">角色卡内嵌（%1$d 条，随卡生效）</string>
-    <string name="detail_world_book_library">世界书库（%1$s · %2$s）</string>
+            <string name="detail_world_book_library">世界书库（%1$s · %2$s）</string>
     <string name="detail_world_book_empty">世界书库还是空的，先到「我的 → 世界书」导入。</string>
     <plurals name="worldbook_entry_count">
     <item quantity="other">%d 条</item>
@@ -287,5 +284,18 @@
     <string name="chat_undo">撤销</string>
     <string name="chat_conversation_delete_message_count">将删除「%1$s」及其 %2$d 条消息，无法恢复。</string>
     <string name="chat_conversation_deleted">已删除会话</string>
+<plurals name="detail_world_book_entries">
+        <item quantity="one">世界书 · %d 条</item>
+        <item quantity="other">世界书 · %d 条</item>
+    </plurals>
+<plurals name="detail_world_book_summary">
+        <item quantity="one">范围内 %1$d 条 · %2$s</item>
+        <item quantity="other">范围内 %1$d 条 · %2$s</item>
+    </plurals>
+<plurals name="detail_world_book_builtin">
+        <item quantity="one">角色卡内嵌（%d 条，随卡生效）</item>
+        <item quantity="other">角色卡内嵌（%d 条，随卡生效）</item>
+    </plurals>
+
 </resources>
 

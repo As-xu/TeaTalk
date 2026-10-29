@@ -150,12 +150,14 @@ class CharacterRepository(
     }
 
     /** 按 id 批量取世界书条目（保留传入顺序，忽略已删除的书）。 */
-    suspend fun worldBookEntries(ids: List<Long>): List<WorldInfoEntry> = withContext(Dispatchers.IO) {
+    suspend fun worldBookEntries(ids: List<Long>): List<SourcedWorldInfoEntry> = withContext(Dispatchers.IO) {
         if (ids.isEmpty()) return@withContext emptyList()
-        val books = worldBookDao.findMany(ids)
-        val byId = books.associateBy { it.id }
-        ids.mapNotNull { byId[it] }
-            .flatMap { WorldInfoParser.fromStandalone(it.entriesJson) }
+        val byId = worldBookDao.findMany(ids).associateBy { it.id }
+        // 顺序跟随 ids；来自已删除书的 id 直接跳过（读路径宽容），并保留每本书的 id 作为来源。
+        ids.flatMap { id ->
+            val book = byId[id] ?: return@flatMap emptyList()
+            WorldInfoParser.fromStandalone(book.entriesJson).map { SourcedWorldInfoEntry(id, it) }
+        }
     }
 
     /** 删除一段会话：先删消息，再删会话行（角色保留）。 */

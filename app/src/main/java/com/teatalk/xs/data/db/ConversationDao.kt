@@ -37,6 +37,13 @@ interface ConversationDao {
     suspend fun touch(id: Long, at: Long)
 
     /** M3：会话级世界书覆盖；null 表示继承角色绑定。 */
+    @Query("SELECT * FROM conversations")
+    suspend fun allOnce(): List<ConversationEntity>
+
+    /** 级联清理绑定：不触碰 updatedAt，避免把会话顶到列表最前。 */
+    @Query("UPDATE conversations SET worldBookIdsJson = :json WHERE id = :id")
+    suspend fun setWorldBooksQuiet(id: Long, json: String?)
+
     @Query("UPDATE conversations SET worldBookIdsJson = :json, updatedAt = :at WHERE id = :id")
     suspend fun setWorldBooks(id: Long, json: String?, at: Long)
 

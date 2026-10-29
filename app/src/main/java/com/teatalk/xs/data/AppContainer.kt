@@ -66,7 +66,7 @@ class AppContainer(context: Context) {
     }
 
     val worldBookRepository: WorldBookRepository by lazy {
-        WorldBookRepository(appContext, database.worldBookDao())
+        WorldBookRepository(appContext, database.worldBookDao(), database.characterDao(), database.conversationDao())
     }
 
     val appPrefs: AppPrefs by lazy { AppPrefs(appContext) }

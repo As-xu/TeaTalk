@@ -20,3 +20,7 @@ secrets/
 
 # 临时取证/度量脚本（不进版本库）
 .tools/
+
+# 本地 Gradle 缓存（不随仓库分发）
+.gradle-home/
+.tmp/

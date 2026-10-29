@@ -140,11 +140,10 @@ class ChatEngine(
         // M3：世界书注入。角色卡内嵌 + 角色默认绑定 + 会话覆盖三层合并；同 uid 以内嵌为准。
         val boundIds = characters.effectiveWorldBookIds(character.id, conversationId)
         val externalEntries = characters.worldBookEntries(boundIds)
-        // uid 只是「书内」命名空间（卡内嵌与每本库书都从 0/1 起），不能跨源当身份用。
-        // 策略：源内按 (uid, comment) 去重；跨源按 content 去重（同一段文本只注入一次）。
-        val cardEntries = card.worldBook.distinctBy { it.uid to it.comment.trim() }
-        val libraryEntries = externalEntries.distinctBy { it.uid to it.comment.trim() }
-        val allEntries = (cardEntries + libraryEntries).distinctBy { it.content.trim() }
+        // uid 只是「书内」命名空间（卡内嵌与每本库书都从 0/1 起）。
+        // 身份 = (sourceId, uid, comment)：不同来源的同 uid 条目都保留；跨源不做 content 去重
+        // （那会杀掉「唯一命中关键词」的那条，见审阅 round 2 P1）。
+        val allEntries = WorldBookMerger.merge(card.worldBook, externalEntries)
         // 扫描文本：本次用户消息 + 最近两条，兼顾 ST 的「最近 N 条」默认行为。
         val scanText = history.takeLast(3).joinToString("\n") { it.content }
         val activated = withContext(Dispatchers.Default) {
