@@ -1,6 +1,7 @@
 # M3 步骤 2/3/4 审阅（对象：0.9.0 / 436b771）
 
-四份原文：`01-software-architect.md`、`02-ux-architect.md`（ux.md）、`03-ui-designer.md`（ui.md）、`04-reality-checker.md`。
+原件：`ux.md`（UX Architect）、`ui.md`（UI Designer）由专家直接写入仓库；
+Software Architect 与 Reality Checker 的结论以本次会话交付为准（未落文件），要点见下表。
 
 ## 已修（0.9.1）
 
