@@ -33,6 +33,7 @@
     <string name="chatlist_search_hint">搜索角色 / 会话</string>
     <string name="chatlist_section_title">会话</string>
     <plurals name="chatlist_waiting">
+        <item quantity="one">%d 个会话</item>
         <item quantity="other">%d 个会话</item>
     </plurals>
     <string name="chatlist_last_placeholder">还没有消息，点开聊一句吧</string>

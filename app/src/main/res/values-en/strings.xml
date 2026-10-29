@@ -29,6 +29,7 @@
     <string name="chatlist_search_hint">Search characters / chats</string>
     <string name="chatlist_section_title">Chats</string>
     <plurals name="chatlist_waiting">
+        <item quantity="one">%d chat</item>
         <item quantity="other">%d chats</item>
     </plurals>
     <string name="chatlist_last_placeholder">No messages yet — say hi</string>
