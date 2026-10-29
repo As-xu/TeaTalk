@@ -30,6 +30,12 @@ data class CharacterEntity(
     val pinned: Boolean = false,
     /** 最近改动时间（编辑、收藏、置顶都会刷新，用于「最近」排序）。 */
     val updatedAt: Long = 0L,
+    /**
+     * M3：角色默认绑定的世界书 id（JSON 数组字符串）。
+     * 会话上未覆盖时使用；`[]` 表示该角色默认不启用任何世界书。
+     */
+    @ColumnInfo(defaultValue = "[]")
+    val linkedWorldBookIdsJson: String = "[]",
 )
 
 /**

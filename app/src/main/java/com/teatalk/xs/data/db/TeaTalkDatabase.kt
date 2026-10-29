@@ -14,7 +14,7 @@ import com.teatalk.core.log.TeaTalkLog
         ModelProviderEntity::class,
         ConversationEntity::class,
     ],
-    version = 7,
+    version = 8,
     exportSchema = true,
 )
 abstract class TeaTalkDatabase : RoomDatabase() {
@@ -24,7 +24,7 @@ abstract class TeaTalkDatabase : RoomDatabase() {
     abstract fun conversationDao(): ConversationDao
 
     companion object {
-        const val VERSION = 7
+        const val VERSION = 8
 
         /**
          * v1（M0）→ v2（D6 卡库）：
@@ -163,6 +163,22 @@ abstract class TeaTalkDatabase : RoomDatabase() {
                     """.trimIndent(),
                 )
                 TeaTalkLog.i("Db", "db.migrate", "from" to 6, "to" to 7, "ms" to (System.currentTimeMillis() - started))
+            }
+        }
+
+        /**
+         * v7（多会话）→ v8（M3 世界书绑定）：
+         * - `characters` 增加 `linkedWorldBookIdsJson`（角色默认绑定的世界书 id 数组，默认 `[]`）
+         * - `conversations` 增加 `worldBookIdsJson`（会话级覆盖；NULL = 继承角色）
+         *
+         * 纯增量列，不改旧数据；已有会话的 NULL 表示继续继承，行为与 v7 完全一致。
+         */
+        val MIGRATION_7_8 = object : Migration(7, 8) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                val started = System.currentTimeMillis()
+                db.execSQL("ALTER TABLE characters ADD COLUMN linkedWorldBookIdsJson TEXT NOT NULL DEFAULT '[]'")
+                db.execSQL("ALTER TABLE conversations ADD COLUMN worldBookIdsJson TEXT")
+                TeaTalkLog.i("Db", "db.migrate", "from" to 7, "to" to 8, "ms" to (System.currentTimeMillis() - started))
             }
         }
 

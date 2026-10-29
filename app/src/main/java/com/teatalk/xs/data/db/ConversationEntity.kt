@@ -21,6 +21,11 @@ data class ConversationEntity(
     val characterId: Long,
     /** 会话标题；为空时 UI 回退到角色名。 */
     val title: String = "",
+    /**
+     * M3：会话级世界书覆盖（JSON 数组字符串）。
+     * null = 继承角色默认绑定；`[]` = 显式不启用；`[1,2]` = 只用这两本。
+     */
+    val worldBookIdsJson: String? = null,
     val createdAt: Long = 0L,
     val updatedAt: Long = 0L,
 )

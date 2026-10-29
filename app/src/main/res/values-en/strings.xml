@@ -67,7 +67,11 @@
     <string name="detail_field_personality">Personality</string>
     <string name="detail_field_scenario">Scenario</string>
     <string name="detail_section_notes">Creator\'s note</string>
-    <string name="detail_world_book_dialog">World book (%1$d entries)</string>
+        <string name="detail_world_book_builtin">Built into card (%1$d entries)</string>
+    <string name="detail_world_book_library">World book library (%1$d books; check to bind)</string>
+    <string name="detail_world_book_empty">Library is empty. Import books in Me → World books.</string>
+    <string name="detail_world_book_count">%1$d entries</string>
+<string name="detail_world_book_dialog">World book (%1$d entries)</string>
     <string name="detail_delete_character">Delete character</string>
     <string name="detail_start_chat">Start chat</string>
     <string name="list_separator">", "</string>

@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -52,6 +53,13 @@ import com.teatalk.xs.TeaTalkApp
 import com.teatalk.xs.data.CardView
 import com.teatalk.xs.data.CardViewParser
 import com.teatalk.xs.data.CharacterRepository
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import com.teatalk.xs.data.db.WorldBookEntity
+import com.teatalk.xs.data.WorldBookRepository
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Checkbox
+import androidx.compose.foundation.layout.heightIn
 import com.teatalk.xs.data.db.CharacterEntity
 import com.teatalk.xs.ui.components.PillTag
 import java.io.File
@@ -75,6 +83,7 @@ data class CharacterDetailState(
 
 class CharacterDetailViewModel(
     private val repository: CharacterRepository,
+    private val worldBookRepository: WorldBookRepository,
     private val characterId: Long,
 ) : ViewModel() {
 
@@ -88,6 +97,33 @@ class CharacterDetailViewModel(
         .flowOn(Dispatchers.Default) // 大卡 JSON 解析别占用主线程
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), CharacterDetailState())
 
+    /** 世界书库（详情页绑定对话框的数据源）。 */
+    val books: StateFlow<List<WorldBookEntity>?> = worldBookRepository.observeAll()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    /** 角色默认绑定的世界书 id（会话未覆盖时生效）。 */
+    private val _linkedWorldBookIds = MutableStateFlow<Set<Long>>(emptySet())
+    val linkedWorldBookIds: StateFlow<Set<Long>> = _linkedWorldBookIds
+
+    init {
+        viewModelScope.launch {
+            _linkedWorldBookIds.value = repository.linkedWorldBookIds(characterId).toSet()
+        }
+    }
+
+    fun toggleWorldBook(id: Long) {
+        val current = _linkedWorldBookIds.value
+        _linkedWorldBookIds.value = if (id in current) current - id else current + id
+    }
+
+    fun saveWorldBooks(onSaved: () -> Unit = {}) {
+        val ids = _linkedWorldBookIds.value.sorted()
+        viewModelScope.launch {
+            repository.setCharacterWorldBooks(characterId, ids)
+            onSaved()
+        }
+    }
+
     /** 删除角色（连同聊天记录），成功后回调让页面退出。 */
     fun delete(onDeleted: () -> Unit) {
         val character = state.value.character ?: return
@@ -99,7 +135,7 @@ class CharacterDetailViewModel(
 
     companion object {
         fun factory(app: TeaTalkApp, characterId: Long): ViewModelProvider.Factory = viewModelFactory {
-            initializer { CharacterDetailViewModel(app.container.characterRepository, characterId) }
+            initializer { CharacterDetailViewModel(app.container.characterRepository, app.container.worldBookRepository, characterId) }
         }
     }
 }
@@ -113,6 +149,10 @@ fun CharacterDetailScreen(
     onStartChat: () -> Unit,
 ) {
     val state by viewModel.state.collectAsState()
+    val books by viewModel.books.collectAsState()
+    val linkedIds by viewModel.linkedWorldBookIds.collectAsState()
+    // 展示的是「生效条目数」：卡内嵌 + 已绑定世界书的条目数之和。
+    val linkedEntryCount = books.orEmpty().filter { it.id in linkedIds }.sumOf { it.entryCount }
     var showWorldBook by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
     val character = state.character
@@ -224,8 +264,8 @@ fun CharacterDetailScreen(
                     )
                 }
                 OutlinedPill(
-                    text = stringResource(R.string.detail_world_book, view.worldBook.size),
-                    enabled = view.worldBook.isNotEmpty(),
+                    text = stringResource(R.string.detail_world_book, view.worldBook.size + linkedEntryCount),
+                    enabled = true,
                     onClick = { showWorldBook = true },
                 )
             }
@@ -258,36 +298,94 @@ fun CharacterDetailScreen(
     }
 
     if (showWorldBook) {
+        val booksList = books.orEmpty()
         AlertDialog(
             onDismissRequest = { showWorldBook = false },
-            title = { Text(stringResource(R.string.detail_world_book_dialog, view.worldBook.size)) },
+            title = {
+                Text(stringResource(R.string.detail_world_book_dialog, view.worldBook.size + linkedIds.size))
+            },
             text = {
-                LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    itemsIndexed(view.worldBook) { _, entry ->
-                        Column {
+                LazyColumn(
+                    modifier = Modifier.heightIn(max = 420.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    if (view.worldBook.isNotEmpty()) {
+                        item {
                             Text(
-                                entry.comment.ifBlank { entry.keys.joinToString("、") },
-                                fontSize = TypeScale.s13,
+                                stringResource(R.string.detail_world_book_builtin, view.worldBook.size),
+                                fontSize = TypeScale.s12,
                                 fontWeight = FontWeight.Medium,
-                                color = cs.onSurface,
+                                color = cs.onSurfaceVariant,
                             )
-                            if (entry.keys.isNotEmpty()) {
+                        }
+                        itemsIndexed(view.worldBook) { _, entry ->
+                            Column(Modifier.padding(start = 12.dp, bottom = 4.dp)) {
                                 Text(
-                                    entry.keys.joinToString("、"),
+                                    entry.comment.ifBlank { entry.keys.joinToString("、") },
+                                    fontSize = TypeScale.s13,
+                                    color = cs.onSurface,
+                                )
+                                if (entry.content.isNotBlank()) {
+                                    Text(
+                                        entry.content.take(80),
+                                        fontSize = TypeScale.s11,
+                                        color = cs.onSurfaceVariant,
+                                    )
+                                }
+                            }
+                        }
+                        item { Spacer(Modifier.height(8.dp)) }
+                    }
+                    item {
+                        Text(
+                            stringResource(R.string.detail_world_book_library, booksList.size),
+                            fontSize = TypeScale.s12,
+                            fontWeight = FontWeight.Medium,
+                            color = cs.onSurfaceVariant,
+                        )
+                    }
+                    if (booksList.isEmpty()) {
+                        item {
+                            Text(
+                                stringResource(R.string.detail_world_book_empty),
+                                fontSize = TypeScale.s12,
+                                color = cs.onSurfaceVariant,
+                            )
+                        }
+                    }
+                    items(booksList, key = { it.id }) { book ->
+                        Row(
+                            Modifier
+                                .fillMaxWidth()
+                                .clickable { viewModel.toggleWorldBook(book.id) }
+                                .padding(vertical = 2.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Checkbox(
+                                checked = book.id in linkedIds,
+                                onCheckedChange = { viewModel.toggleWorldBook(book.id) },
+                            )
+                            Column(Modifier.padding(start = 4.dp)) {
+                                Text(book.name, fontSize = TypeScale.s14, color = cs.onSurface)
+                                Text(
+                                    stringResource(R.string.detail_world_book_count, book.entryCount),
                                     fontSize = TypeScale.s11,
                                     color = cs.onSurfaceVariant,
                                 )
                             }
-                            Text(
-                                entry.content.take(120),
-                                fontSize = TypeScale.s12,
-                                color = cs.onSurfaceVariant.copy(alpha = 0.9f),
-                            )
                         }
                     }
                 }
             },
-            confirmButton = { TextButton(onClick = { showWorldBook = false }) { Text(stringResource(R.string.close)) } },
+            confirmButton = {
+                TextButton(onClick = {
+                    showWorldBook = false
+                    viewModel.saveWorldBooks()
+                }) { Text(stringResource(R.string.edit_save)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showWorldBook = false }) { Text(stringResource(R.string.cancel)) }
+            },
         )
     }
 

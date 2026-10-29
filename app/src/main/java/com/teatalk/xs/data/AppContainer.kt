@@ -53,6 +53,7 @@ class AppContainer(context: Context) {
                 TeaTalkDatabase.MIGRATION_4_5,
                 TeaTalkDatabase.MIGRATION_5_6,
                 TeaTalkDatabase.MIGRATION_6_7,
+                TeaTalkDatabase.MIGRATION_7_8,
             )
             .build()
             .also {
@@ -61,7 +62,7 @@ class AppContainer(context: Context) {
     }
 
     val characterRepository: CharacterRepository by lazy {
-        CharacterRepository(appContext, database.characterDao(), database.conversationDao())
+        CharacterRepository(appContext, database.characterDao(), database.conversationDao(), database.worldBookDao())
     }
 
     val worldBookRepository: WorldBookRepository by lazy {

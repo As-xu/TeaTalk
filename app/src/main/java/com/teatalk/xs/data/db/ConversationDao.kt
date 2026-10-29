@@ -36,6 +36,10 @@ interface ConversationDao {
     @Query("UPDATE conversations SET updatedAt = :at WHERE id = :id")
     suspend fun touch(id: Long, at: Long)
 
+    /** M3：会话级世界书覆盖；null 表示继承角色绑定。 */
+    @Query("UPDATE conversations SET worldBookIdsJson = :json, updatedAt = :at WHERE id = :id")
+    suspend fun setWorldBooks(id: Long, json: String?, at: Long)
+
     @Query("DELETE FROM conversations WHERE id = :id")
     suspend fun deleteById(id: Long)
 

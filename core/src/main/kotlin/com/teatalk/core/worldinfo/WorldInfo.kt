@@ -65,6 +65,12 @@ object WorldInfoParser {
         if (book != null) parseCharacterBook(book) else parseWorldInfoFile(root)
     }.getOrDefault(emptyList())
 
+    /** 独立世界书文件（ST 世界书 JSON：`{entries:{…}}` 或根数组）——D6 导入的 `world_books.entriesJson` 走这里。 */
+    fun fromStandalone(json: String): List<WorldInfoEntry> = runCatching {
+        val root = this.json.parseToJsonElement(json) as? JsonObject ?: return@runCatching emptyList()
+        parseWorldInfoFile(root)
+    }.getOrDefault(emptyList())
+
     /** V2 角色卡内嵌世界书（`isCard=true`：ST 导出默认 selective=false）。 */
     fun parseCharacterBook(book: JsonObject): List<WorldInfoEntry> =
         entriesOf(book["entries"]).mapIndexed { index, (key, entry) ->

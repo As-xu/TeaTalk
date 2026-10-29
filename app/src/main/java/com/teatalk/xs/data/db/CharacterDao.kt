@@ -35,6 +35,10 @@ interface CharacterDao {
     @Query("UPDATE characters SET pinned = :pinned, updatedAt = :updatedAt WHERE id = :id")
     suspend fun setPinned(id: Long, pinned: Boolean, updatedAt: Long)
 
+    /** M3：角色默认世界书绑定（JSON 数组字符串）。 */
+    @Query("UPDATE characters SET linkedWorldBookIdsJson = :json, updatedAt = :at WHERE id = :id")
+    suspend fun setLinkedWorldBooks(id: Long, json: String, at: Long)
+
     /** 编辑保存：只覆盖 name/tags/firstMes/cardJson 四个列，头像与来源不变。 */
     @Query(
         """

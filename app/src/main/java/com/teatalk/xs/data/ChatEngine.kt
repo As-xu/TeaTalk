@@ -1,6 +1,8 @@
 package com.teatalk.xs.data
 
 import com.teatalk.core.log.TeaTalkLog
+import com.teatalk.core.worldinfo.WorldInfoEntry
+import com.teatalk.core.worldinfo.WorldInfoInjector
 import com.teatalk.xs.data.model.ProviderRepository
 import com.teatalk.xs.data.model.ActiveProvider
 import com.teatalk.xs.data.model.ProviderResolution
@@ -135,15 +137,37 @@ class ChatEngine(
             .let { list ->
                 if (excludeLastAssistant && list.lastOrNull()?.role == ROLE_ASSISTANT) list.dropLast(1) else list
             }
+        // M3：世界书注入。角色卡内嵌 + 角色默认绑定 + 会话覆盖三层合并；同 uid 以内嵌为准。
+        val boundIds = characters.effectiveWorldBookIds(character.id, conversationId)
+        val externalEntries = characters.worldBookEntries(boundIds)
+        val allEntries = (card.worldBook + externalEntries).distinctBy { it.uid to it.comment }
+        // 扫描文本：本次用户消息 + 最近两条，兼顾 ST 的「最近 N 条」默认行为。
+        val scanText = history.takeLast(3).joinToString("\n") { it.content }
+        val activated = withContext(Dispatchers.Default) {
+            WorldInfoInjector.select(allEntries, scanText)
+        }
+        val beforeWorld = WorldInfoInjector.beforeCharacter(activated)
+        val afterWorld = WorldInfoInjector.afterCharacter(activated)
+        val historyInsertions = WorldInfoInjector.historyInsertions(activated)
+
         val messages = withContext(Dispatchers.Default) {
             buildList {
-                add(ROLE_SYSTEM to systemPrompt(card, character.name))
-                history.forEach { message ->
+                add(ROLE_SYSTEM to systemPrompt(card, character.name, beforeWorld, afterWorld))
+                val base = history.map { message ->
                     val role = if (message.role == ROLE_USER) ROLE_USER else ROLE_ASSISTANT
-                    add(role to message.content)
+                    role to message.content
                 }
+                addAll(WorldInfoInjector.injectHistory(base, historyInsertions))
             }
         }
+        TeaTalkLog.i(
+            "Prompt",
+            "worldbook.inject",
+            "entries" to allEntries.size,
+            "activated" to activated.size,
+            "chars" to WorldInfoInjector.cost(activated),
+            "bound" to boundIds.size,
+        )
         TeaTalkLog.i(
             "Chat",
             "prompt.ready",
@@ -191,10 +215,25 @@ class ChatEngine(
         }
     }
 
-    /** 角色扮演的最小 system prompt；超出预算先截断描述（M2 再做真正的 token 预算）。 */
-    private fun systemPrompt(card: CardView, fallbackName: String): String {
+    /**
+     * 角色扮演的 system prompt。
+     *
+     * 世界书分两段：`beforeWorld` 拼在角色设定之前（ST position=0），
+     * `afterWorld` 拼在角色设定之后（ST position=1）。超出预算按段截断。
+     */
+    private fun systemPrompt(
+        card: CardView,
+        fallbackName: String,
+        beforeWorld: List<WorldInfoEntry> = emptyList(),
+        afterWorld: List<WorldInfoEntry> = emptyList(),
+    ): String {
         val name = card.name.ifBlank { fallbackName }
         return buildString {
+            if (beforeWorld.isNotEmpty()) {
+                append("[世界书·角色前]\n")
+                append(WorldInfoInjector.block(beforeWorld).take(MAX_SYSTEM_CHARS))
+                append("\n\n")
+            }
             append("你正在扮演「").append(name).append("」。")
             if (card.description.isNotBlank()) {
                 append("\n\n[设定]\n").append(card.description.take(MAX_SYSTEM_CHARS))
@@ -207,6 +246,10 @@ class ChatEngine(
             }
             if (card.systemPrompt.isNotBlank()) {
                 append("\n\n[额外指示]\n").append(card.systemPrompt.take(MAX_SYSTEM_CHARS))
+            }
+            if (afterWorld.isNotEmpty()) {
+                append("\n\n[世界书·角色后]\n")
+                append(WorldInfoInjector.block(afterWorld).take(MAX_SYSTEM_CHARS))
             }
             append("\n\n要求：始终以该角色第一人称回应，保持语气与人格，不要跳出角色、不要解释设定或输出分析过程。")
         }

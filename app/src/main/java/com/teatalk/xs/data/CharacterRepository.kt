@@ -9,12 +9,15 @@ import com.teatalk.core.card.CardParser
 import com.teatalk.core.card.PngTextReader
 import com.teatalk.core.log.Redact
 import com.teatalk.core.log.TeaTalkLog
+import com.teatalk.core.worldinfo.WorldInfoEntry
+import com.teatalk.core.worldinfo.WorldInfoParser
 import com.teatalk.xs.data.db.CharacterDao
 import com.teatalk.xs.data.db.CharacterEntity
 import com.teatalk.xs.data.db.ConversationDao
 import com.teatalk.xs.data.db.ConversationEntity
 import com.teatalk.xs.data.db.ConversationWithLastMessage
 import com.teatalk.xs.data.db.MessageEntity
+import com.teatalk.xs.data.db.WorldBookDao
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.sync.Mutex
@@ -44,6 +47,7 @@ class CharacterRepository(
     private val appContext: Context,
     private val dao: CharacterDao,
     private val conversations: ConversationDao,
+    private val worldBookDao: WorldBookDao,
 ) {
 
     /**
@@ -110,6 +114,56 @@ class CharacterRepository(
 
     suspend fun renameConversation(conversationId: Long, title: String) = withContext(Dispatchers.IO) {
         conversations.rename(conversationId, title.trim(), System.currentTimeMillis())
+    }
+
+    // ---------------- M3：世界书绑定（角色默认 + 会话覆盖） ----------------
+
+    /** 角色默认绑定的世界书 id。 */
+    suspend fun linkedWorldBookIds(characterId: Long): List<Long> = withContext(Dispatchers.IO) {
+        val character = dao.find(characterId) ?: return@withContext emptyList()
+        parseIds(character.linkedWorldBookIdsJson)
+    }
+
+    /**
+     * 会话级覆盖；`null` 表示继承角色，`[]` 表示显式不启用。
+     */
+    suspend fun conversationWorldBookOverride(conversationId: Long): List<Long>? = withContext(Dispatchers.IO) {
+        val conversation = conversations.find(conversationId) ?: return@withContext null
+        conversation.worldBookIdsJson?.let { parseIds(it) }
+    }
+
+    /** 实际生效的世界书 id：会话覆盖优先，否则角色默认。 */
+    suspend fun effectiveWorldBookIds(characterId: Long, conversationId: Long?): List<Long> =
+        withContext(Dispatchers.IO) {
+            if (conversationId != null) {
+                val override = conversations.find(conversationId)?.worldBookIdsJson
+                if (override != null) return@withContext parseIds(override)
+            }
+            val character = dao.find(characterId) ?: return@withContext emptyList()
+            parseIds(character.linkedWorldBookIdsJson)
+        }
+
+    suspend fun setCharacterWorldBooks(characterId: Long, ids: List<Long>) = withContext(Dispatchers.IO) {
+        dao.setLinkedWorldBooks(characterId, encodeIds(ids), System.currentTimeMillis())
+        TeaTalkLog.i("Prompt", "worldbook.bind", "scope" to "character", "count" to ids.size)
+    }
+
+    /** `ids = null` 恢复继承角色默认。 */
+    suspend fun setConversationWorldBooks(conversationId: Long, ids: List<Long>?) = withContext(Dispatchers.IO) {
+        conversations.setWorldBooks(conversationId, ids?.let { encodeIds(it) }, System.currentTimeMillis())
+        TeaTalkLog.i(
+            "Prompt", "worldbook.bind",
+            "scope" to "conversation", "count" to (ids?.size ?: -1),
+        )
+    }
+
+    /** 按 id 批量取世界书条目（保留传入顺序，忽略已删除的书）。 */
+    suspend fun worldBookEntries(ids: List<Long>): List<WorldInfoEntry> = withContext(Dispatchers.IO) {
+        if (ids.isEmpty()) return@withContext emptyList()
+        val books = worldBookDao.findMany(ids)
+        val byId = books.associateBy { it.id }
+        ids.mapNotNull { byId[it] }
+            .flatMap { WorldInfoParser.fromStandalone(it.entriesJson) }
     }
 
     /** 删除一段会话：先删消息，再删会话行（角色保留）。 */
@@ -466,7 +520,16 @@ class CharacterRepository(
         const val ROLE_USER = "user"
         const val ROLE_ASSISTANT = "assistant"
     }
+
+    private fun encodeIds(ids: List<Long>): String =
+        ids.distinct().sorted().joinToString(prefix = "[", postfix = "]", separator = ",")
+
+    private fun parseIds(json: String?): List<Long> = runCatching {
+        val array = Json.parseToJsonElement(json ?: "[]") as JsonArray
+        array.mapNotNull { (it as? JsonPrimitive)?.content?.toLongOrNull() }
+    }.getOrDefault(emptyList())
 }
+
 
 /** 卡片编辑表单（D6）。`tags` 已拆分好，写库时序列化回 JSON 数组。 */
 data class CardEdit(

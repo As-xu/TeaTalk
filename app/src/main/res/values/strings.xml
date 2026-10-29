@@ -73,7 +73,11 @@
     <string name="detail_field_personality">性格</string>
     <string name="detail_field_scenario">场景</string>
     <string name="detail_section_notes">创作者注释</string>
-    <string name="detail_world_book_dialog">世界书（%1$d 条）</string>
+        <string name="detail_world_book_builtin">角色卡内嵌（%1$d 条，随卡生效）</string>
+    <string name="detail_world_book_library">世界书库（%1$d 本，勾选后绑定到该角色）</string>
+    <string name="detail_world_book_empty">世界书库还是空的，先到「我的 → 世界书」导入。</string>
+    <string name="detail_world_book_count">%1$d 条</string>
+<string name="detail_world_book_dialog">世界书（%1$d 条）</string>
     <string name="detail_delete_character">删除角色</string>
     <string name="detail_start_chat">开始聊天</string>
     <string name="list_separator">、</string>

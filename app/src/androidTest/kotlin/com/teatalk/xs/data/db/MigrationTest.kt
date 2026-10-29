@@ -42,6 +42,7 @@ class MigrationTest {
         TeaTalkDatabase.MIGRATION_4_5,
         TeaTalkDatabase.MIGRATION_5_6,
         TeaTalkDatabase.MIGRATION_6_7,
+        TeaTalkDatabase.MIGRATION_7_8,
     )
 
     @Before
@@ -195,6 +196,12 @@ class MigrationTest {
         assertTrue(indexes.contains("index_messages_conversationId"))
         assertTrue(indexes.contains("index_conversations_characterId"))
         assertTrue(indexes.contains("index_conversations_characterId_updatedAt"))
+        // 7) v7→v8 世界书绑定列。
+        assertTrue(columnNames("characters").contains("linkedWorldBookIdsJson"))
+        assertTrue(columnNames("conversations").contains("worldBookIdsJson"))
+        db.query("SELECT linkedWorldBookIdsJson FROM characters LIMIT 1").use { c ->
+            if (c.moveToFirst()) assertEquals("[]", c.getString(0))
+        }
         assertTrue(columnNames("world_books").contains("entriesJson"))
         assertTrue(columnNames("model_providers").contains("baseUrl"))
         assertNotNull(db)
@@ -221,7 +228,7 @@ class MigrationTest {
     )
 
     @Test
-    fun migrationTestHelper_migrates_1_to_7_and_validates_schema() {
+    fun migrationTestHelper_migrates_1_to_8_and_validates_schema() {
         val name = "migration-helper.db"
         context.deleteDatabase(name)
         migrations.createDatabase(name, 1).apply {
@@ -240,6 +247,7 @@ class MigrationTest {
             TeaTalkDatabase.MIGRATION_4_5,
             TeaTalkDatabase.MIGRATION_5_6,
             TeaTalkDatabase.MIGRATION_6_7,
+            TeaTalkDatabase.MIGRATION_7_8,
         )
         try {
             // 数据保留（helper 已校验 schema，这里只看语义）。
