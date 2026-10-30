@@ -1,7 +1,6 @@
 package com.teatalk.xs.data
 
 import com.teatalk.core.log.TeaTalkLog
-import com.teatalk.core.prompt.PromptOrder
 import com.teatalk.core.worldinfo.WorldInfoEntry
 import com.teatalk.core.worldinfo.WorldInfoInjector
 import com.teatalk.xs.data.model.ProviderRepository
@@ -157,27 +156,25 @@ class ChatEngine(
         val afterWorld = WorldInfoInjector.afterCharacter(activated)
         val historyInsertions = WorldInfoInjector.historyInsertions(activated)
 
-        // 顺序：system → 示例消息 → 历史（含 at-depth 注入）→ post_history_instructions。
-        // 顺序收敛到 :core 的纯函数，便于单测与后续 golden case 对拍。
-        var system = systemPrompt(card, character.name, beforeWorld, afterWorld)
-        val examples = withContext(Dispatchers.Default) { PromptOrder.parseExamples(card.mesExample) }
-        if (examples.isEmpty() && card.mesExample.isNotBlank()) {
-            TeaTalkLog.i("Prompt", "examples.fallback", "chars" to card.mesExample.length)
-            system += "\n\n[示例对话]\n" + card.mesExample.take(MAX_SYSTEM_CHARS)
-        }
+        // 顺序与字段承载以真实 SillyTavern 请求体为准（见 docs/11-golden-cases.md）：
+        // system prompt → 世界书 before → 描述/性格/场景 → 示例 → 起点标记 → 历史 → PHI。
+        val beforeWorldText = beforeWorld.map { it.content }
+        val afterWorldText = afterWorld.map { it.content }
         val messages = withContext(Dispatchers.Default) {
             val base = history.map { message ->
-                val role = if (message.role == ROLE_USER) ROLE_USER else ROLE_ASSISTANT
+                val role = if (message.role == ROLE_USER) PromptAssembler.ROLE_USER else PromptAssembler.ROLE_ASSISTANT
                 role to message.content
             }
             val withWorld = WorldInfoInjector.injectHistory(base, historyInsertions)
-            PromptOrder.assemble(
-                system = system,
-                examples = examples,
-                history = withWorld,
-                postHistoryInstruction = card.postHistoryInstructions,
+            PromptAssembler.assemble(
+                card = card,
+                characterName = character.name,
+                history = withWorld.map { PromptAssembler.HistoryMessage(it.first, it.second) },
+                beforeWorld = beforeWorldText,
+                afterWorld = afterWorldText,
             )
         }
+        val examples = withContext(Dispatchers.Default) { PromptAssembler.parseExampleBlocks(card.mesExample) }
         TeaTalkLog.i(
             "Prompt",
             "prompt.order",
@@ -286,48 +283,6 @@ class ChatEngine(
                     emit(event)
                 }
             }
-        }
-    }
-
-    /**
-     * 角色扮演的 system prompt。
-     *
-     * 世界书分两段：`beforeWorld` 拼在角色设定之前（ST position=0），
-     * `afterWorld` 拼在角色设定之后（ST position=1）。超出预算按段截断。
-     */
-    private fun systemPrompt(
-        card: CardView,
-        fallbackName: String,
-        beforeWorld: List<WorldInfoEntry> = emptyList(),
-        afterWorld: List<WorldInfoEntry> = emptyList(),
-    ): String {
-        val name = card.name.ifBlank { fallbackName }
-        return buildString {
-            if (beforeWorld.isNotEmpty()) {
-                append("[世界书·角色前]\n")
-                append(WorldInfoInjector.block(beforeWorld))
-                append("\n\n")
-            }
-            append("你正在扮演「").append(name).append("」。")
-            if (card.description.isNotBlank()) {
-                append("\n\n[设定]\n").append(card.description.take(MAX_SYSTEM_CHARS))
-            }
-            if (card.personality.isNotBlank()) {
-                append("\n\n[性格]\n").append(card.personality.take(MAX_SYSTEM_CHARS))
-            }
-            if (card.scenario.isNotBlank()) {
-                append("\n\n[场景]\n").append(card.scenario.take(MAX_SYSTEM_CHARS))
-            }
-            if (card.systemPrompt.isNotBlank()) {
-                append("\n\n[额外指示]\n").append(card.systemPrompt.take(MAX_SYSTEM_CHARS))
-            }
-            // ST 的 post_history_instructions：在历史之后、模型回复之前插入的指令。
-            // 这里的管线是「system + history」，所以把它并进 system 末尾，位置语义最接近。
-if (afterWorld.isNotEmpty()) {
-                append("\n\n[世界书·角色后]\n")
-                append(WorldInfoInjector.block(afterWorld))
-            }
-            append("\n\n要求：始终以该角色第一人称回应，保持语气与人格，不要跳出角色、不要解释设定或输出分析过程。")
         }
     }
 

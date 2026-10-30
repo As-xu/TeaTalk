@@ -59,7 +59,15 @@ MOCK_URL=http://127.0.0.1:9101/v1 node tools/golden/golden.mjs \
 请求里**——ST 的嵌入式 lorebook 需要额外「导入为世界书并绑定」才生效。这本身也是一条待确认行为，
 下一步用 UI/API 显式绑定后重新抓一次（见 docs/11 §下一步）。
 
-## 与 TeaTalk 当前实现的差异（第一轮）
+## 对齐进展（2026-10-30）
+
+- 新增 `app/src/main/java/com/teatalk/xs/data/PromptAssembler.kt`：按 ST 结构组装（system_prompt 或默认句 / 世界书 before / description / personality / scenario / `[Example Chat]` + 逐行示例 / `[Start a new Chat]` / 历史 / PHI / 世界书 after）。
+- 新增 `app/src/test/java/com/teatalk/xs/data/GoldenPromptTest.kt`：以 `app/src/test/resources/golden/capture-aster.json` 为输入做**逐条等值断言**，已通过。
+- `ChatEngine` 改为调用 `PromptAssembler`（原 `systemPrompt()` 拼接与 `PromptOrder.assemble()` 路径移除）。
+- AVD 复查「查看本次请求」面板：结构与 ST 一致（System prompt 76 + 世界书 3165 + 描述 2845 + …）；截图 `docs/screenshots/m3-golden/01-prompt-panel-structure.png`。
+- 剩余差异：ST 世界书块的 3 条顺序与激活集合由 ST 扫描器裁决，本机 capture 的 block 长度已一致（3165 vs 3165），顺序需在 case B 里逐条断言；`{{user}}` 名称目前固定为 `User`（待接入个人资料名）。
+
+## 与 TeaTalk 当前实现的差异（第一轮，历史记录）
 
 | 维度 | ST（ground truth） | TeaTalk 当前 |
 | --- | --- | --- |
