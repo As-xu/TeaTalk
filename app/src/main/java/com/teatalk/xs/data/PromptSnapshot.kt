@@ -32,7 +32,7 @@ data class WorldEntrySnapshot(
     val content: String,
 ) {
     companion object {
-        fun of(entry: WorldInfoEntry): WorldEntrySnapshot = WorldEntrySnapshot(
+        fun of(entry: WorldInfoEntry, characterName: String = "", userName: String = "User"): WorldEntrySnapshot = WorldEntrySnapshot(
             comment = entry.comment.ifBlank { entry.keys.take(3).joinToString(",") },
             position = when (entry.position) {
                 0 -> "before"
@@ -45,7 +45,7 @@ data class WorldEntrySnapshot(
                 else -> "position-${entry.position}"
             },
             chars = entry.content.length,
-            content = entry.content,
+            content = PromptAssembler.substitute(entry.content, characterName, userName),
         )
     }
 }
@@ -63,6 +63,8 @@ object PromptDebugStore {
         messages: List<Pair<String, String>>,
         activated: List<WorldInfoEntry>,
         worldChars: Int,
+        characterName: String = "",
+        userName: String = "User",
     ) {
         _snapshot.value = PromptSnapshot(
             conversationId = conversationId,
@@ -71,7 +73,7 @@ object PromptDebugStore {
             sampling = sampling,
             system = system,
             messages = messages.map { (role, content) -> PromptMessageSnapshot(role, content) },
-            worldEntries = activated.map(WorldEntrySnapshot::of),
+            worldEntries = activated.map { WorldEntrySnapshot.of(it, characterName, userName) },
             worldChars = worldChars,
             takenAt = System.currentTimeMillis(),
         )

@@ -212,7 +212,7 @@ class ChatEngine(
             preset != null -> "preset"
             provider.topP != null || provider.maxTokens != null ||
                 provider.frequencyPenalty != null || provider.presencePenalty != null -> "provider"
-            else -> "default"
+            else -> "built-in"
         }
         val presetLabel = buildString {
             append("temp ").append(effectiveTemperature)
@@ -231,6 +231,8 @@ class ChatEngine(
             messages = messages.drop(1),
             activated = activated,
             worldChars = WorldInfoInjector.cost(activated),
+            characterName = character.name,
+            userName = userName(),
         )
 
         val builder = StringBuilder()

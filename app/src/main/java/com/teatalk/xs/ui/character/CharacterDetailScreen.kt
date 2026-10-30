@@ -68,6 +68,10 @@ import com.teatalk.xs.TeaTalkApp
 import com.teatalk.xs.data.CardView
 import com.teatalk.xs.data.CardViewParser
 import com.teatalk.xs.data.CharacterRepository
+import com.teatalk.xs.data.PromptAssembler
+import com.teatalk.xs.data.model.AppPrefs
+import com.teatalk.xs.ui.components.SectionLabel
+import com.teatalk.xs.ui.components.Hairline
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import com.teatalk.xs.data.db.WorldBookEntity
@@ -125,9 +129,10 @@ class CharacterDetailViewModel(
     private val _draftWorldBookIds = MutableStateFlow<Set<Long>?>(null)
     val draftWorldBookIds: StateFlow<Set<Long>?> = _draftWorldBookIds
 
-    /** 保存回执（Snackbar 用），消费后置空。 */
-    private val _worldBookMessage = MutableStateFlow<String?>(null)
-    val worldBookMessage: StateFlow<String?> = _worldBookMessage
+    /** 保存回执（Snackbar 用）：递增序号，避免 StateFlow 去重导致重复保存静默。 */
+    private var worldBookMessageSeq = 0L
+    private val _worldBookMessage = MutableStateFlow<Long?>(null)
+    val worldBookMessage: StateFlow<Long?> = _worldBookMessage
 
     init {
         viewModelScope.launch {
@@ -155,7 +160,7 @@ class CharacterDetailViewModel(
             repository.setCharacterWorldBooks(characterId, draft.sorted())
             _linkedWorldBookIds.value = draft
             _draftWorldBookIds.value = null
-            _worldBookMessage.value = "saved"
+            _worldBookMessage.value = ++worldBookMessageSeq
         }
     }
 
@@ -355,7 +360,10 @@ fun CharacterDetailScreen(
     }
     SnackbarHost(
         hostState = snackbar,
-        modifier = Modifier.align(Alignment.BottomCenter).padding(16.dp),
+        modifier = Modifier
+            .align(Alignment.BottomCenter)
+            .navigationBarsPadding()
+            .padding(horizontal = 16.dp, vertical = 12.dp),
     )
     }
 
@@ -410,11 +418,8 @@ fun CharacterDetailScreen(
                 ) {
                     if (view.worldBook.isNotEmpty()) {
                         item {
-                            Text(
+                            SectionLabel(
                                 pluralStringResource(R.plurals.detail_world_book_builtin, view.worldBook.size, view.worldBook.size),
-                                fontSize = TypeScale.s12,
-                                fontWeight = FontWeight.Medium,
-                                color = cs.onSurfaceVariant,
                             )
                         }
                         itemsIndexed(view.worldBook) { _, entry ->
@@ -425,26 +430,31 @@ fun CharacterDetailScreen(
                                     color = cs.onSurface,
                                 )
                                 if (entry.content.isNotBlank()) {
+                                    val preview = PromptAssembler.substitute(
+                                        entry.content,
+                                        character?.name.orEmpty(),
+                                        remember { AppPrefs(context).userName },
+                                    )
                                     Text(
-                                        entry.content.take(80),
+                                        preview,
                                         fontSize = TypeScale.s11,
+                                        lineHeight = 16.sp,
                                         color = cs.onSurfaceVariant,
+                                        maxLines = 2,
+                                        overflow = TextOverflow.Ellipsis,
                                     )
                                 }
                             }
                         }
                     }
-                    item { Spacer(Modifier.height(8.dp)) }
+                    item { Spacer(Modifier.height(4.dp)); Hairline() }
                     item {
-                        Text(
+                        SectionLabel(
                             stringResource(
                                 R.string.detail_world_book_library,
                                 pluralStringResource(R.plurals.detail_books_total, booksList.size, booksList.size),
                                 pluralStringResource(R.plurals.detail_books_selected, draft.size, draft.size),
                             ),
-                            fontSize = TypeScale.s12,
-                            fontWeight = FontWeight.Medium,
-                            color = cs.onSurfaceVariant,
                         )
                     }
                     items(booksList, key = { it.id }) { book ->
@@ -465,7 +475,7 @@ fun CharacterDetailScreen(
                                 )
                                 // 合并子节点语义：TalkBack 读「书名 + 条目数 + 勾选状态」，而不是空白复选框。
                                 .semantics(mergeDescendants = true) {
-                                    contentDescription = "${'$'}{book.name}，${'$'}entryCountText"
+                                    contentDescription = "$book.name，$entryCountText"
                                 }
                                 .padding(vertical = 2.dp),
                             verticalAlignment = Alignment.CenterVertically,
