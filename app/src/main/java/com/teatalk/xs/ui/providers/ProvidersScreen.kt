@@ -192,8 +192,8 @@ fun ProvidersScreen(viewModel: ProvidersViewModel, onBack: () -> Unit) {
                     adding = false
                     editing = null
                 },
-                onSave = { name, baseUrl, apiKey, model ->
-                    viewModel.save(initial?.id, name, baseUrl, apiKey, model)
+                onSave = { name, baseUrl, apiKey, model, topP, maxTokens, freq, pres ->
+                    viewModel.save(initial?.id, name, baseUrl, apiKey, model, topP, maxTokens, freq, pres)
                 },
                 onTest = { baseUrl, apiKey ->
                     viewModel.testConnection(initial?.id, baseUrl, apiKey)
@@ -281,7 +281,16 @@ private fun ProviderEditDialog(
     storedKeyMasked: String?,
     state: ProvidersDialogState,
     onDismiss: () -> Unit,
-    onSave: (name: String, baseUrl: String, apiKey: String, model: String) -> Unit,
+    onSave: (
+        name: String,
+        baseUrl: String,
+        apiKey: String,
+        model: String,
+        topP: String,
+        maxTokens: String,
+        frequencyPenalty: String,
+        presencePenalty: String,
+    ) -> Unit,
     onTest: (baseUrl: String, apiKey: String) -> Unit,
     onFetch: (baseUrl: String, apiKey: String) -> Unit,
 ) {
@@ -290,6 +299,10 @@ private fun ProviderEditDialog(
     var baseUrl by remember { mutableStateOf(initial?.baseUrl.orEmpty()) }
     var apiKey by remember { mutableStateOf("") }
     var model by remember { mutableStateOf(initial?.defaultModel.orEmpty()) }
+    var topP by remember { mutableStateOf(initial?.topP?.toString().orEmpty()) }
+    var maxTokens by remember { mutableStateOf(initial?.maxTokens?.toString().orEmpty()) }
+    var freqPen by remember { mutableStateOf(initial?.frequencyPenalty?.toString().orEmpty()) }
+    var presPen by remember { mutableStateOf(initial?.presencePenalty?.toString().orEmpty()) }
 
     Dialog(onDismissRequest = onDismiss) {
         Surface(shape = RoundedCornerShape(22.dp), color = MaterialTheme.colorScheme.surface) {
@@ -339,6 +352,59 @@ private fun ProviderEditDialog(
                     singleLine = true,
                     enabled = !state.busy,
                     modifier = Modifier.fillMaxWidth(),
+                )
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    stringResource(R.string.providers_sampling_title),
+                    fontSize = TypeScale.s12,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(4.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(
+                        value = topP,
+                        onValueChange = { topP = it },
+                        label = { Text(stringResource(R.string.providers_top_p)) },
+                        placeholder = { Text("0.9") },
+                        singleLine = true,
+                        enabled = !state.busy,
+                        modifier = Modifier.weight(1f),
+                    )
+                    OutlinedTextField(
+                        value = maxTokens,
+                        onValueChange = { maxTokens = it },
+                        label = { Text(stringResource(R.string.providers_max_tokens)) },
+                        placeholder = { Text("512") },
+                        singleLine = true,
+                        enabled = !state.busy,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+                Spacer(Modifier.height(6.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(
+                        value = freqPen,
+                        onValueChange = { freqPen = it },
+                        label = { Text(stringResource(R.string.providers_freq_penalty)) },
+                        placeholder = { Text("0.2") },
+                        singleLine = true,
+                        enabled = !state.busy,
+                        modifier = Modifier.weight(1f),
+                    )
+                    OutlinedTextField(
+                        value = presPen,
+                        onValueChange = { presPen = it },
+                        label = { Text(stringResource(R.string.providers_pres_penalty)) },
+                        placeholder = { Text("0.1") },
+                        singleLine = true,
+                        enabled = !state.busy,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+                Text(
+                    stringResource(R.string.providers_sampling_hint),
+                    fontSize = TypeScale.s11,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Spacer(Modifier.height(6.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -393,7 +459,7 @@ private fun ProviderEditDialog(
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                     TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) }
                     TextButton(
-                        onClick = { onSave(name, baseUrl, apiKey, model) },
+                        onClick = { onSave(name, baseUrl, apiKey, model, topP, maxTokens, freqPen, presPen) },
                         enabled = !state.busy,
                     ) {
                         Text(stringResource(R.string.edit_save), color = MaterialTheme.colorScheme.primary)

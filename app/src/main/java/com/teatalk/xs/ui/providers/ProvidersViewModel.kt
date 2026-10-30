@@ -70,6 +70,10 @@ class ProvidersViewModel(
         baseUrl: String,
         apiKey: String,
         model: String,
+        topP: String = "",
+        maxTokens: String = "",
+        frequencyPenalty: String = "",
+        presencePenalty: String = "",
     ) {
         if (_dialog.value.busy) return
         val trimmedName = name.trim()
@@ -85,6 +89,24 @@ class ProvidersViewModel(
                 return
             }
         }
+        val topPValue = topP.trim().toDoubleOrNull()?.takeIf { it in 0.0..1.0 }
+        val maxTokensValue = maxTokens.trim().toIntOrNull()?.takeIf { it > 0 }
+        val freqValue = frequencyPenalty.trim().toDoubleOrNull()?.takeIf { it in -2.0..2.0 }
+        val presValue = presencePenalty.trim().toDoubleOrNull()?.takeIf { it in -2.0..2.0 }
+        if (topP.trim().isNotEmpty() && topPValue == null) {
+            _dialog.update { it.copy(note = UiText.of(R.string.providers_sampling_invalid), noteIsError = true) }
+            return
+        }
+        if (maxTokens.trim().isNotEmpty() && maxTokensValue == null) {
+            _dialog.update { it.copy(note = UiText.of(R.string.providers_sampling_invalid), noteIsError = true) }
+            return
+        }
+        if (frequencyPenalty.trim().isNotEmpty() && freqValue == null ||
+            presencePenalty.trim().isNotEmpty() && presValue == null
+        ) {
+            _dialog.update { it.copy(note = UiText.of(R.string.providers_sampling_invalid), noteIsError = true) }
+            return
+        }
         viewModelScope.launch {
             _dialog.update { it.copy(busy = true, note = null) }
             val providerId = repository.save(
@@ -95,6 +117,10 @@ class ProvidersViewModel(
                 defaultModel = model.trim(),
                 models = _dialog.value.models,
                 apiKey = apiKey.trim().ifBlank { null },
+                topP = topPValue,
+                maxTokens = maxTokensValue,
+                frequencyPenalty = freqValue,
+                presencePenalty = presValue,
             )
             if (_activeId.value == null) _activeId.value = providerId
             _dialog.update { it.copy(busy = false, savedTick = it.savedTick + 1) }

@@ -33,6 +33,10 @@ class ProviderRepository(
         defaultModel: String,
         models: List<String>,
         apiKey: String?,
+        topP: Double? = null,
+        maxTokens: Int? = null,
+        frequencyPenalty: Double? = null,
+        presencePenalty: Double? = null,
     ): String {
         val providerId = id ?: UUID.randomUUID().toString()
         val existing = dao.find(providerId)
@@ -47,6 +51,10 @@ class ProviderRepository(
                 modelsJson = JSONArray(models).toString(),
                 createdAt = existing?.createdAt ?: now,
                 lastUsedAt = existing?.lastUsedAt ?: 0L,
+                topP = topP,
+                maxTokens = maxTokens,
+                frequencyPenalty = frequencyPenalty,
+                presencePenalty = presencePenalty,
             ),
         )
         if (!apiKey.isNullOrBlank()) secrets.put(providerId, apiKey.trim())
@@ -99,6 +107,10 @@ class ProviderRepository(
                 model = row.defaultModel,
                 apiKey = key,
                 temperature = 0.8,
+                topP = row.topP,
+                maxTokens = row.maxTokens,
+                frequencyPenalty = row.frequencyPenalty,
+                presencePenalty = row.presencePenalty,
             ),
         )
     }
@@ -122,6 +134,10 @@ class ActiveProvider(
     val model: String,
     val apiKey: String,
     val temperature: Double,
+    val topP: Double? = null,
+    val maxTokens: Int? = null,
+    val frequencyPenalty: Double? = null,
+    val presencePenalty: Double? = null,
 ) {
     override fun toString(): String =
         "ActiveProvider(id=$id, name=$name, baseUrl=${Redact.url(baseUrl)}, model=$model, key=<redacted>)"

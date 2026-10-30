@@ -326,5 +326,12 @@
     <string name="prompt_debug_chars">%1$d 字符</string>
     <string name="toast_card_save_failed">保存失败：角色卡数据损坏</string>
     <string name="edit_section_advanced">高级设定</string>
+    <string name="providers_sampling_title">采样参数（可选，ST 预设优先）</string>
+    <string name="providers_sampling_hint">留空则使用内置默认；预设导入后以预设为准。</string>
+    <string name="providers_top_p">top_p</string>
+    <string name="providers_max_tokens">max tokens</string>
+    <string name="providers_freq_penalty">频率惩罚</string>
+    <string name="providers_pres_penalty">存在惩罚</string>
+    <string name="providers_sampling_invalid">采样参数不合法：top_p 0–1，max tokens 正整数，惩罚 -2–2</string>
 </resources>
 

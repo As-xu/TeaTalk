@@ -14,7 +14,7 @@ import com.teatalk.core.log.TeaTalkLog
         ModelProviderEntity::class,
         ConversationEntity::class,
     ],
-    version = 8,
+    version = 9,
     exportSchema = true,
 )
 abstract class TeaTalkDatabase : RoomDatabase() {
@@ -24,7 +24,7 @@ abstract class TeaTalkDatabase : RoomDatabase() {
     abstract fun conversationDao(): ConversationDao
 
     companion object {
-        const val VERSION = 8
+        const val VERSION = 9
 
         /**
          * v1（M0）→ v2（D6 卡库）：
@@ -179,6 +179,17 @@ abstract class TeaTalkDatabase : RoomDatabase() {
                 db.execSQL("ALTER TABLE characters ADD COLUMN linkedWorldBookIdsJson TEXT NOT NULL DEFAULT '[]'")
                 db.execSQL("ALTER TABLE conversations ADD COLUMN worldBookIdsJson TEXT")
                 TeaTalkLog.i("Db", "db.migrate", "from" to 7, "to" to 8, "ms" to (System.currentTimeMillis() - started))
+            }
+        }
+
+        val MIGRATION_8_9 = object : Migration(8, 9) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                val started = System.currentTimeMillis()
+                db.execSQL("ALTER TABLE model_providers ADD COLUMN topP REAL")
+                db.execSQL("ALTER TABLE model_providers ADD COLUMN maxTokens INTEGER")
+                db.execSQL("ALTER TABLE model_providers ADD COLUMN frequencyPenalty REAL")
+                db.execSQL("ALTER TABLE model_providers ADD COLUMN presencePenalty REAL")
+                TeaTalkLog.i("Db", "db.migrate", "from" to 8, "to" to 9, "ms" to (System.currentTimeMillis() - started))
             }
         }
 

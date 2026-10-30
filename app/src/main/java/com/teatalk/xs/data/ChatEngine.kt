@@ -1,6 +1,7 @@
 package com.teatalk.xs.data
 
 import com.teatalk.core.log.TeaTalkLog
+import com.teatalk.core.prompt.PromptOrder
 import com.teatalk.core.worldinfo.WorldInfoEntry
 import com.teatalk.core.worldinfo.WorldInfoInjector
 import com.teatalk.xs.data.model.ProviderRepository
@@ -156,16 +157,33 @@ class ChatEngine(
         val afterWorld = WorldInfoInjector.afterCharacter(activated)
         val historyInsertions = WorldInfoInjector.historyInsertions(activated)
 
-        val messages = withContext(Dispatchers.Default) {
-            buildList {
-                add(ROLE_SYSTEM to systemPrompt(card, character.name, beforeWorld, afterWorld))
-                val base = history.map { message ->
-                    val role = if (message.role == ROLE_USER) ROLE_USER else ROLE_ASSISTANT
-                    role to message.content
-                }
-                addAll(WorldInfoInjector.injectHistory(base, historyInsertions))
-            }
+        // 顺序：system → 示例消息 → 历史（含 at-depth 注入）→ post_history_instructions。
+        // 顺序收敛到 :core 的纯函数，便于单测与后续 golden case 对拍。
+        var system = systemPrompt(card, character.name, beforeWorld, afterWorld)
+        val examples = withContext(Dispatchers.Default) { PromptOrder.parseExamples(card.mesExample) }
+        if (examples.isEmpty() && card.mesExample.isNotBlank()) {
+            TeaTalkLog.i("Prompt", "examples.fallback", "chars" to card.mesExample.length)
+            system += "\n\n[示例对话]\n" + card.mesExample.take(MAX_SYSTEM_CHARS)
         }
+        val messages = withContext(Dispatchers.Default) {
+            val base = history.map { message ->
+                val role = if (message.role == ROLE_USER) ROLE_USER else ROLE_ASSISTANT
+                role to message.content
+            }
+            val withWorld = WorldInfoInjector.injectHistory(base, historyInsertions)
+            PromptOrder.assemble(
+                system = system,
+                examples = examples,
+                history = withWorld,
+                postHistoryInstruction = card.postHistoryInstructions,
+            )
+        }
+        TeaTalkLog.i(
+            "Prompt",
+            "prompt.order",
+            "examples" to examples.size,
+            "phi" to card.postHistoryInstructions.isNotBlank(),
+        )
         TeaTalkLog.i(
             "Prompt",
             "worldbook.inject",
@@ -184,9 +202,25 @@ class ChatEngine(
         // M3 步骤 2：把这次请求的可读快照放到内存里，供「查看本次请求」面板展示（不落盘、不导出）。
         // 预设需在快照之前解析，面板才能显示本次请求的真实采样值。
         val preset = samplingPreset()
-        val presetLabel = preset?.let {
-            "temp ${it.temperature} · top_p ${it.topP} · max ${it.maxTokens}" +
-                " · freq ${it.frequencyPenalty} · pres ${it.presencePenalty}"
+        // 优先级：ST 预设 > Provider 级配置 > 内置默认。两者都为空时保持客户端默认。
+        val effectiveTopP = preset?.topP ?: provider.topP
+        val effectiveMaxTokens = preset?.maxTokens ?: provider.maxTokens
+        val effectiveFreq = preset?.frequencyPenalty ?: provider.frequencyPenalty
+        val effectivePres = preset?.presencePenalty ?: provider.presencePenalty
+        val effectiveTemperature = preset?.temperature?.toDouble() ?: provider.temperature
+        val samplingSource = when {
+            preset != null -> "preset"
+            provider.topP != null || provider.maxTokens != null ||
+                provider.frequencyPenalty != null || provider.presencePenalty != null -> "provider"
+            else -> "default"
+        }
+        val presetLabel = buildString {
+            append("temp ").append(effectiveTemperature)
+            effectiveTopP?.let { append(" · top_p ").append(it) }
+            effectiveMaxTokens?.let { append(" · max ").append(it) }
+            effectiveFreq?.let { append(" · freq ").append(it) }
+            effectivePres?.let { append(" · pres ").append(it) }
+            append(" · source ").append(samplingSource)
         }
         PromptDebugStore.publish(
             conversationId = conversationId,
@@ -205,11 +239,12 @@ class ChatEngine(
             "Prompt",
             "sampling.preset",
             "present" to (preset != null),
-            "temperature" to (preset?.temperature ?: provider.temperature),
-            "topP" to (preset?.topP ?: -1f),
-            "maxTokens" to (preset?.maxTokens ?: -1),
-            "freqPenalty" to (preset?.frequencyPenalty ?: -1f),
-            "presPenalty" to (preset?.presencePenalty ?: -1f),
+            "source" to samplingSource,
+            "temperature" to effectiveTemperature,
+            "topP" to (effectiveTopP ?: -1.0),
+            "maxTokens" to (effectiveMaxTokens ?: -1),
+            "freqPenalty" to (effectiveFreq ?: -1.0),
+            "presPenalty" to (effectivePres ?: -1.0),
         )
         client.stream(
             baseUrl = provider.baseUrl,
@@ -217,11 +252,11 @@ class ChatEngine(
             model = model,
             messages = messages,
             // 预设优先于接口自带的 temperature（用户显式导入的意图更强）。
-            temperature = preset?.temperature?.toDouble() ?: provider.temperature,
-            topP = preset?.topP?.toDouble(),
-            maxTokens = preset?.maxTokens,
-            frequencyPenalty = preset?.frequencyPenalty?.toDouble(),
-            presencePenalty = preset?.presencePenalty?.toDouble(),
+            temperature = effectiveTemperature,
+            topP = effectiveTopP?.toDouble(),
+            maxTokens = effectiveMaxTokens,
+            frequencyPenalty = effectiveFreq?.toDouble(),
+            presencePenalty = effectivePres?.toDouble(),
         ).collect { event ->
             when (event) {
                 is ChatEvent.Started -> emit(event)
@@ -288,13 +323,7 @@ class ChatEngine(
             }
             // ST 的 post_history_instructions：在历史之后、模型回复之前插入的指令。
             // 这里的管线是「system + history」，所以把它并进 system 末尾，位置语义最接近。
-            if (card.postHistoryInstructions.isNotBlank()) {
-                append("\n\n[历史后指令]\n").append(card.postHistoryInstructions.take(MAX_SYSTEM_CHARS))
-            }
-            if (card.mesExample.isNotBlank()) {
-                append("\n\n[示例对话]\n").append(card.mesExample.take(MAX_SYSTEM_CHARS))
-            }
-            if (afterWorld.isNotEmpty()) {
+if (afterWorld.isNotEmpty()) {
                 append("\n\n[世界书·角色后]\n")
                 append(WorldInfoInjector.block(afterWorld))
             }

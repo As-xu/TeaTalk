@@ -43,6 +43,7 @@ class MigrationTest {
         TeaTalkDatabase.MIGRATION_5_6,
         TeaTalkDatabase.MIGRATION_6_7,
         TeaTalkDatabase.MIGRATION_7_8,
+        TeaTalkDatabase.MIGRATION_8_9,
     )
 
     @Before
@@ -219,6 +220,12 @@ class MigrationTest {
         }
         assertTrue(columnNames("world_books").contains("entriesJson"))
         assertTrue(columnNames("model_providers").contains("baseUrl"))
+        // 8) v8→v9 Provider 采样参数列。
+        assertTrue(
+            columnNames("model_providers").containsAll(
+                listOf("topP", "maxTokens", "frequencyPenalty", "presencePenalty"),
+            ),
+        )
         assertNotNull(db)
     }
 
@@ -243,7 +250,7 @@ class MigrationTest {
     )
 
     @Test
-    fun migrationTestHelper_migrates_1_to_8_and_validates_schema() {
+    fun migrationTestHelper_migrates_1_to_9_and_validates_schema() {
         val name = "migration-helper.db"
         context.deleteDatabase(name)
         migrations.createDatabase(name, 1).apply {
@@ -263,6 +270,7 @@ class MigrationTest {
             TeaTalkDatabase.MIGRATION_5_6,
             TeaTalkDatabase.MIGRATION_6_7,
             TeaTalkDatabase.MIGRATION_7_8,
+            TeaTalkDatabase.MIGRATION_8_9,
         )
         try {
             // 数据保留（helper 已校验 schema，这里只看语义）。

@@ -20,4 +20,9 @@ data class ModelProviderEntity(
     val modelsJson: String = "[]",
     val createdAt: Long = 0L,
     val lastUsedAt: Long = 0L,
+    // 可选采样参数：ST 预设未导入时作为回退，优先级 preset > provider > 内置默认。
+    val topP: Double? = null,
+    val maxTokens: Int? = null,
+    val frequencyPenalty: Double? = null,
+    val presencePenalty: Double? = null,
 )
