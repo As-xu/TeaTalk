@@ -51,6 +51,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.material3.OutlinedTextField
+import com.teatalk.xs.data.model.AppPrefs
 import com.teatalk.xs.R
 import com.teatalk.xs.data.model.SamplingPreset
 import com.teatalk.xs.data.model.SamplingPresetStore
@@ -77,8 +79,12 @@ fun ProfileScreen(
 ) {
     val cs = MaterialTheme.colorScheme
     var showLanguageDialog by remember { mutableStateOf(false) }
-    // M3 步骤 4：ST 预设（采样参数）
     val context = LocalContext.current
+    // M3：个人资料名（替换 prompt/开场白里的 {{user}}）
+    val prefs = remember(context) { AppPrefs(context) }
+    var userName by remember { mutableStateOf(prefs.userName) }
+    var showPersonaDialog by remember { mutableStateOf(false) }
+    // M3 步骤 4：ST 预设（采样参数）
     var preset by remember { mutableStateOf(SamplingPresetStore.read(context)) }
     var showPresetDialog by remember { mutableStateOf(false) }
     val importPreset = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
@@ -108,7 +114,7 @@ fun ProfileScreen(
             .padding(horizontal = 16.dp),
     ) {
         Spacer(Modifier.height(12.dp))
-        // 身份卡
+        // 身份卡（点击改称呼）
         Box(
             Modifier
                 .fillMaxWidth()
@@ -118,6 +124,7 @@ fun ProfileScreen(
                         listOf(cs.primaryContainer, cs.surfaceContainerHigh),
                     ),
                 )
+                .clickable { showPersonaDialog = true }
                 .padding(18.dp),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -130,10 +137,12 @@ fun ProfileScreen(
                 Spacer(Modifier.size(14.dp))
                 Column(Modifier.weight(1f)) {
                     Text(
-                        stringResource(R.string.profile_persona_name),
+                        userName,
                         fontSize = TypeScale.s18,
                         fontWeight = FontWeight.SemiBold,
                         color = cs.onBackground,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                     )
                     Spacer(Modifier.height(2.dp))
                     Text(
@@ -225,6 +234,34 @@ fun ProfileScreen(
                     TextButton(onClick = { showPresetDialog = false }) { Text(stringResource(R.string.close)) }
                 }
             },
+        )
+    }
+
+    if (showPersonaDialog) {
+        var draft by remember { mutableStateOf(userName) }
+        AlertDialog(
+            onDismissRequest = { showPersonaDialog = false },
+            title = { Text(stringResource(R.string.persona_edit_title)) },
+            text = {
+                OutlinedTextField(
+                    value = draft,
+                    onValueChange = { draft = it },
+                    singleLine = true,
+                    label = { Text(stringResource(R.string.persona_edit_hint)) },
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    val next = draft.trim().ifBlank { "User" }
+                    prefs.userName = next
+                    userName = next
+                    showPersonaDialog = false
+                }) { Text(stringResource(R.string.edit_save)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showPersonaDialog = false }) { Text(stringResource(R.string.cancel)) }
+            },
+            containerColor = cs.surfaceContainerHigh,
         )
     }
 

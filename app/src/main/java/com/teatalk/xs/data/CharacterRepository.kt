@@ -48,6 +48,8 @@ class CharacterRepository(
     private val dao: CharacterDao,
     private val conversations: ConversationDao,
     private val worldBookDao: WorldBookDao,
+    /** 个人资料名：导入开场白时替换 `{{user}}`。 */
+    private val userName: () -> String = { "User" },
 ) {
 
     /**

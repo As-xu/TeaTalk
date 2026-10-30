@@ -33,6 +33,8 @@ class ChatEngine(
     private val client: ChatClient,
     /** M3 步骤 4：ST 预设（可选采样参数）。返回 null 表示未导入。 */
     private val samplingPreset: () -> SamplingPreset? = { null },
+    /** 个人资料名（替换 `{{user}}`）；M3 golden 对齐项。 */
+    private val userName: () -> String = { "User" },
 ) {
 
     /**
@@ -169,6 +171,7 @@ class ChatEngine(
             PromptAssembler.assemble(
                 card = card,
                 characterName = character.name,
+                userName = userName(),
                 history = withWorld.map { PromptAssembler.HistoryMessage(it.first, it.second) },
                 beforeWorld = beforeWorldText,
                 afterWorld = afterWorldText,

@@ -74,6 +74,13 @@ MOCK_URL=http://127.0.0.1:9101/v1 node tools/golden/golden.mjs \
 - 换行差异：ST 导入时把 CRLF 归一化为 LF。`PromptAssembler.normalizeNewlines()` 在组装时归一化（cards/世界书/历史），这是此前「描述 +7、世界书 +41 字符」的唯一来源。
 - 结果：描述 2838、世界书 3165 与 ST 完全一致。
 
+## 个人资料名（`{{user}}`）已接入（2026-10-30）
+
+- `AppPrefs.userName`（默认 `User`）→ `ChatEngine` → `PromptAssembler.userName` → 替换卡字段/世界书/开场白里的 `{{user}}`。
+- 开场白在 `CharacterRepository.ensureGreeting` 入库时即替换，聊天里不会再出现 `{{user}}` 字面量。
+- 入口：我的 → 身份卡（点一下）→ Your name。
+- 实测：改成 `Aria` 后，system prompt 变为 `…between Seraphina and Aria.`，世界书条目里的 `{{user}}` 也替换为 `Aria`。
+
 ## 与 TeaTalk 当前实现的差异（第一轮，历史记录）
 
 | 维度 | ST（ground truth） | TeaTalk 当前 |

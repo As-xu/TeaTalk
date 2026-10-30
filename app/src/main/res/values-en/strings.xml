@@ -328,5 +328,7 @@
     <string name="providers_freq_penalty">Frequency penalty</string>
     <string name="providers_pres_penalty">Presence penalty</string>
     <string name="providers_sampling_invalid">Invalid sampling value: top_p 0–1, max tokens positive, penalties -2–2</string>
+    <string name="persona_edit_title">Your name</string>
+    <string name="persona_edit_hint">Replace {{user}} in cards</string>
 </resources>
 

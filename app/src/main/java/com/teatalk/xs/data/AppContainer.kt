@@ -63,7 +63,13 @@ class AppContainer(context: Context) {
     }
 
     val characterRepository: CharacterRepository by lazy {
-        CharacterRepository(appContext, database.characterDao(), database.conversationDao(), database.worldBookDao())
+        CharacterRepository(
+            appContext,
+            database.characterDao(),
+            database.conversationDao(),
+            database.worldBookDao(),
+            userName = { appPrefs.userName },
+        )
     }
 
     val worldBookRepository: WorldBookRepository by lazy {
@@ -88,6 +94,7 @@ class AppContainer(context: Context) {
                 providerRepository,
                 chatClient,
                 samplingPreset = { com.teatalk.xs.data.model.SamplingPresetStore.read(appContext) },
+                userName = { appPrefs.userName },
             )
     }
 }

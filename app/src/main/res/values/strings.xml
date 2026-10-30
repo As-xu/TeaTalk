@@ -333,5 +333,7 @@
     <string name="providers_freq_penalty">频率惩罚</string>
     <string name="providers_pres_penalty">存在惩罚</string>
     <string name="providers_sampling_invalid">采样参数不合法：top_p 0–1，max tokens 正整数，惩罚 -2–2</string>
+    <string name="persona_edit_title">修改称呼</string>
+    <string name="persona_edit_hint">你的名字（替换 {{user}}）</string>
 </resources>
 
