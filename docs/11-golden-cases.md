@@ -67,6 +67,13 @@ MOCK_URL=http://127.0.0.1:9101/v1 node tools/golden/golden.mjs \
 - AVD 复查「查看本次请求」面板：结构与 ST 一致（System prompt 76 + 世界书 3165 + 描述 2845 + …）；截图 `docs/screenshots/m3-golden/01-prompt-panel-structure.png`。
 - 剩余差异：ST 世界书块的 3 条顺序与激活集合由 ST 扫描器裁决，本机 capture 的 block 长度已一致（3165 vs 3165），顺序需在 case B 里逐条断言；`{{user}}` 名称目前固定为 `User`（待接入个人资料名）。
 
+## case B（世界书块）已对齐（2026-10-30）
+
+- ST 抓包 `capture-sera-wi.json` 的 6 条 message 已全部逐条等值断言（`GoldenPromptTest.worldBookBeforeBlockMatchesSillyTavernWorldCase`）。
+- 世界书块顺序：ST 把命中条目按 order 降序 sort 后逐个 unshift，等价于「order 升序、同 order 内 uid 降序」；golden 实测为 `power(3) → shadowfang(1) → eldoria(0)`。`WorldInfoInjector.beforeCharacter/afterCharacter` 已按此实现，并加 `beforeCharacterRendersInSillyTavernOrder` 锁死。
+- 换行差异：ST 导入时把 CRLF 归一化为 LF。`PromptAssembler.normalizeNewlines()` 在组装时归一化（cards/世界书/历史），这是此前「描述 +7、世界书 +41 字符」的唯一来源。
+- 结果：描述 2838、世界书 3165 与 ST 完全一致。
+
 ## 与 TeaTalk 当前实现的差异（第一轮，历史记录）
 
 | 维度 | ST（ground truth） | TeaTalk 当前 |

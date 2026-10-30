@@ -81,7 +81,10 @@ object PromptAssembler {
                 ROLE_SYSTEM -> ROLE_SYSTEM
                 else -> ROLE_ASSISTANT
             }
-            out += role to message.content
+            val content = normalizeNewlines(message.content)
+            // ST 的聊天记录在入库时已完成宏替换；这里对 assistant 历史再做一次，
+            // 让未替换的旧数据也能与 ST 对拍一致（用户输入保持原样）。
+            out += role to if (role == ROLE_ASSISTANT) substitute(content, name, userName) else content
         }
 
         // 7. post_history_instructions 放在最后
@@ -124,8 +127,13 @@ object PromptAssembler {
 
     /** ST 的宏替换：只处理比赛用的两种写法，避免过度替换文本里的普通花括号。 */
     fun substitute(text: String, characterName: String, userName: String): String =
-        text.replace("{{char}}", characterName)
+        normalizeNewlines(text)
+            .replace("{{char}}", characterName)
             .replace("<CHAR>", characterName)
             .replace("{{user}}", userName)
             .replace("<USER>", userName)
+
+    /** ST 在导入时把 CRLF 归一化为 LF；我们同样在组装时归一化，避免逐字符差。 */
+    fun normalizeNewlines(text: String): String =
+        text.replace("\r\n", "\n").replace('\r', '\n')
 }

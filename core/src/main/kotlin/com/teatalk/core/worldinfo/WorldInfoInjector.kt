@@ -78,13 +78,23 @@ object WorldInfoInjector {
         .filter { it.isNotBlank() }
         .joinToString("\n\n")
 
-    /** position 0：角色定义之前的条目（按 ST 顺序升序）。 */
+    /**
+     * position 0：角色定义之前的条目。
+     *
+     * ST（`WorldInfoBuffer`）把命中条目按 order 降序排序后逐个 `unshift` 到数组头部，
+     * 因此最终文本顺序 = 「order 升序、同 order 内 uid 降序」。golden case 实测：
+     * 三条同 order 的条目在 prompt 里是 uid 3 → 1 → 0。
+     */
     fun beforeCharacter(entries: List<WorldInfoEntry>): List<WorldInfoEntry> =
-        entries.filter { it.position == 0 }.sortedWith(compareBy({ it.order }, { it.uid }))
+        entries.filter { it.position == 0 }
+            .sortedWith(compareBy({ it.order }, { it.uid }))
+            .reversed()
 
-    /** position 1：角色定义之后的条目（按 ST 顺序升序）。 */
+    /** position 1：角色定义之后的条目（与 before 相同的 ST 倒序规则）。 */
     fun afterCharacter(entries: List<WorldInfoEntry>): List<WorldInfoEntry> =
-        entries.filter { it.position == 1 }.sortedWith(compareBy({ it.order }, { it.uid }))
+        entries.filter { it.position == 1 }
+            .sortedWith(compareBy({ it.order }, { it.uid }))
+            .reversed()
 
     /** position 2/3/4：需要插进聊天历史的条目。 */
     fun historyInsertions(entries: List<WorldInfoEntry>): List<Insertion> =

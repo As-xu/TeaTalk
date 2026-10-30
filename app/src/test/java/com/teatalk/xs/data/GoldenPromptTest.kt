@@ -1,5 +1,7 @@
 package com.teatalk.xs.data
 
+import com.teatalk.core.worldinfo.WorldInfoInjector
+import com.teatalk.core.worldinfo.WorldInfoParser
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
@@ -74,5 +76,43 @@ class GoldenPromptTest {
             history = emptyList(),
         )
         assertTrue(actual.first().second.startsWith("Write Aster's next reply in a fictional chat"))
+    }
+
+    @Test
+    fun worldBookBeforeBlockMatchesSillyTavernWorldCase() {
+        val card = CardViewParser.parse(resource("golden/golden-sera-card.json"))
+        val entries = WorldInfoParser.fromStandalone(resource("golden/golden-eldoria.json"))
+        // ST 这次激活了 eldoria/shadowfang/power 三条（glade 未命中关键词），且全部 position=0。
+        val activated = entries.filter { it.uid in setOf(0, 1, 3) }
+        val before = WorldInfoInjector.beforeCharacter(activated).map { it.content }
+        val expected = captureMessages("golden/capture-sera-wi.json")
+        val actual = PromptAssembler.assemble(
+            card = card,
+            characterName = "Seraphina",
+            userName = "User",
+            history = listOf(
+                PromptAssembler.HistoryMessage(PromptAssembler.ROLE_ASSISTANT, card.firstMes),
+                PromptAssembler.HistoryMessage(
+                    PromptAssembler.ROLE_USER,
+                    "Tell me about tea in Eldoria.",
+                ),
+            ),
+            beforeWorld = before,
+        )
+        assertEquals("message count", expected.size, actual.size)
+        expected.indices.forEach { index ->
+            assertEquals("role #$index", expected[index].first, actual[index].first)
+            assertEquals("content #$index", expected[index].second, actual[index].second)
+        }
+    }
+
+    @Test
+    fun beforeCharacterRendersInSillyTavernOrder() {
+        val entries = WorldInfoParser.fromStandalone(resource("golden/golden-eldoria.json"))
+        val activated = entries.filter { it.uid in setOf(0, 1, 3) }
+        assertEquals(
+            listOf(3, 1, 0),
+            WorldInfoInjector.beforeCharacter(activated).map { it.uid },
+        )
     }
 }
