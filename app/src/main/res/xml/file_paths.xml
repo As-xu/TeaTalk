@@ -2,4 +2,6 @@
 <paths>
     <!-- 只暴露 cacheDir/logs 子目录：整目录暴露等于把缓存里的一切都交给分享目标 -->
     <cache-path name="diagnostics" path="logs/" />
+    <!-- M4-1：聊天导出文件只放在 cache/export/，同样只暴露该子目录 -->
+    <cache-path name="chat_export" path="export/" />
 </paths>

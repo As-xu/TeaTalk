@@ -330,5 +330,10 @@
     <string name="providers_sampling_invalid">Invalid sampling value: top_p 0–1, max tokens positive, penalties -2–2</string>
     <string name="persona_edit_title">Your name</string>
     <string name="persona_edit_hint">Replace {{user}} in cards</string>
+    <string name="chat_menu_export">Export chat (JSONL)</string>
+    <string name="chat_menu_import">Import chat (JSONL)…</string>
+    <string name="chat_import_title">Imported chat</string>
+    <string name="chat_import_done">%1$d messages imported</string>
+    <string name="chat_import_failed">This file is not a readable chat log</string>
 </resources>
 

@@ -481,6 +481,81 @@ class CharacterRepository(
     }
 
     /** 限长读取：单张卡上限 64MB，防御超大文件把内存打爆。 */
+
+    /** 聊天 jsonl 导入结果（M4-1）：新会话 id、写入消息数、坏行数。 */
+    data class ChatImportResult(val conversationId: Long, val messageCount: Int, val skippedLines: Int)
+
+    /** 当前会话的全部消息（导出/备份用；升序 = 对话顺序）。 */
+    suspend fun messagesOnce(conversationId: Long): List<MessageEntity> =
+        withContext(Dispatchers.IO) { dao.allMessages(conversationId) }
+
+    /** 导出为 ST 兼容的 `.jsonl` 文本；会话/角色不存在时返回 null。 */
+    suspend fun exportChatJsonl(conversationId: Long): String? = withContext(Dispatchers.IO) {
+        val conversation = conversations.find(conversationId) ?: return@withContext null
+        val character = dao.find(conversation.characterId) ?: return@withContext null
+        val messages = dao.allMessages(conversationId)
+        ChatJsonl.export(character.name, messages)
+    }
+
+    /**
+     * 导入 ST `.jsonl`：新建一条会话写入全部消息（含多版本 swipes）。
+     *
+     * 单文件上限 [MAX_CHAT_JSONL_CHARS]（字符数，防误选大文件）；解析出 0 条消息时返回 null。
+     */
+    suspend fun importChatJsonl(
+        characterId: Long,
+        uri: Uri,
+        title: String,
+    ): ChatImportResult? = withContext(Dispatchers.IO) {
+        val character = dao.find(characterId) ?: return@withContext null
+        val text = appContext.contentResolver.openInputStream(uri)?.use { input ->
+            input.bufferedReader(Charsets.UTF_8).use { reader ->
+                val buffer = CharArray(64 * 1024)
+                val out = StringBuilder()
+                var total = 0
+                while (true) {
+                    val read = reader.read(buffer)
+                    if (read <= 0) break
+                    total += read
+                    if (total > MAX_CHAT_JSONL_CHARS) return@withContext null
+                    out.append(buffer, 0, read)
+                }
+                out.toString()
+            }
+        } ?: return@withContext null
+        val parsed = ChatJsonl.parse(text)
+        if (parsed.messages.isEmpty()) return@withContext null
+        val now = System.currentTimeMillis()
+        val conversationId = conversations.insert(
+            ConversationEntity(
+                characterId = character.id,
+                title = title,
+                createdAt = now,
+                updatedAt = now,
+            ),
+        )
+        val entities = parsed.messages.map { message ->
+            val variants = if (message.swipes.size > 1) message.swipes else emptyList()
+            MessageEntity(
+                characterId = character.id,
+                conversationId = conversationId,
+                role = message.role,
+                content = message.content,
+                createdAt = message.createdAt,
+                variantsJson = if (variants.isEmpty()) "[]" else MessageVariants.encode(variants),
+                variantStatusJson = if (variants.isEmpty()) "[]" else MessageVariants.encodeStatuses(
+                    List(variants.size) { MessageEntity.STATUS_COMPLETE },
+                ),
+                providerName = message.api,
+                model = message.model,
+                selectedVariant = message.swipeId.coerceIn(0, (message.swipes.size - 1).coerceAtLeast(0)),
+                status = MessageEntity.STATUS_COMPLETE,
+            )
+        }
+        dao.insertMessagesExact(entities)
+        ChatImportResult(conversationId, entities.size, parsed.skippedLines)
+    }
+
     private fun readCardBytes(input: InputStream): ByteArray {
         val out = ByteArrayOutputStream()
         val buf = ByteArray(64 * 1024)
@@ -498,6 +573,7 @@ class CharacterRepository(
     private companion object {
         const val AVATAR_DIR = "avatars"
         const val MAX_CARD_BYTES = 64L * 1024 * 1024
+        const val MAX_CHAT_JSONL_CHARS = 32L * 1024 * 1024
         const val ROLE_USER = "user"
         const val ROLE_ASSISTANT = "assistant"
     }

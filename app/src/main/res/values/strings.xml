@@ -335,5 +335,10 @@
     <string name="providers_sampling_invalid">采样参数不合法：top_p 0–1，max tokens 正整数，惩罚 -2–2</string>
     <string name="persona_edit_title">修改称呼</string>
     <string name="persona_edit_hint">你的名字（替换 {{user}}）</string>
+    <string name="chat_menu_export">导出聊天记录</string>
+    <string name="chat_menu_import">导入聊天记录…</string>
+    <string name="chat_import_title">导入的聊天</string>
+    <string name="chat_import_done">已导入 %1$d 条消息</string>
+    <string name="chat_import_failed">这个文件不是可用的聊天记录</string>
 </resources>
 

@@ -5,6 +5,8 @@ import kotlinx.serialization.json.put
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.addJsonObject
 import androidx.compose.foundation.layout.fillMaxHeight
+import android.content.Intent
+import android.net.Uri
 import android.os.SystemClock
 
 import androidx.compose.foundation.background
@@ -70,6 +72,9 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.FileProvider
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -93,6 +98,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import java.io.File
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -121,7 +127,9 @@ import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
@@ -423,6 +431,27 @@ class ChatViewModel(
         _notice.value = null
     }
 
+    /** M4-1：把当前会话导出为 ST 兼容的 `.jsonl` 文本（IO 线程读库）。 */
+    fun exportChatJsonl(onReady: (String) -> Unit) {
+        viewModelScope.launch {
+            repository.exportChatJsonl(conversationId)?.let(onReady)
+        }
+    }
+
+    /** M4-1：导入 ST `.jsonl` 为新会话；成功回调 (新会话 id, 消息数)，失败回调 null。 */
+    fun importChatJsonl(
+        characterId: Long,
+        uri: Uri,
+        title: String,
+        onImported: (Long, Int) -> Unit,
+        onFailed: () -> Unit,
+    ) {
+        viewModelScope.launch {
+            val result = repository.importChatJsonl(characterId, uri, title)
+            if (result == null) onFailed() else onImported(result.conversationId, result.messageCount)
+        }
+    }
+
     fun consumeRestoreText() {
         _restoreText.value = null
     }
@@ -560,6 +589,48 @@ fun ChatScreen(
     val context = androidx.compose.ui.platform.LocalContext.current
     val clipboard = LocalClipboardManager.current
 
+    // M4-1：聊天记录导入（SAF 选 .jsonl）与导出（写缓存 + 分享）。
+    val importChatLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        val charId = character?.id
+        if (uri != null && charId != null) {
+            viewModel.importChatJsonl(
+                characterId = charId,
+                uri = uri,
+                title = context.getString(R.string.chat_import_title),
+                onImported = { newId, count ->
+                    onOpenConversation(newId)
+                    scope.launch {
+                        snackbar.showSnackbar(context.getString(R.string.chat_import_done, count))
+                    }
+                },
+                onFailed = {
+                    scope.launch {
+                        snackbar.showSnackbar(context.getString(R.string.chat_import_failed))
+                    }
+                },
+            )
+        }
+    }
+
+    fun shareExportJsonl() {
+        viewModel.exportChatJsonl { text ->
+            scope.launch {
+                val uri = withContext(Dispatchers.IO) {
+                    val dir = File(context.cacheDir, "export").apply { mkdirs() }
+                    val file = File(dir, "teatalk-chat-${System.currentTimeMillis()}.jsonl")
+                    file.writeText(text)
+                    FileProvider.getUriForFile(context, "${context.packageName}.files", file)
+                }
+                val intent = Intent(Intent.ACTION_SEND).apply {
+                    type = "application/jsonl"
+                    putExtra(Intent.EXTRA_STREAM, uri)
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+                context.startActivity(Intent.createChooser(intent, context.getString(R.string.chat_menu_export)))
+            }
+        }
+    }
+
     // 只有「用户本来就在底部」时才自动跟随；向上翻看历史时不打断。
     val stickToBottom by remember {
         derivedStateOf {
@@ -643,6 +714,16 @@ fun ChatScreen(
                 onShowPrompt = {
                     menuOpen = false
                     showPrompt = true
+                },
+                onExportChat = {
+                    menuOpen = false
+                    shareExportJsonl()
+                },
+                onImportChat = {
+                    menuOpen = false
+                    importChatLauncher.launch(
+                        arrayOf("application/jsonl", "application/json", "text/plain", "*/*"),
+                    )
                 },
             )
             Hairline()
@@ -972,6 +1053,8 @@ private fun ChatHeader(
     onNewConversation: () -> Unit,
     onShowConversations: () -> Unit,
     onShowPrompt: () -> Unit,
+    onExportChat: () -> Unit,
+    onImportChat: () -> Unit,
 ) {
     val cs = MaterialTheme.colorScheme
     Row(
@@ -1027,6 +1110,14 @@ private fun ChatHeader(
                 DropdownMenuItem(
                     text = { Text(stringResource(R.string.chat_menu_prompt)) },
                     onClick = onShowPrompt,
+                )
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.chat_menu_export)) },
+                    onClick = onExportChat,
+                )
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.chat_menu_import)) },
+                    onClick = onImportChat,
                 )
             }
         }
