@@ -63,6 +63,16 @@ D:\Project\TeaTalkApp\build.sh
 | （可选）第二台设备或平板 | 适配 minSdk 28 的窄屏/大屏 | 不阻塞 |
 | （可选）10 张「边界卡」：超长名字、超大世界书、CHARX、带表情的 V3 卡 | 导入鲁棒性回归 | 不阻塞（已有 29 张真实卡） |
 
+## 5.0 Git 推送（代理）
+
+本机 `git config` 里写有 `http.proxy/https.proxy = socks5://127.0.0.1:10793`，但该代理经常未监听，表现为 `Failed to connect to 127.0.0.1 port 10793` / `Recv failure`。推送时临时绕过：
+
+```bash
+git -c http.proxy= -c https.proxy= push origin main
+```
+
+若直连被重置，再恢复代理或换网络。
+
 ## 5.1 密钥管理
 
 - 真实的 `key.json` 只放本地，`.gitignore` 已忽略；仓库里只提交 `key.example.json` 模板。
