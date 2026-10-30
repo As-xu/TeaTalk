@@ -55,6 +55,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -326,7 +327,6 @@ fun CharacterDetailScreen(
                         view.worldBook.size + linkedEntryCount,
                         view.worldBook.size + linkedEntryCount,
                     ),
-                    enabled = true,
                     onClick = { viewModel.openWorldBooks() },
                     modifier = Modifier.weight(1f),
                 )
@@ -413,7 +413,10 @@ fun CharacterDetailScreen(
                 }
                 // weight(1f, fill=false)：横屏 / 矮视口时列表让出空间，操作行始终可见。
                 LazyColumn(
-                    modifier = Modifier.fillMaxWidth().weight(1f, fill = false).heightIn(max = 420.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f, fill = false)
+                        .heightIn(max = 420.dp * LocalDensity.current.fontScale.coerceIn(1f, 1.6f)),
                     verticalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
                     if (view.worldBook.isNotEmpty()) {
@@ -549,7 +552,6 @@ private fun HeroIconButton(onClick: () -> Unit, content: @Composable () -> Unit)
 @Composable
 private fun OutlinedPill(
     text: String,
-    enabled: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -559,14 +561,14 @@ private fun OutlinedPill(
             .height(46.dp)
             .clip(RoundedCornerShape(23.dp))
             .border(1.dp, cs.outline, RoundedCornerShape(23.dp))
-            .clickable(enabled = enabled, onClick = onClick)
+            .clickable(onClick = onClick)
             .padding(horizontal = 18.dp),
         contentAlignment = Alignment.Center,
     ) {
         Text(
             text,
             fontSize = TypeScale.s14,
-            color = if (enabled) cs.onSurfaceVariant else cs.onSurfaceVariant.copy(alpha = 0.45f),
+            color = cs.onSurfaceVariant,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
