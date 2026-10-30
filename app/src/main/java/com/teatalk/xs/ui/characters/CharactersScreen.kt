@@ -40,6 +40,7 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
@@ -73,6 +74,11 @@ import com.teatalk.xs.ui.components.PillTag
 import java.io.File
 import kotlinx.coroutines.launch
 import com.teatalk.xs.ui.theme.TypeScale
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.filled.Edit
+import com.teatalk.xs.data.ManualCard
 
 private val CARD_MIME_TYPES = arrayOf("image/png", "image/jpeg", "application/json", "application/zip", "*/*")
 
@@ -100,6 +106,7 @@ fun CharactersScreen(
     var editTarget by remember { mutableStateOf<CharacterEntity?>(null) }
     var pendingDelete by remember { mutableStateOf<CharacterEntity?>(null) }
     var showWarnings by remember { mutableStateOf(false) }
+    var creating by remember { mutableStateOf(false) }
 
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) viewModel.importCard(uri)
@@ -137,6 +144,15 @@ fun CharactersScreen(
             ) {
                 Text(stringResource(R.string.characters_title), fontSize = TypeScale.s21, fontWeight = FontWeight.SemiBold, color = cs.onBackground)
                 Spacer(Modifier.weight(1f))
+                TextButton(onClick = { creating = true }) {
+                    Icon(Icons.Filled.Edit, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(2.dp))
+                    Text(
+                        stringResource(R.string.characters_new),
+                        fontSize = TypeScale.s14,
+                        fontWeight = FontWeight.Medium,
+                    )
+                }
                 TextButton(onClick = { picker.launch(CARD_MIME_TYPES) }, enabled = !importing) {
                     Icon(Icons.Filled.Add, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(Modifier.width(2.dp))
@@ -277,6 +293,75 @@ fun CharactersScreen(
     if (showWarnings) {
         WarningsSheet(warnings = warnings, onDismiss = { showWarnings = false; viewModel.consumeWarnings() })
     }
+
+    if (creating) {
+        NewCharacterDialog(
+            onDismiss = { creating = false },
+            onCreate = { draft ->
+                creating = false
+                viewModel.createCharacter(draft)
+            },
+        )
+    }
+}
+
+
+@Composable
+private fun NewCharacterDialog(
+    onDismiss: () -> Unit,
+    onCreate: (ManualCard.Draft) -> Unit,
+) {
+    var name by remember { mutableStateOf("") }
+    var description by remember { mutableStateOf("") }
+    var personality by remember { mutableStateOf("") }
+    var scenario by remember { mutableStateOf("") }
+    var firstMessage by remember { mutableStateOf("") }
+    var systemPrompt by remember { mutableStateOf("") }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.characters_new_title)) },
+        text = {
+            Column(
+                Modifier
+                    .heightIn(max = 520.dp)
+                    .verticalScroll(rememberScrollState()),
+            ) {
+                NcField(stringResource(R.string.characters_new_name), name) { name = it }
+                NcField(stringResource(R.string.characters_new_description), description, lines = 3) { description = it }
+                NcField(stringResource(R.string.characters_new_personality), personality, lines = 2) { personality = it }
+                NcField(stringResource(R.string.characters_new_scenario), scenario, lines = 2) { scenario = it }
+                NcField(stringResource(R.string.characters_new_first_message), firstMessage, lines = 3) { firstMessage = it }
+                NcField(stringResource(R.string.characters_new_system_prompt), systemPrompt, lines = 2) { systemPrompt = it }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = {
+                onCreate(
+                    ManualCard.Draft(
+                        name = name,
+                        description = description,
+                        personality = personality,
+                        scenario = scenario,
+                        firstMessage = firstMessage,
+                        systemPrompt = systemPrompt,
+                    ),
+                )
+            }) { Text(stringResource(R.string.edit_save)) }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) } },
+    )
+}
+
+@Composable
+private fun NcField(label: String, value: String, lines: Int = 1, onChange: (String) -> Unit) {
+    OutlinedTextField(
+        value = value,
+        onValueChange = onChange,
+        label = { Text(label, fontSize = TypeScale.s12) },
+        minLines = lines,
+        textStyle = androidx.compose.material3.LocalTextStyle.current.copy(fontSize = TypeScale.s13_5),
+        modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+    )
 }
 
 /** 可输入的搜索胶囊（BasicTextField，视觉与样张一致）。 */

@@ -22,6 +22,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.MenuBook
@@ -39,6 +40,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -57,7 +59,10 @@ import com.teatalk.xs.R
 import com.teatalk.xs.data.model.SamplingPreset
 import com.teatalk.xs.data.model.SamplingPresetStore
 import com.teatalk.xs.ui.components.Hairline
+import com.teatalk.xs.TeaTalkApp
+import com.teatalk.xs.data.StDirectoryImporter
 import com.teatalk.xs.ui.theme.TypeScale
+import kotlinx.coroutines.launch
 
 /** 应用内语言选项：null = 跟随系统。 */
 private data class LanguageOption(val tag: String?, val labelRes: Int)
@@ -87,6 +92,26 @@ fun ProfileScreen(
     // M3 步骤 4：ST 预设（采样参数）
     var preset by remember { mutableStateOf(SamplingPresetStore.read(context)) }
     var showPresetDialog by remember { mutableStateOf(false) }
+    // M4-4：SillyTavern data/default-user 整目录导入
+    var stSummary by remember { mutableStateOf<StDirectoryImporter.Summary?>(null) }
+    var stImporting by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+    val stImportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
+        if (uri != null) {
+            stImporting = true
+            scope.launch {
+                val container = (context.applicationContext as TeaTalkApp).container
+                val importer = StDirectoryImporter(context, container.characterRepository, container.worldBookRepository)
+                val summary = importer.import(uri)
+                stImporting = false
+                if (summary == null) {
+                    Toast.makeText(context, context.getString(R.string.st_import_failed), Toast.LENGTH_SHORT).show()
+                } else {
+                    stSummary = summary
+                }
+            }
+        }
+    }
     val importPreset = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
             val raw = runCatching {
@@ -172,6 +197,18 @@ fun ProfileScreen(
         }
         Spacer(Modifier.height(12.dp))
         SettingsGroup {
+            SettingRow(
+                Icons.Filled.Download,
+                R.string.profile_st_import,
+                null,
+                {
+                    if (stImporting) {
+                        Toast.makeText(context, context.getString(R.string.st_importing), Toast.LENGTH_SHORT).show()
+                    } else {
+                        stImportLauncher.launch(null)
+                    }
+                },
+            )
             SettingRow(Icons.Filled.SystemUpdateAlt, R.string.profile_backup, R.string.profile_backup_sub, {})
             SettingRow(
                 Icons.Filled.Info,
@@ -190,6 +227,30 @@ fun ProfileScreen(
             modifier = Modifier.fillMaxWidth(),
         )
         Spacer(Modifier.height(24.dp))
+    }
+
+    stSummary?.let { summary ->
+        val empty = summary.total == 0
+        AlertDialog(
+            onDismissRequest = { stSummary = null },
+            title = { Text(stringResource(if (empty) R.string.st_import_empty_title else R.string.st_import_done_title)) },
+            text = {
+                Column {
+                    Text(stringResource(R.string.st_import_cards, summary.cards, summary.cardsFailed))
+                    Text(stringResource(R.string.st_import_worlds, summary.worldBooks, summary.worldBooksFailed))
+                    Text(stringResource(R.string.st_import_chats, summary.chats, summary.chatsSkipped))
+                    if (empty) {
+                        Spacer(Modifier.height(8.dp))
+                        Text(stringResource(R.string.st_import_empty_hint))
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { stSummary = null }) {
+                    Text(stringResource(R.string.close))
+                }
+            },
+        )
     }
 
     if (showPresetDialog) {

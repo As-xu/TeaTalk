@@ -30,10 +30,15 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
+import androidx.compose.material3.Switch
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
@@ -72,6 +77,7 @@ fun WorldBooksScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     var detail by remember { mutableStateOf<WorldBookEntity?>(null) }
     var pendingDelete by remember { mutableStateOf<WorldBookEntity?>(null) }
+    var editing by remember { mutableStateOf<Pair<WorldBookEntity, WorldInfoEntry>?>(null) }
 
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) viewModel.import(uri)
@@ -157,6 +163,7 @@ fun WorldBooksScreen(
             book = book,
             entries = viewModel.entriesOf(book),
             onDelete = { detail = null; pendingDelete = book },
+            onEditEntry = { entry -> editing = book to entry },
             onDismiss = { detail = null },
         )
     }
@@ -177,6 +184,17 @@ fun WorldBooksScreen(
             },
         )
     }
+
+    editing?.let { (book, entry) ->
+        WorldBookEntryDialog(
+            entry = entry,
+            onDismiss = { editing = null },
+            onSave = { edited ->
+                editing = null
+                viewModel.saveEntry(book, edited)
+            },
+        )
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -185,6 +203,7 @@ private fun WorldBookDetailSheet(
     book: WorldBookEntity,
     entries: List<WorldInfoEntry>,
     onDelete: () -> Unit,
+    onEditEntry: (WorldInfoEntry) -> Unit,
     onDismiss: () -> Unit,
 ) {
     val cs = MaterialTheme.colorScheme
@@ -222,6 +241,13 @@ private fun WorldBookDetailSheet(
                             if (!entry.enabled) {
                                 Text(stringResource(R.string.worldbook_entry_disabled), fontSize = TypeScale.s11, color = cs.error)
                             }
+                            Spacer(Modifier.weight(1f))
+                            Text(
+                                stringResource(R.string.worldbook_entry_edit),
+                                fontSize = TypeScale.s12,
+                                color = cs.primary,
+                                modifier = Modifier.clickable { onEditEntry(entry) }.padding(start = 8.dp),
+                            )
                         }
                         Text(
                             if (entry.keys.isEmpty()) stringResource(R.string.worldbook_entry_no_keys)
@@ -243,6 +269,154 @@ private fun WorldBookDetailSheet(
                 }
             }
         }
+    }
+}
+
+
+@Composable
+private fun WorldBookEntryDialog(
+    entry: WorldInfoEntry,
+    onDismiss: () -> Unit,
+    onSave: (WorldInfoEntry) -> Unit,
+) {
+    val cs = MaterialTheme.colorScheme
+    var comment by remember { mutableStateOf(entry.comment) }
+    var keys by remember { mutableStateOf(entry.keys.joinToString(", ")) }
+    var secondary by remember { mutableStateOf(entry.secondaryKeys.joinToString(", ")) }
+    var content by remember { mutableStateOf(entry.content) }
+    var order by remember { mutableStateOf(entry.order.toString()) }
+    var depth by remember { mutableStateOf(entry.depth.toString()) }
+    var position by remember { mutableStateOf(entry.position) }
+    var role by remember { mutableStateOf(entry.role) }
+    var enabled by remember { mutableStateOf(entry.enabled) }
+    var constant by remember { mutableStateOf(entry.constant) }
+    var selective by remember { mutableStateOf(entry.selective) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.worldbook_entry_edit_title)) },
+        text = {
+            Column(
+                Modifier
+                    .heightIn(max = 520.dp)
+                    .verticalScroll(rememberScrollState()),
+            ) {
+                WbField(stringResource(R.string.worldbook_field_comment), comment) { comment = it }
+                WbField(stringResource(R.string.worldbook_field_keys), keys) { keys = it }
+                WbField(stringResource(R.string.worldbook_field_secondary), secondary) { secondary = it }
+                WbField(stringResource(R.string.worldbook_field_content), content, singleLine = false) { content = it }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Box(Modifier.weight(1f)) {
+                        WbField(stringResource(R.string.worldbook_field_order), order) { order = it.filter(Char::isDigit).take(6) }
+                    }
+                    Box(Modifier.weight(1f)) {
+                        WbField(stringResource(R.string.worldbook_field_depth), depth) { depth = it.filter(Char::isDigit).take(4) }
+                    }
+                }
+                WbDropdown(
+                    label = stringResource(R.string.worldbook_field_position),
+                    value = position,
+                    options = listOf(
+                        0 to stringResource(R.string.worldbook_position_before),
+                        1 to stringResource(R.string.worldbook_position_after),
+                        2 to stringResource(R.string.worldbook_position_antop),
+                        3 to stringResource(R.string.worldbook_position_anbottom),
+                        4 to stringResource(R.string.worldbook_position_atdepth),
+                        5 to stringResource(R.string.worldbook_position_emtop),
+                        6 to stringResource(R.string.worldbook_position_embottom),
+                    ),
+                ) { position = it }
+                WbDropdown(
+                    label = stringResource(R.string.worldbook_field_role),
+                    value = role,
+                    options = listOf(
+                        0 to stringResource(R.string.worldbook_role_system),
+                        1 to stringResource(R.string.worldbook_role_user),
+                        2 to stringResource(R.string.worldbook_role_assistant),
+                    ),
+                ) { role = it }
+                WbToggle(stringResource(R.string.worldbook_entry_enabled), enabled) { enabled = it }
+                WbToggle(stringResource(R.string.worldbook_entry_constant), constant) { constant = it }
+                WbToggle(stringResource(R.string.worldbook_entry_selective), selective) { selective = it }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = {
+                onSave(
+                    entry.copy(
+                        comment = comment.trim(),
+                        keys = splitKeys(keys),
+                        secondaryKeys = splitKeys(secondary),
+                        content = content,
+                        order = order.toIntOrNull() ?: entry.order,
+                        depth = depth.toIntOrNull() ?: entry.depth,
+                        position = position,
+                        role = role,
+                        enabled = enabled,
+                        constant = constant,
+                        selective = selective,
+                    ),
+                )
+            }) { Text(stringResource(R.string.edit_save)) }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) }
+        },
+    )
+}
+
+private fun splitKeys(raw: String): List<String> =
+    raw.split(',').map(String::trim).filter(String::isNotEmpty)
+
+@Composable
+private fun WbField(
+    label: String,
+    value: String,
+    singleLine: Boolean = true,
+    onChange: (String) -> Unit,
+) {
+    OutlinedTextField(
+        value = value,
+        onValueChange = onChange,
+        label = { Text(label, fontSize = TypeScale.s12) },
+        singleLine = singleLine,
+        minLines = if (singleLine) 1 else 3,
+        textStyle = androidx.compose.material3.LocalTextStyle.current.copy(fontSize = TypeScale.s13_5),
+        modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+    )
+}
+
+@Composable
+private fun WbDropdown(label: String, value: Int, options: List<Pair<Int, String>>, onSelect: (Int) -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    val cs = MaterialTheme.colorScheme
+    val selected = options.firstOrNull { it.first == value }?.second ?: value.toString()
+    Box(Modifier.fillMaxWidth().padding(top = 12.dp)) {
+        Row(
+            Modifier.fillMaxWidth().clickable { open = true }.padding(vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(label, fontSize = TypeScale.s13, color = cs.onSurfaceVariant, modifier = Modifier.weight(1f))
+            Text(selected, fontSize = TypeScale.s13_5, color = cs.primary)
+        }
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            options.forEach { (id, text) ->
+                DropdownMenuItem(
+                    text = { Text(text, fontSize = TypeScale.s13_5) },
+                    onClick = { open = false; onSelect(id) },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun WbToggle(label: String, checked: Boolean, onChange: (Boolean) -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().padding(top = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(label, fontSize = TypeScale.s13, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.weight(1f))
+        Switch(checked = checked, onCheckedChange = onChange)
     }
 }
 

@@ -112,6 +112,23 @@ class CharactersViewModel(
         }
     }
 
+    /** M4-3：手写新建角色。 */
+    fun createCharacter(draft: com.teatalk.xs.data.ManualCard.Draft) {
+        viewModelScope.launch {
+            val name = draft.name.trim()
+            if (name.isEmpty()) {
+                _message.value = UiText.of(com.teatalk.xs.R.string.characters_new_name_required)
+                return@launch
+            }
+            val id = repository.createCharacter(draft)
+            _message.value = if (id != null) {
+                UiText.of(com.teatalk.xs.R.string.characters_created, name)
+            } else {
+                UiText.of(com.teatalk.xs.R.string.characters_new_failed)
+            }
+        }
+    }
+
     fun delete(character: CharacterEntity) {
         viewModelScope.launch {
             repository.delete(character)

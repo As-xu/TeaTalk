@@ -77,6 +77,15 @@ class WorldBookRepository(
         WorldBookImportOutcome.Success(name, entries.size)
     }
 
+    /** M4-2：编辑单条条目（写回原始 JSON，保留未编辑字段）。成功返回 true。 */
+    suspend fun updateEntry(book: WorldBookEntity, entry: WorldInfoEntry): Boolean = withContext(Dispatchers.IO) {
+        val patched = WorldBookEntryPatch.patch(book.entriesJson, entry) ?: return@withContext false
+        val count = WorldInfoParser.fromCard(patched).size
+        dao.updateEntries(book.id, patched, count, System.currentTimeMillis())
+        TeaTalkLog.i("Card", "worldbook.entry.update", "bookId" to book.id, "uid" to entry.uid)
+        true
+    }
+
     suspend fun delete(book: WorldBookEntity) = withContext(Dispatchers.IO) {
         dao.deleteById(book.id)
         // 级联清理绑定：书没了但 id 还挂在角色/会话上时，UI 会显示「0 本书却 1 本已绑定」，

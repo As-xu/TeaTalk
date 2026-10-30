@@ -110,8 +110,9 @@ object WorldInfoParser {
         return WorldInfoEntry(
             uid = e.intOrNull("uid") ?: e.intOrNull("id") ?: fallbackUid,
             comment = e.string("comment"),
-            keys = e.stringList("keys").ifEmpty { e.stringList("key") },
-            secondaryKeys = e.stringList("secondary_keys").ifEmpty { e.stringList("keysecondary") },
+            // ST 独立世界书把关键词存成逗号字符串（`"key": "茶,tea"`）；数组形态也兼容。
+            keys = e.stringList("keys").ifEmpty { e.keyList("key") },
+            secondaryKeys = e.stringList("secondary_keys").ifEmpty { e.keyList("keysecondary") },
             content = e.string("content"),
             constant = e.boolOrNull("constant") ?: false,
             enabled = e.boolOrNull("enabled") ?: !(e.boolOrNull("disable") ?: false),
@@ -185,7 +186,14 @@ object WorldInfoParser {
         else -> null
     }
 
-    private fun JsonObject.stringList(name: String): List<String> = when (val v = this[name]) {
+    /** ST 文件形态：`"key": "a, b"` 或数组 `["a","b"]` 都吃。 */
+private fun JsonObject.keyList(name: String): List<String> = when (val v = this[name]) {
+    is JsonArray -> v.mapNotNull { (it as? JsonPrimitive)?.takeIf { p -> p.isString }?.content }
+    is JsonPrimitive -> if (v.isString) v.content.split(',').map(String::trim).filter(String::isNotEmpty) else emptyList()
+    else -> emptyList()
+}
+
+private fun JsonObject.stringList(name: String): List<String> = when (val v = this[name]) {
         is JsonArray -> v.mapNotNull { (it as? JsonPrimitive)?.takeIf { p -> p.isString }?.content }
         is JsonPrimitive -> if (v.isString && v.content.isNotBlank()) listOf(v.content) else emptyList()
         else -> emptyList()

@@ -49,6 +49,16 @@ class WorldBooksViewModel(
         }
     }
 
+    /** M4-2：保存一条条目的编辑结果。 */
+    fun saveEntry(book: WorldBookEntity, entry: WorldInfoEntry) {
+        viewModelScope.launch {
+            val ok = repository.updateEntry(book, entry)
+            _message.value = UiText.of(
+                if (ok) com.teatalk.xs.R.string.worldbook_entry_saved else com.teatalk.xs.R.string.worldbook_entry_save_failed,
+            )
+        }
+    }
+
     fun delete(book: WorldBookEntity) {
         viewModelScope.launch {
             repository.delete(book)

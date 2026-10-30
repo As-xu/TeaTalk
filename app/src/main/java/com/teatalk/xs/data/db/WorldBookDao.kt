@@ -23,4 +23,8 @@ interface WorldBookDao {
 
     @Query("DELETE FROM world_books WHERE id = :id")
     suspend fun deleteById(id: Long)
+
+    /** M4-2：条目编辑后回写原始 JSON（保留解析器不认识字段）。 */
+    @Query("UPDATE world_books SET entriesJson = :entriesJson, entryCount = :entryCount, updatedAt = :updatedAt WHERE id = :id")
+    suspend fun updateEntries(id: Long, entriesJson: String, entryCount: Int, updatedAt: Long)
 }

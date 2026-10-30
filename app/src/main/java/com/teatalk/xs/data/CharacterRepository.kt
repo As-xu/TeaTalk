@@ -243,6 +243,28 @@ class CharacterRepository(
         CardImportReason.MISSING_DATA -> R.string.import_err_missing_data
     }
 
+    /** M4-3：手写新建角色卡（不经过导入管线）。返回新角色 id，失败为 null。 */
+    suspend fun createCharacter(draft: ManualCard.Draft): Long? = withContext(Dispatchers.IO) {
+        val name = draft.name.trim()
+        if (name.isEmpty()) return@withContext null
+        val now = System.currentTimeMillis()
+        val cardJson = ManualCard.create(draft)
+        val id = dao.insert(
+            CharacterEntity(
+                name = name,
+                avatarPath = null,
+                cardJson = cardJson,
+                cardSource = CARD_SOURCE_MANUAL,
+                tagsJson = "[]",
+                firstMes = draft.firstMessage,
+                createdAt = now,
+                updatedAt = now,
+            ),
+        )
+        TeaTalkLog.i("Card", "char.create.ok", "id" to id, "nameLen" to name.length)
+        id
+    }
+
     suspend fun delete(character: CharacterEntity) = withContext(Dispatchers.IO) {
         dao.deleteMessagesForCharacter(character.id)
         conversations.deleteByCharacter(character.id)
@@ -572,6 +594,8 @@ class CharacterRepository(
 
     private companion object {
         const val AVATAR_DIR = "avatars"
+        const val CARD_SOURCE_MANUAL = "manual"
+
         const val MAX_CARD_BYTES = 64L * 1024 * 1024
         const val MAX_CHAT_JSONL_CHARS = 32L * 1024 * 1024
         const val ROLE_USER = "user"
