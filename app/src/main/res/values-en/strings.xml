@@ -385,5 +385,17 @@
     <string name="characters_created">Created “%1$s”</string>
     <string name="characters_new_failed">Create failed, please retry</string>
     <string name="characters_new_name_required">Name is required</string>
+    <string name="st_import_chooser_title">Import from SillyTavern</string>
+    <string name="st_import_chooser_hint">Pick the data/default-user folder, or its .zip archive.</string>
+    <string name="st_import_chooser_folder">Pick folder</string>
+    <string name="st_import_chooser_zip">Pick .zip</string>
+    <string name="st_import_skipped_duplicates">%1$d duplicates skipped</string>
+    <string name="backup_choose_title">Backup &amp; restore</string>
+    <string name="backup_choose_hint">Export packs characters, world books, conversations and messages into one zip (avatars included). Restore skips entries whose names already exist.</string>
+    <string name="backup_export">Export backup</string>
+    <string name="backup_restore">Restore from backup</string>
+    <string name="backup_exported">Backup saved</string>
+    <string name="backup_restored">Restored: characters %1$d, world books %2$d, chats %3$d, messages %4$d (skipped %5$d)</string>
+    <string name="backup_failed">Could not read the backup file</string>
 </resources>
 

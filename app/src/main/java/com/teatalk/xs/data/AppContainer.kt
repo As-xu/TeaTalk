@@ -78,6 +78,9 @@ class AppContainer(context: Context) {
 
     val appPrefs: AppPrefs by lazy { AppPrefs(appContext) }
 
+    /** M4 加固：本机备份导出/恢复（角色卡 + 世界书 + 会话与消息）。 */
+    val backupRepository: BackupRepository by lazy { BackupRepository(appContext, database) }
+
     val secretStore: SecretStore by lazy { SecretStore(appContext) }
 
     val providerRepository: ProviderRepository by lazy {

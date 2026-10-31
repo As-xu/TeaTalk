@@ -390,5 +390,17 @@
     <string name="characters_created">已创建「%1$s」</string>
     <string name="characters_new_failed">创建失败，请重试</string>
     <string name="characters_new_name_required">请先填名字</string>
+    <string name="st_import_chooser_title">从 SillyTavern 导入</string>
+    <string name="st_import_chooser_hint">选择 data/default-user 文件夹，或选择它的 .zip 压缩包。</string>
+    <string name="st_import_chooser_folder">选择文件夹</string>
+    <string name="st_import_chooser_zip">选择 .zip</string>
+    <string name="st_import_skipped_duplicates">已存在 %1$d 条，已跳过</string>
+    <string name="backup_choose_title">备份与恢复</string>
+    <string name="backup_choose_hint">导出会把角色卡、世界书、会话与消息打包成一个 zip（含头像原图）；恢复时按名字去重，不覆盖现有数据。</string>
+    <string name="backup_export">导出备份</string>
+    <string name="backup_restore">从备份恢复</string>
+    <string name="backup_exported">备份已保存</string>
+    <string name="backup_restored">恢复完成：角色 %1$d、世界书 %2$d、会话 %3$d、消息 %4$d（跳过重复 %5$d）</string>
+    <string name="backup_failed">备份文件读取失败</string>
 </resources>
 

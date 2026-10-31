@@ -1,5 +1,6 @@
 package com.teatalk.xs.ui.profile
 
+import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -94,22 +95,77 @@ fun ProfileScreen(
     // M3 步骤 4：ST 预设（采样参数）
     var preset by remember { mutableStateOf(SamplingPresetStore.read(context)) }
     var showPresetDialog by remember { mutableStateOf(false) }
-    // M4-4：SillyTavern data/default-user 整目录导入
+    // M4-4：SillyTavern data/default-user 整目录导入（加固后支持 .zip）
+    var showStImportChooser by remember { mutableStateOf(false) }
+    // M4 加固：备份导出 / 恢复
+    var showBackupChooser by remember { mutableStateOf(false) }
+    var backupBusy by remember { mutableStateOf(false) }
+    var backupMessage by remember { mutableStateOf<String?>(null) }
     var stSummary by remember { mutableStateOf<StDirectoryImporter.Summary?>(null) }
     var stImporting by remember { mutableStateOf(false) }
+    var currentTreeUri by remember { mutableStateOf<android.net.Uri?>(null) }
     val scope = rememberCoroutineScope()
+    fun runStImport(zipUri: Uri?) {
+        stImporting = true
+        scope.launch {
+            val container = (context.applicationContext as TeaTalkApp).container
+            val importer = StDirectoryImporter(context, container.characterRepository, container.worldBookRepository)
+            val summary = if (zipUri == null) currentTreeUri?.let { importer.import(it) } else importer.importZip(zipUri)
+            stImporting = false
+            if (summary == null) {
+                Toast.makeText(context, context.getString(R.string.st_import_failed), Toast.LENGTH_SHORT).show()
+            } else {
+                stSummary = summary
+            }
+        }
+    }
     val stImportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
         if (uri != null) {
-            stImporting = true
+            currentTreeUri = uri
+            runStImport(null)
+        }
+    }
+    val stZipLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) runStImport(uri)
+    }
+    val backupExportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/zip")) { uri ->
+        if (uri != null) {
+            backupBusy = true
             scope.launch {
                 val container = (context.applicationContext as TeaTalkApp).container
-                val importer = StDirectoryImporter(context, container.characterRepository, container.worldBookRepository)
-                val summary = importer.import(uri)
-                stImporting = false
-                if (summary == null) {
-                    Toast.makeText(context, context.getString(R.string.st_import_failed), Toast.LENGTH_SHORT).show()
+                val bytes = runCatching { container.backupRepository.export() }.getOrNull()
+                val ok = if (bytes == null) false else runCatching {
+                    context.contentResolver.openOutputStream(uri)?.use { it.write(bytes) }
+                    true
+                }.getOrDefault(false)
+                backupBusy = false
+                backupMessage = context.getString(if (ok) R.string.backup_exported else R.string.backup_failed)
+            }
+        }
+    }
+    val backupRestoreLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) {
+            backupBusy = true
+            scope.launch {
+                val container = (context.applicationContext as TeaTalkApp).container
+                val bytes = runCatching {
+                    context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+                }.getOrNull()
+                val summary = if (bytes == null) null else runCatching {
+                    container.backupRepository.restore(bytes)
+                }.getOrNull()
+                backupBusy = false
+                backupMessage = if (summary == null) {
+                    context.getString(R.string.backup_failed)
                 } else {
-                    stSummary = summary
+                    context.getString(
+                        R.string.backup_restored,
+                        summary.cards,
+                        summary.worldBooks,
+                        summary.chats,
+                        summary.messages,
+                        summary.skipped,
+                    )
                 }
             }
         }
@@ -212,7 +268,7 @@ fun ProfileScreen(
                     if (stImporting) {
                         Toast.makeText(context, context.getString(R.string.st_importing), Toast.LENGTH_SHORT).show()
                     } else {
-                        stImportLauncher.launch(null)
+                        showStImportChooser = true
                     }
                 },
             )
@@ -220,7 +276,13 @@ fun ProfileScreen(
                 Icons.Filled.SystemUpdateAlt,
                 R.string.profile_backup,
                 R.string.profile_backup_sub,
-                { onShowComingSoon(R.string.profile_backup_soon) },
+                {
+                    if (backupBusy) {
+                        Toast.makeText(context, context.getString(R.string.st_importing), Toast.LENGTH_SHORT).show()
+                    } else {
+                        showBackupChooser = true
+                    }
+                },
             )
             SettingRow(
                 Icons.Filled.Info,
@@ -241,6 +303,61 @@ fun ProfileScreen(
         Spacer(Modifier.height(24.dp))
     }
 
+    if (showStImportChooser) {
+        AlertDialog(
+            onDismissRequest = { showStImportChooser = false },
+            title = { Text(stringResource(R.string.st_import_chooser_title)) },
+            text = { Text(stringResource(R.string.st_import_chooser_hint)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    showStImportChooser = false
+                    stZipLauncher.launch(arrayOf("application/zip", "application/x-zip-compressed", "application/octet-stream"))
+                }) {
+                    Text(stringResource(R.string.st_import_chooser_zip))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    showStImportChooser = false
+                    stImportLauncher.launch(null)
+                }) {
+                    Text(stringResource(R.string.st_import_chooser_folder))
+                }
+            },
+        )
+    }
+
+    if (showBackupChooser) {
+        AlertDialog(
+            onDismissRequest = { showBackupChooser = false },
+            title = { Text(stringResource(R.string.backup_choose_title)) },
+            text = { Text(stringResource(R.string.backup_choose_hint)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    showBackupChooser = false
+                    backupExportLauncher.launch("teatalk-backup-${System.currentTimeMillis()}.zip")
+                }) { Text(stringResource(R.string.backup_export)) }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    showBackupChooser = false
+                    backupRestoreLauncher.launch(arrayOf("application/zip", "application/x-zip-compressed", "application/octet-stream"))
+                }) { Text(stringResource(R.string.backup_restore)) }
+            },
+        )
+    }
+
+    backupMessage?.let { message ->
+        AlertDialog(
+            onDismissRequest = { backupMessage = null },
+            title = { Text(stringResource(R.string.backup_choose_title)) },
+            text = { Text(message) },
+            confirmButton = {
+                TextButton(onClick = { backupMessage = null }) { Text(stringResource(R.string.close)) }
+            },
+        )
+    }
+
     stSummary?.let { summary ->
         val empty = summary.total == 0
         AlertDialog(
@@ -251,6 +368,15 @@ fun ProfileScreen(
                     Text(stringResource(R.string.st_import_cards, summary.cards, summary.cardsFailed))
                     Text(stringResource(R.string.st_import_worlds, summary.worldBooks, summary.worldBooksFailed))
                     Text(stringResource(R.string.st_import_chats, summary.chats, summary.chatsSkipped))
+                    val duplicates = summary.cardsSkipped + summary.worldBooksSkipped
+                    if (duplicates > 0) {
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            stringResource(R.string.st_import_skipped_duplicates, duplicates),
+                            fontSize = TypeScale.s12,
+                            color = cs.onSurfaceVariant,
+                        )
+                    }
                     if (empty) {
                         Spacer(Modifier.height(8.dp))
                         Text(stringResource(R.string.st_import_empty_hint))
