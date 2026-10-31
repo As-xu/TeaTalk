@@ -75,9 +75,9 @@ fun WorldBooksScreen(
     val importing by viewModel.importing.collectAsState()
     val message by viewModel.message.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
-    var detail by remember { mutableStateOf<WorldBookEntity?>(null) }
+    var detailId by remember { mutableStateOf<Long?>(null) }
     var pendingDelete by remember { mutableStateOf<WorldBookEntity?>(null) }
-    var editing by remember { mutableStateOf<Pair<WorldBookEntity, WorldInfoEntry>?>(null) }
+    var editing by remember { mutableStateOf<Pair<Long, WorldInfoEntry>?>(null) }
 
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) viewModel.import(uri)
@@ -127,7 +127,7 @@ fun WorldBooksScreen(
                         Row(
                             Modifier
                                 .fillMaxWidth()
-                                .clickable { detail = book }
+                                .clickable { detailId = book.id }
                                 .padding(horizontal = 20.dp, vertical = 14.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
@@ -158,13 +158,15 @@ fun WorldBooksScreen(
         SnackbarHost(snackbarHostState, Modifier.align(Alignment.BottomCenter).padding(bottom = 16.dp))
     }
 
-    detail?.let { book ->
+    // 详情从实时列表里取，保存后自动重组；不要持有点击时的快照。
+    val detailBook = books?.firstOrNull { it.id == detailId }
+    detailBook?.let { book ->
         WorldBookDetailSheet(
             book = book,
-            entries = viewModel.entriesOf(book),
-            onDelete = { detail = null; pendingDelete = book },
-            onEditEntry = { entry -> editing = book to entry },
-            onDismiss = { detail = null },
+            entries = remember(book.entriesJson) { viewModel.entriesOf(book) },
+            onDelete = { detailId = null; pendingDelete = book },
+            onEditEntry = { entry -> editing = book.id to entry },
+            onDismiss = { detailId = null },
         )
     }
 

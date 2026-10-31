@@ -77,12 +77,17 @@ class WorldBookRepository(
         WorldBookImportOutcome.Success(name, entries.size)
     }
 
-    /** M4-2：编辑单条条目（写回原始 JSON，保留未编辑字段）。成功返回 true。 */
-    suspend fun updateEntry(book: WorldBookEntity, entry: WorldInfoEntry): Boolean = withContext(Dispatchers.IO) {
-        val patched = WorldBookEntryPatch.patch(book.entriesJson, entry) ?: return@withContext false
+    /** M4-2：编辑单条条目（写回原始 JSON，保留未编辑字段）。成功返回 true。
+     *
+     * 必须以「库里的当前 JSON」为基础打补丁：界面上的 book 是点开详情时的快照，
+     * 连续编辑/导入/别的入口写库后快照就会过期，用旧 JSON 覆盖会静默丢数据。
+     */
+    suspend fun updateEntry(bookId: Long, entry: WorldInfoEntry): Boolean = withContext(Dispatchers.IO) {
+        val current = dao.find(bookId) ?: return@withContext false
+        val patched = WorldBookEntryPatch.patch(current.entriesJson, entry) ?: return@withContext false
         val count = WorldInfoParser.fromCard(patched).size
-        dao.updateEntries(book.id, patched, count, System.currentTimeMillis())
-        TeaTalkLog.i("Card", "worldbook.entry.update", "bookId" to book.id, "uid" to entry.uid)
+        dao.updateEntries(bookId, patched, count, System.currentTimeMillis())
+        TeaTalkLog.i("Card", "worldbook.entry.update", "bookId" to bookId, "uid" to entry.uid)
         true
     }
 

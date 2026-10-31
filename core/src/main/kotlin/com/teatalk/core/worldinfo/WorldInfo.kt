@@ -189,7 +189,12 @@ object WorldInfoParser {
     /** ST 文件形态：`"key": "a, b"` 或数组 `["a","b"]` 都吃。 */
 private fun JsonObject.keyList(name: String): List<String> = when (val v = this[name]) {
     is JsonArray -> v.mapNotNull { (it as? JsonPrimitive)?.takeIf { p -> p.isString }?.content }
-    is JsonPrimitive -> if (v.isString) v.content.split(',').map(String::trim).filter(String::isNotEmpty) else emptyList()
+    is JsonPrimitive -> if (v.isString) {
+            // ST 用半角逗号，但中文输入法常打出全角逗号；两种都当分隔符，否则中文关键词永远匹配不到。
+            v.content.split(',', '，').map(String::trim).filter(String::isNotEmpty)
+        } else {
+            emptyList()
+        }
     else -> emptyList()
 }
 

@@ -438,17 +438,15 @@ class ChatViewModel(
         }
     }
 
-    /** M4-1：导入 ST `.jsonl` 为新会话；成功回调 (新会话 id, 消息数)，失败回调 null。 */
+    /** M4-1：导入 ST `.jsonl` 为新会话；结果按「成功/太大/空/失败」分类交回 UI。 */
     fun importChatJsonl(
         characterId: Long,
         uri: Uri,
         title: String,
-        onImported: (Long, Int) -> Unit,
-        onFailed: () -> Unit,
+        onResult: (CharacterRepository.ChatImportOutcome) -> Unit,
     ) {
         viewModelScope.launch {
-            val result = repository.importChatJsonl(characterId, uri, title)
-            if (result == null) onFailed() else onImported(result.conversationId, result.messageCount)
+            onResult(repository.importChatJsonl(characterId, uri, title))
         }
     }
 
@@ -597,18 +595,29 @@ fun ChatScreen(
                 characterId = charId,
                 uri = uri,
                 title = context.getString(R.string.chat_import_title),
-                onImported = { newId, count ->
-                    onOpenConversation(newId)
-                    scope.launch {
-                        snackbar.showSnackbar(context.getString(R.string.chat_import_done, count))
+            ) { result ->
+                scope.launch {
+                    when (result) {
+                        is CharacterRepository.ChatImportOutcome.Imported -> {
+                            onOpenConversation(result.conversationId)
+                            snackbar.showSnackbar(
+                                context.getString(R.string.chat_import_done, result.messageCount),
+                            )
+                            if (result.skippedLines > 0) {
+                                snackbar.showSnackbar(
+                                    context.getString(R.string.chat_import_skipped, result.skippedLines),
+                                )
+                            }
+                        }
+                        CharacterRepository.ChatImportOutcome.TooLarge ->
+                            snackbar.showSnackbar(context.getString(R.string.chat_import_too_large))
+                        CharacterRepository.ChatImportOutcome.Empty ->
+                            snackbar.showSnackbar(context.getString(R.string.chat_import_empty))
+                        is CharacterRepository.ChatImportOutcome.Failed ->
+                            snackbar.showSnackbar(context.getString(R.string.chat_import_failed))
                     }
-                },
-                onFailed = {
-                    scope.launch {
-                        snackbar.showSnackbar(context.getString(R.string.chat_import_failed))
-                    }
-                },
-            )
+                }
+            }
         }
     }
 
@@ -819,10 +828,11 @@ fun ChatScreen(
                     Row(
                         Modifier
                             .weight(1f)
-                            .height(40.dp)
+                            // 固定 40dp 会在换行时把第二行裁掉（UI 审阅 P0-1）；改为「最小 40、随内容长高」。
+                            .heightIn(min = 40.dp, max = 120.dp)
                             .clip(RoundedCornerShape(20.dp))
                             .background(cs.surfaceContainerHigh)
-                            .padding(horizontal = 14.dp),
+                            .padding(horizontal = 14.dp, vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         BasicTextField(

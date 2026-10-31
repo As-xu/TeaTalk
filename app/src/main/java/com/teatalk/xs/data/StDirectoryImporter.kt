@@ -72,7 +72,14 @@ class StDirectoryImporter(
         val worldsDir = rootChildren.firstOrNull { it.isDir && it.name.equals("worlds", true) }
         val worldNodes = worldsDir?.let { children(resolver, treeUri, it.documentId) }.orEmpty()
             .filter { !it.isDir && it.name?.endsWith(".json", true) == true }
+        // 同名书已存在时不去重导入：ST 的导出目录可能被重复选中，重复入库会让库列表出现同名副本。
+        val existingWorlds = runCatching { worldBooks.observeAll().first() }.getOrDefault(emptyList())
         for (node in worldNodes) {
+            val name = node.name?.removeSuffix(".json").orEmpty()
+            if (existingWorlds.any { it.name.equals(name, true) }) {
+                summary.worldBooks++
+                continue
+            }
             val uri = documentUri(treeUri, node.documentId)
             when (runCatching { worldBooks.import(uri) }.getOrNull()) {
                 is WorldBookImportOutcome.Success -> summary.worldBooks++
@@ -88,7 +95,7 @@ class StDirectoryImporter(
                 val folderName = dir.name ?: continue
                 val files = children(resolver, treeUri, dir.documentId).orEmpty()
                     .filter { !it.isDir && it.name?.endsWith(".jsonl", true) == true }
-                val character = byName[folderName]
+                val character = byName[folderName] ?: byName.entries.firstOrNull { it.key.equals(folderName, true) }?.value
                 if (character == null) {
                     summary.chatsSkipped += files.size
                     continue
@@ -102,7 +109,7 @@ class StDirectoryImporter(
                             title = title,
                         )
                     }.getOrNull()
-                    if (result != null) summary.chats++ else summary.chatsSkipped++
+                    if (result is CharacterRepository.ChatImportOutcome.Imported) summary.chats++ else summary.chatsSkipped++
                 }
             }
         }

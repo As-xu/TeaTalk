@@ -504,8 +504,13 @@ class CharacterRepository(
 
     /** 限长读取：单张卡上限 64MB，防御超大文件把内存打爆。 */
 
-    /** 聊天 jsonl 导入结果（M4-1）：新会话 id、写入消息数、坏行数。 */
-    data class ChatImportResult(val conversationId: Long, val messageCount: Int, val skippedLines: Int)
+    /** 聊天 jsonl 导入结果（M4-1）：区分「文件太大 / 空文件 / 读不了 / 成功」，UI 才能给出可操作的提示。 */
+    sealed interface ChatImportOutcome {
+        data class Imported(val conversationId: Long, val messageCount: Int, val skippedLines: Int) : ChatImportOutcome
+        data object TooLarge : ChatImportOutcome
+        data object Empty : ChatImportOutcome
+        data class Failed(val reason: String? = null) : ChatImportOutcome
+    }
 
     /** 当前会话的全部消息（导出/备份用；升序 = 对话顺序）。 */
     suspend fun messagesOnce(conversationId: Long): List<MessageEntity> =
@@ -528,39 +533,37 @@ class CharacterRepository(
         characterId: Long,
         uri: Uri,
         title: String,
-    ): ChatImportResult? = withContext(Dispatchers.IO) {
-        val character = dao.find(characterId) ?: return@withContext null
-        val text = appContext.contentResolver.openInputStream(uri)?.use { input ->
-            input.bufferedReader(Charsets.UTF_8).use { reader ->
-                val buffer = CharArray(64 * 1024)
-                val out = StringBuilder()
-                var total = 0
-                while (true) {
-                    val read = reader.read(buffer)
-                    if (read <= 0) break
-                    total += read
-                    if (total > MAX_CHAT_JSONL_CHARS) return@withContext null
-                    out.append(buffer, 0, read)
+    ): ChatImportOutcome = withContext(Dispatchers.IO) {
+        val character = dao.find(characterId) ?: return@withContext ChatImportOutcome.Failed("character_missing")
+        // SAF 授权可能失效、云盘 provider 可能读失败：必须兜住，不能从 viewModelScope 逃逸成崩溃。
+        val text = try {
+            appContext.contentResolver.openInputStream(uri)?.use { input ->
+                input.bufferedReader(Charsets.UTF_8).use { reader ->
+                    val buffer = CharArray(64 * 1024)
+                    val out = StringBuilder()
+                    var total = 0L
+                    while (true) {
+                        val read = reader.read(buffer)
+                        if (read <= 0) break
+                        total += read
+                        if (total > MAX_CHAT_JSONL_CHARS) return@withContext ChatImportOutcome.TooLarge
+                        out.append(buffer, 0, read)
+                    }
+                    out.toString()
                 }
-                out.toString()
-            }
-        } ?: return@withContext null
+            } ?: return@withContext ChatImportOutcome.Failed("unreadable")
+        } catch (e: Exception) {
+            TeaTalkLog.w("Import", "chat.read_failed error=${e.javaClass.simpleName}")
+            return@withContext ChatImportOutcome.Failed(e.javaClass.simpleName)
+        }
         val parsed = ChatJsonl.parse(text)
-        if (parsed.messages.isEmpty()) return@withContext null
+        if (parsed.messages.isEmpty()) return@withContext ChatImportOutcome.Empty
         val now = System.currentTimeMillis()
-        val conversationId = conversations.insert(
-            ConversationEntity(
-                characterId = character.id,
-                title = title,
-                createdAt = now,
-                updatedAt = now,
-            ),
-        )
         val entities = parsed.messages.map { message ->
             val variants = if (message.swipes.size > 1) message.swipes else emptyList()
             MessageEntity(
                 characterId = character.id,
-                conversationId = conversationId,
+                conversationId = 0L,
                 role = message.role,
                 content = message.content,
                 createdAt = message.createdAt,
@@ -574,8 +577,20 @@ class CharacterRepository(
                 status = MessageEntity.STATUS_COMPLETE,
             )
         }
-        dao.insertMessagesExact(entities)
-        ChatImportResult(conversationId, entities.size, parsed.skippedLines)
+        // 会话与消息同事务写入：任何一步失败都不能留下一条空会话。
+        val conversation = ConversationEntity(
+            characterId = character.id,
+            title = title,
+            createdAt = now,
+            updatedAt = now,
+        )
+        try {
+            val conversationId = conversations.insertWithMessages(conversation, entities)
+            ChatImportOutcome.Imported(conversationId, entities.size, parsed.skippedLines)
+        } catch (e: Exception) {
+            TeaTalkLog.w("Import", "chat.write_failed error=${e.javaClass.simpleName}")
+            ChatImportOutcome.Failed(e.javaClass.simpleName)
+        }
     }
 
     private fun readCardBytes(input: InputStream): ByteArray {

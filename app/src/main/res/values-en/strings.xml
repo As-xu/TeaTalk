@@ -108,6 +108,8 @@
     <string name="profile_import">Import character card</string>
     <string name="profile_import_sub">PNG / JSON / CHARX</string>
     <string name="profile_backup">Backup &amp; export</string>
+    <string name="profile_theme_soon">More palettes arrive in M5; light/dark follows the system for now</string>
+    <string name="profile_backup_soon">Backup and restore arrive in the M4 hardening round</string>
     <string name="profile_backup_sub">Characters &amp; chats</string>
     <string name="profile_about">About TeaTalk</string>
     <string name="profile_about_sub">v%1$s · AGPL-3.0 · Stored on device</string>
@@ -334,6 +336,9 @@
     <string name="chat_menu_import">Import chat (JSONL)…</string>
     <string name="chat_import_title">Imported chat</string>
     <string name="chat_import_done">%1$d messages imported</string>
+    <string name="chat_import_skipped">%1$d lines could not be parsed and were skipped</string>
+    <string name="chat_import_too_large">File is too large (over 32 MB); split the chat log first</string>
+    <string name="chat_import_empty">No importable messages in this file</string>
     <string name="chat_import_failed">This file is not a readable chat log</string>
     <string name="profile_st_import">Import from SillyTavern…</string>
     <string name="st_importing">Importing, please wait…</string>

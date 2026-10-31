@@ -60,18 +60,29 @@ object ChatJsonl {
     fun parse(text: String): Parsed {
         val messages = ArrayList<ParsedMessage>()
         var skipped = 0
-        var index = 0
+        var lastCreatedAt = 0L
         for (raw in text.lineSequence()) {
             val line = raw.trim()
             if (line.isEmpty()) continue
-            index++
             val obj = runCatching { json.parseToJsonElement(line).jsonObject }.getOrNull()
-            if (obj == null || obj["mes"] == null) {
-                // 头行（或其它非消息行）不算失败，仅跳过。
+            if (obj == null) {
+                // 坏 JSON 行：用户需要知道有内容被丢弃，计入 skipped。
+                skipped++
                 continue
             }
-            val parsed = runCatching { toMessage(obj) }.getOrNull()
-            if (parsed == null) skipped++ else messages.add(parsed)
+            if (obj["mes"] == null) {
+                // 头行（chat_metadata 等）不算失败，静默跳过。
+                continue
+            }
+            var parsed = runCatching { toMessage(obj) }.getOrNull()
+            if (parsed == null || parsed.content.isBlank()) {
+                skipped++
+                continue
+            }
+            // 同一毫秒的消息保持文件顺序：时间戳取单调递增，避免列表按 createdAt 排序后乱序。
+            if (parsed.createdAt <= lastCreatedAt) parsed = parsed.copy(createdAt = lastCreatedAt + 1)
+            lastCreatedAt = parsed.createdAt
+            messages.add(parsed)
         }
         return Parsed(messages = messages, skippedLines = skipped)
     }
@@ -81,8 +92,10 @@ object ChatJsonl {
         val swipes = (obj["swipes"] as? JsonArray)
             ?.mapNotNull { (it as? JsonPrimitive)?.contentOrNull }
             .orEmpty()
-        val swipeId = (obj["swipe_id"] as? JsonPrimitive)?.intOrNull ?: 0
-        val content = swipes.getOrNull(swipeId) ?: mes
+        val rawSwipeId = (obj["swipe_id"] as? JsonPrimitive)?.intOrNull ?: 0
+        val swipesList = if (swipes.isEmpty()) listOf(mes) else swipes
+        val swipeId = rawSwipeId.coerceIn(0, swipesList.size - 1)
+        val content = swipesList[swipeId]
         val extra = obj["extra"] as? JsonObject
         val createdAt = runCatching {
             (obj["send_date"] as? JsonPrimitive)?.contentOrNull?.let { Instant.parse(it).toEpochMilli() }
@@ -93,8 +106,8 @@ object ChatJsonl {
             isSystem = (obj["is_system"] as? JsonPrimitive)?.booleanOrNull ?: false,
             createdAt = createdAt,
             content = content,
-            swipes = if (swipes.isEmpty()) listOf(mes) else swipes,
-            swipeId = swipeId.coerceAtLeast(0),
+            swipes = swipesList,
+            swipeId = swipeId,
             api = (extra?.get("api") as? JsonPrimitive)?.contentOrNull,
             model = (extra?.get("model") as? JsonPrimitive)?.contentOrNull,
         )

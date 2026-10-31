@@ -312,6 +312,7 @@ private fun NewCharacterDialog(
     onCreate: (ManualCard.Draft) -> Unit,
 ) {
     var name by remember { mutableStateOf("") }
+    var nameError by remember { mutableStateOf(false) }
     var description by remember { mutableStateOf("") }
     var personality by remember { mutableStateOf("") }
     var scenario by remember { mutableStateOf("") }
@@ -326,7 +327,11 @@ private fun NewCharacterDialog(
                     .heightIn(max = 520.dp)
                     .verticalScroll(rememberScrollState()),
             ) {
-                NcField(stringResource(R.string.characters_new_name), name) { name = it }
+                NcField(
+                    stringResource(R.string.characters_new_name),
+                    name,
+                    isError = nameError,
+                ) { name = it; if (it.isNotBlank()) nameError = false }
                 NcField(stringResource(R.string.characters_new_description), description, lines = 3) { description = it }
                 NcField(stringResource(R.string.characters_new_personality), personality, lines = 2) { personality = it }
                 NcField(stringResource(R.string.characters_new_scenario), scenario, lines = 2) { scenario = it }
@@ -336,6 +341,11 @@ private fun NewCharacterDialog(
         },
         confirmButton = {
             TextButton(onClick = {
+                // 名称是唯一必填项：本地先拦，校验失败不关闭弹层（UX 审阅 P0-2）。
+                if (name.isBlank()) {
+                    nameError = true
+                    return@TextButton
+                }
                 onCreate(
                     ManualCard.Draft(
                         name = name,
@@ -353,10 +363,17 @@ private fun NewCharacterDialog(
 }
 
 @Composable
-private fun NcField(label: String, value: String, lines: Int = 1, onChange: (String) -> Unit) {
+private fun NcField(
+    label: String,
+    value: String,
+    lines: Int = 1,
+    isError: Boolean = false,
+    onChange: (String) -> Unit,
+) {
     OutlinedTextField(
         value = value,
         onValueChange = onChange,
+        isError = isError,
         label = { Text(label, fontSize = TypeScale.s12) },
         minLines = lines,
         textStyle = androidx.compose.material3.LocalTextStyle.current.copy(fontSize = TypeScale.s13_5),

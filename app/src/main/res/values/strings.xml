@@ -112,6 +112,8 @@
     <string name="profile_import">导入角色卡</string>
     <string name="profile_import_sub">PNG / JSON / CHARX</string>
     <string name="profile_backup">备份与导出</string>
+    <string name="profile_theme_soon">多配色主题在 M5 提供，当前跟随系统深色/浅色</string>
+    <string name="profile_backup_soon">备份与恢复在 M4 收尾阶段提供</string>
     <string name="profile_backup_sub">角色卡与聊天记录</string>
     <string name="profile_about">关于 TeaTalk</string>
     <string name="profile_about_sub">v%1$s · AGPL-3.0 · 数据只存本机</string>
@@ -339,6 +341,9 @@
     <string name="chat_menu_import">导入聊天记录…</string>
     <string name="chat_import_title">导入的聊天</string>
     <string name="chat_import_done">已导入 %1$d 条消息</string>
+    <string name="chat_import_skipped">已跳过 %1$d 行无法解析的内容</string>
+    <string name="chat_import_too_large">文件太大（超过 32 MB），请先拆分聊天记录</string>
+    <string name="chat_import_empty">这个文件里没有可导入的消息</string>
     <string name="chat_import_failed">这个文件不是可用的聊天记录</string>
     <string name="profile_st_import">从 SillyTavern 导入…</string>
     <string name="st_importing">正在导入，请稍候…</string>

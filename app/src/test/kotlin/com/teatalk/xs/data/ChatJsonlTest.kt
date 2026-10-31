@@ -91,7 +91,8 @@ class ChatJsonlTest {
         """.trimIndent()
         val parsed = ChatJsonl.parse(text)
         assertEquals(1, parsed.messages.size)
-        assertEquals(0, parsed.skippedLines)
+        // 非空但解析不了的行必须计入 skippedLines，UI 才能提示「跳过了几行」。
+        assertEquals(1, parsed.skippedLines)
         assertNotNull(parsed.messages[0].createdAt)
     }
 }

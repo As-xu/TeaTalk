@@ -79,6 +79,8 @@ fun ProfileScreen(
     onOpenModelSettings: () -> Unit = {},
     onOpenWorldBooks: () -> Unit = {},
     onOpenAbout: () -> Unit = {},
+    onOpenCharacters: () -> Unit = {},
+    onShowComingSoon: (Int) -> Unit = {},
     currentLanguageTag: String? = null,
     onLanguageChange: (String?) -> Unit = {},
 ) {
@@ -183,9 +185,14 @@ fun ProfileScreen(
         Spacer(Modifier.height(14.dp))
         SettingsGroup {
             SettingRow(Icons.Filled.Settings, R.string.profile_model, R.string.profile_model_sub, onOpenModelSettings)
-            SettingRow(Icons.Filled.Palette, R.string.profile_theme, R.string.profile_theme_sub, {})
+            SettingRow(
+                Icons.Filled.Palette,
+                R.string.profile_theme,
+                R.string.profile_theme_sub,
+                { onShowComingSoon(R.string.profile_theme_soon) },
+            )
             SettingRow(Icons.Filled.Language, R.string.profile_language, null, { showLanguageDialog = true }, trailing = currentLabel)
-            SettingRow(Icons.Filled.UploadFile, R.string.profile_import, R.string.profile_import_sub, {})
+            SettingRow(Icons.Filled.UploadFile, R.string.profile_import, R.string.profile_import_sub, onOpenCharacters)
             SettingRow(Icons.Filled.MenuBook, R.string.profile_worldbook, R.string.profile_worldbook_sub, onOpenWorldBooks)
             SettingRow(
                 Icons.Filled.Tune,
@@ -209,7 +216,12 @@ fun ProfileScreen(
                     }
                 },
             )
-            SettingRow(Icons.Filled.SystemUpdateAlt, R.string.profile_backup, R.string.profile_backup_sub, {})
+            SettingRow(
+                Icons.Filled.SystemUpdateAlt,
+                R.string.profile_backup,
+                R.string.profile_backup_sub,
+                { onShowComingSoon(R.string.profile_backup_soon) },
+            )
             SettingRow(
                 Icons.Filled.Info,
                 R.string.profile_about,

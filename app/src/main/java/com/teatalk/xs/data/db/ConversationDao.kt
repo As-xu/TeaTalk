@@ -4,6 +4,7 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Transaction
 import kotlinx.coroutines.flow.Flow
 
 /** 会话表；消息本体仍在 `messages`，这里只负责会话的生命周期与列表。 */
@@ -55,6 +56,17 @@ interface ConversationDao {
 
     @Query("SELECT COUNT(*) FROM conversations")
     suspend fun countAll(): Int
+
+    @Insert
+    suspend fun insertMessagesExact(messages: List<MessageEntity>)
+
+    /** 会话与消息必须同成同败：失败时不能留下一条空会话。 */
+    @Transaction
+    suspend fun insertWithMessages(conversation: ConversationEntity, messages: List<MessageEntity>): Long {
+        val id = insert(conversation)
+        insertMessagesExact(messages.map { it.copy(conversationId = id) })
+        return id
+    }
 
     /**
      * 聊天列表：每条会话一行，带角色名/头像（用于气泡左侧）与最后一条消息预览。
