@@ -23,6 +23,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBars
@@ -115,6 +118,7 @@ import com.teatalk.xs.data.ChatEngine
 import com.teatalk.xs.data.UiText
 import com.teatalk.xs.data.db.CharacterEntity
 import com.teatalk.xs.data.db.ConversationEntity
+import com.teatalk.xs.data.db.MemberWithCharacter
 import com.teatalk.xs.data.db.MessageEntity
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
@@ -166,6 +170,15 @@ class ChatViewModel(
     val messages: StateFlow<List<MessageEntity>> = repository.observeMessages(conversationId)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
+    /** 群聊成员（单人会话为空列表）。 */
+    val groupMembers: StateFlow<List<MemberWithCharacter>> =
+        repository.observeGroupMembers(conversationId)
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /** 全部角色（群聊加成员时挑选用）。 */
+    val allCharacters: StateFlow<List<CharacterEntity>> = repository.observeCharacters()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
     private val _streaming = MutableStateFlow(false)
     val streaming: StateFlow<Boolean> = _streaming.asStateFlow()
 
@@ -200,6 +213,9 @@ class ChatViewModel(
     private var replyAnchorId: Long? = null
     /** 本轮实际使用的接口（来自 `ChatEvent.Started`，不跨轮共享）。 */
     private var replyProvider: ChatEvent.Started? = null
+    /** 群聊本轮发言者（来自 `ChatEvent.Started`，用于气泡归属与历史前缀）。 */
+    private var replySpeakerId: Long? = null
+    private var replySpeakerName: String? = null
     /** 本轮是否已落过库（同一轮最多一条）。 */
     private var committed = false
     private val commitMutex = Mutex()
@@ -232,6 +248,8 @@ class ChatViewModel(
         _streamText.value = ""
         accumulated.setLength(0)
         replyProvider = null
+        replySpeakerId = null
+        replySpeakerName = null
         committed = false
         replyAnchorId = null
         _streaming.value = true
@@ -263,6 +281,8 @@ class ChatViewModel(
         _streamText.value = ""
         accumulated.setLength(0)
         replyProvider = null
+        replySpeakerId = null
+        replySpeakerName = null
         committed = false
         _streaming.value = true
         _busy.value = true
@@ -450,6 +470,30 @@ class ChatViewModel(
         }
     }
 
+    /** 群聊：模型常会自带「名字: 」前缀，落库前去掉，避免气泡正文重复姓名。 */
+    private fun stripSpeakerPrefix(body: String): String {
+        val name = replySpeakerName?.trim().orEmpty()
+        if (name.isEmpty()) return body
+        val prefix = "$name:"
+        return if (body.startsWith(prefix, ignoreCase = true)) body.removePrefix(prefix).trimStart() else body
+    }
+
+    fun addGroupMember(characterId: Long) {
+        viewModelScope.launch {
+            if (!repository.addGroupMember(conversationId, characterId)) {
+                _notice.value = UiText.of(R.string.group_member_add_failed)
+            }
+        }
+    }
+
+    fun removeGroupMember(characterId: Long) {
+        viewModelScope.launch {
+            if (!repository.removeGroupMember(conversationId, characterId)) {
+                _notice.value = UiText.of(R.string.group_member_remove_failed)
+            }
+        }
+    }
+
     fun consumeRestoreText() {
         _restoreText.value = null
     }
@@ -463,6 +507,8 @@ class ChatViewModel(
             when (event) {
                 is ChatEvent.Started -> {
                     replyProvider = event
+                    replySpeakerId = event.speakerId
+                    replySpeakerName = event.speakerName
                     _activeProviderId.value = event.providerId
                 }
 
@@ -499,7 +545,7 @@ class ChatViewModel(
      * 保证同一轮生成最多写一条：先到者为准，后到者静默丢弃。
      */
     private suspend fun commitOnce(gen: Int, status: String, raw: String) {
-        val body = raw.trim()
+        val body = stripSpeakerPrefix(raw.trim())
         if (body.isEmpty()) return
         commitMutex.withLock {
             if (gen != generation || committed) return
@@ -513,6 +559,7 @@ class ChatViewModel(
                     providerName = replyProvider?.providerName,
                     model = replyProvider?.model,
                     replyToMessageId = replyAnchorId,
+                    speakerId = replySpeakerId,
                 )
             } catch (cancelled: CancellationException) {
                 // 写库被取消：可能已回滚，放开标记让停止路径重试
@@ -558,6 +605,9 @@ fun ChatScreen(
     val conversation by viewModel.conversation.collectAsState()
     val conversations by viewModel.conversations.collectAsState()
     val messages by viewModel.messages.collectAsState()
+    val groupMembers by viewModel.groupMembers.collectAsState()
+    val allCharacters by viewModel.allCharacters.collectAsState()
+    val isGroup = conversation?.kind == ConversationEntity.KIND_GROUP
     val streaming by viewModel.streaming.collectAsState()
     val activeProviderId by viewModel.activeProviderId.collectAsState()
     val streamText by viewModel.streamText.collectAsState()
@@ -577,6 +627,9 @@ fun ChatScreen(
     var showPrompt by remember { mutableStateOf(false) }
     val promptSnapshot by PromptDebugStore.snapshot.collectAsState()
     var renameTarget by remember { mutableStateOf<ConversationEntity?>(null) }
+    // 群聊：成员面板 / 添加成员挑选
+    var showMembers by remember { mutableStateOf(false) }
+    var pickMember by remember { mutableStateOf(false) }
     val deleteInfo by viewModel.deleteInfo.collectAsState()
     val deletedConversation by viewModel.deletedConversation.collectAsState()
     val lastAssistantId = remember(messages) {
@@ -709,6 +762,8 @@ fun ChatScreen(
             ChatHeader(
                 character = character,
                 conversationTitle = conversation?.title.orEmpty(),
+                isGroup = isGroup,
+                memberCount = groupMembers.size,
                 onBack = onBack,
                 menuOpen = menuOpen,
                 onMenuOpenChange = { menuOpen = it },
@@ -723,6 +778,10 @@ fun ChatScreen(
                 onShowPrompt = {
                     menuOpen = false
                     showPrompt = true
+                },
+                onShowMembers = {
+                    menuOpen = false
+                    showMembers = true
                 },
                 onExportChat = {
                     menuOpen = false
@@ -758,9 +817,16 @@ fun ChatScreen(
                         UserBubble(message.content, onLongPress = { preview = message })
                     } else {
                         val variants = remember(message) { MessageVariants.of(message) }
+                        val speaker = if (isGroup) {
+                            groupMembers.firstOrNull { it.characterId == message.speakerId }
+                        } else {
+                            null
+                        }
                         AssistantBubble(
                             text = message.content,
                             character = character,
+                            speakerName = speaker?.name,
+                            speakerAvatar = speaker?.avatarPath,
                             variants = variants,
                             variantStatuses = remember(message) { MessageVariants.statuses(message) },
                             providerHint = message.providerId
@@ -783,9 +849,36 @@ fun ChatScreen(
                 }
                 if (streaming) {
                     item(key = "streaming") {
-                        AssistantBubble(streamText, character, thinking = streamText.isEmpty(), streaming = true)
+                        AssistantBubble(
+                            text = streamText,
+                            character = character,
+                            speakerAvatar = if (isGroup) groupMembers.firstOrNull()?.avatarPath else null,
+                            thinking = streamText.isEmpty(),
+                            streaming = true,
+                        )
                     }
                 }
+            }
+
+            if (showMembers) {
+                GroupMembersSheet(
+                    members = groupMembers,
+                    characters = allCharacters,
+                    onDismiss = { showMembers = false },
+                    onAdd = { pickMember = true },
+                    onRemove = viewModel::removeGroupMember,
+                )
+            }
+
+            if (pickMember) {
+                AddMemberDialog(
+                    candidates = allCharacters.filter { c -> groupMembers.none { it.characterId == c.id } },
+                    onDismiss = { pickMember = false },
+                    onPick = { id ->
+                        pickMember = false
+                        viewModel.addGroupMember(id)
+                    },
+                )
             }
 
             error?.let { err ->
@@ -817,6 +910,25 @@ fun ChatScreen(
                         .padding(horizontal = 10.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
+                    if (isGroup && groupMembers.isNotEmpty()) {
+                        var mentionOpen by remember { mutableStateOf(false) }
+                        Box {
+                            IconButton(onClick = { mentionOpen = true }) {
+                                Text("@", fontSize = TypeScale.s16, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                            DropdownMenu(expanded = mentionOpen, onDismissRequest = { mentionOpen = false }) {
+                                groupMembers.forEach { member ->
+                                    DropdownMenuItem(
+                                        text = { Text(member.name) },
+                                        onClick = {
+                                            mentionOpen = false
+                                            input = (input.trimEnd() + " @" + member.name + " ").trimStart()
+                                        },
+                                    )
+                                }
+                            }
+                        }
+                    }
                     IconButton(onClick = {}) {
                         Icon(
                             Icons.Filled.Add,
@@ -1057,6 +1169,8 @@ fun ChatScreen(
 private fun ChatHeader(
     character: CharacterEntity?,
     conversationTitle: String,
+    isGroup: Boolean = false,
+    memberCount: Int = 0,
     onBack: () -> Unit,
     menuOpen: Boolean,
     onMenuOpenChange: (Boolean) -> Unit,
@@ -1065,6 +1179,7 @@ private fun ChatHeader(
     onShowPrompt: () -> Unit,
     onExportChat: () -> Unit,
     onImportChat: () -> Unit,
+    onShowMembers: () -> Unit = {},
 ) {
     val cs = MaterialTheme.colorScheme
     Row(
@@ -1091,9 +1206,11 @@ private fun ChatHeader(
                 overflow = TextOverflow.Ellipsis,
             )
             Text(
-                // 会话没有标题时副标题不再重复角色名
-                if (conversationTitle.isBlank()) stringResource(R.string.chat_online_status)
-                else stringResource(R.string.chat_header_subtitle, character?.name ?: stringResource(R.string.character_fallback)),
+                when {
+                    isGroup -> stringResource(R.string.group_members_subtitle, memberCount)
+                    conversationTitle.isBlank() -> stringResource(R.string.chat_online_status)
+                    else -> stringResource(R.string.chat_header_subtitle, character?.name ?: stringResource(R.string.character_fallback))
+                },
                 fontSize = TypeScale.s11,
                 color = cs.onSurfaceVariant,
                 maxLines = 1,
@@ -1117,6 +1234,12 @@ private fun ChatHeader(
                     text = { Text(stringResource(R.string.chat_conversations_title)) },
                     onClick = onShowConversations,
                 )
+                if (isGroup) {
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.group_members_title)) },
+                        onClick = onShowMembers,
+                    )
+                }
                 DropdownMenuItem(
                     text = { Text(stringResource(R.string.chat_menu_prompt)) },
                     onClick = onShowPrompt,
@@ -1254,6 +1377,8 @@ private fun ErrorBanner(
 private fun AssistantBubble(
     text: String,
     character: CharacterEntity?,
+    speakerName: String? = null,
+    speakerAvatar: String? = null,
     thinking: Boolean = false,
     streaming: Boolean = false,
     variants: List<String> = emptyList(),
@@ -1268,10 +1393,24 @@ private fun AssistantBubble(
 ) {
     val cs = MaterialTheme.colorScheme
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Start, verticalAlignment = Alignment.Top) {
-        CharacterAvatar(avatarPath = character?.avatarPath, name = character?.name ?: "", size = 32.dp, corner = 10.dp)
+        CharacterAvatar(
+            avatarPath = speakerAvatar ?: character?.avatarPath,
+            name = speakerName ?: character?.name ?: "",
+            size = 32.dp,
+            corner = 10.dp,
+        )
         Spacer(Modifier.width(8.dp))
         Column {
             var actionsOpen by remember { mutableStateOf(false) }
+            if (!speakerName.isNullOrBlank()) {
+                Text(
+                    speakerName,
+                    fontSize = TypeScale.s11,
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(start = 2.dp, bottom = 2.dp),
+                )
+            }
             Box {
             Box(
                 Modifier
@@ -1597,3 +1736,100 @@ private fun buildPromptJson(snapshot: PromptSnapshot): String = buildJsonObject 
         }
     }
 }.toString()
+
+/** 群聊成员面板：列成员、可移除（≥2 人时）、可添加（<8 人时）。 */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun GroupMembersSheet(
+    members: List<MemberWithCharacter>,
+    characters: List<CharacterEntity>,
+    onDismiss: () -> Unit,
+    onAdd: () -> Unit,
+    onRemove: (Long) -> Unit,
+) {
+    val cs = MaterialTheme.colorScheme
+    val canRemove = members.size > CharacterRepository.MIN_GROUP_MEMBERS
+    val canAdd = members.size < CharacterRepository.MAX_GROUP_MEMBERS && characters.size > members.size
+    ModalBottomSheet(onDismissRequest = onDismiss) {
+        Column(Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
+            Text(
+                stringResource(R.string.group_members_title),
+                fontSize = TypeScale.s16,
+                fontWeight = FontWeight.SemiBold,
+                color = cs.onBackground,
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 10.dp),
+            )
+            LazyColumn(Modifier.fillMaxWidth().heightIn(max = 360.dp)) {
+                items(members, key = { it.characterId }) { member ->
+                    Row(
+                        Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        CharacterAvatar(avatarPath = member.avatarPath, name = member.name, size = 34.dp, corner = 11.dp)
+                        Spacer(Modifier.width(10.dp))
+                        Text(
+                            member.name,
+                            fontSize = TypeScale.s14_5,
+                            color = cs.onSurface,
+                            modifier = Modifier.weight(1f),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        TextButton(onClick = { onRemove(member.characterId) }, enabled = canRemove) {
+                            Text(stringResource(R.string.group_remove_member), color = if (canRemove) cs.error else cs.onSurfaceVariant)
+                        }
+                    }
+                }
+            }
+            TextButton(
+                onClick = onAdd,
+                enabled = canAdd,
+                modifier = Modifier.padding(horizontal = 12.dp),
+            ) {
+                Text(
+                    stringResource(
+                        if (canAdd) R.string.group_add_member else R.string.group_members_all_added,
+                    ),
+                )
+            }
+        }
+    }
+}
+
+/** 添加群成员：从尚未加入的角色里挑一个。 */
+@Composable
+private fun AddMemberDialog(
+    candidates: List<CharacterEntity>,
+    onDismiss: () -> Unit,
+    onPick: (Long) -> Unit,
+) {
+    val cs = MaterialTheme.colorScheme
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.group_add_member)) },
+        text = {
+            LazyColumn(Modifier.fillMaxWidth().heightIn(max = 360.dp)) {
+                items(candidates, key = { it.id }) { candidate ->
+                    Row(
+                        Modifier.fillMaxWidth().clickable { onPick(candidate.id) }
+                            .padding(vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        CharacterAvatar(avatarPath = candidate.avatarPath, name = candidate.name, size = 32.dp, corner = 10.dp)
+                        Spacer(Modifier.width(10.dp))
+                        Text(
+                            candidate.name,
+                            fontSize = TypeScale.s14_5,
+                            color = cs.onSurface,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.close)) }
+        },
+    )
+}

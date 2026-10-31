@@ -3,6 +3,7 @@ package com.teatalk.xs.data
 import com.teatalk.core.log.TeaTalkLog
 import com.teatalk.core.worldinfo.WorldInfoEntry
 import com.teatalk.core.worldinfo.WorldInfoInjector
+import com.teatalk.xs.data.db.ConversationEntity
 import com.teatalk.xs.data.model.ProviderRepository
 import com.teatalk.xs.data.model.SamplingPreset
 import com.teatalk.xs.data.model.ActiveProvider
@@ -48,7 +49,12 @@ class ChatEngine(
         val text = userText.trim()
         if (text.isEmpty()) return null
         val conversation = characters.conversation(conversationId) ?: return null
-        if (characters.find(conversation.characterId) == null) return null
+        val exists = if (conversation.kind == ConversationEntity.KIND_GROUP) {
+            characters.groupMembers(conversationId).isNotEmpty()
+        } else {
+            characters.find(conversation.characterId) != null
+        }
+        if (!exists) return null
         TeaTalkLog.i("Chat", "send.start", "conversationId" to conversationId, "chars" to text.length)
         val messageId = characters.addMessage(conversationId, ROLE_USER, text)
         if (conversation.title.isBlank()) {
@@ -103,8 +109,18 @@ class ChatEngine(
         excludeLastAssistant: Boolean = false,
     ): Flow<ChatEvent> = flow {
         val conversation = characters.conversation(conversationId)
-        val character = conversation?.let { characters.find(it.characterId) }
-        if (conversation == null || character == null) {
+        if (conversation == null) {
+            emit(ChatEvent.Failed(ChatError.BAD_RESPONSE, "conversation not found"))
+            return@flow
+        }
+        val isGroup = conversation.kind == ConversationEntity.KIND_GROUP
+        val members = if (isGroup) characters.groupMembers(conversationId) else emptyList()
+        val character = if (isGroup) null else characters.find(conversation.characterId)
+        if (isGroup && members.isEmpty()) {
+            emit(ChatEvent.Failed(ChatError.BAD_RESPONSE, "group has no members"))
+            return@flow
+        }
+        if (!isGroup && character == null) {
             emit(ChatEvent.Failed(ChatError.BAD_RESPONSE, "conversation or character not found"))
             return@flow
         }
@@ -132,23 +148,52 @@ class ChatEngine(
             emit(ChatEvent.Failed(ChatError.NO_MODEL))
             return@flow
         }
-        emit(ChatEvent.Started(provider.id, provider.name, model))
 
-        // 整张卡 JSON 解析 + system prompt 拼装都在后台线程：聊天路径此前在 Main 上做（审阅 P1）。
-        val card = withContext(Dispatchers.Default) { CardViewParser.parse(character.cardJson) }
         val history = characters.recentMessages(conversationId, HISTORY_LIMIT)
             // 以本次用户消息为锚点：只取到它为止的历史，避免停止/并发写让「未来」的消息混进 prompt
             .filter { it.id <= replyToMessageId }
             .let { list ->
                 if (excludeLastAssistant && list.lastOrNull()?.role == ROLE_ASSISTANT) list.dropLast(1) else list
             }
-        // M3：世界书注入。角色卡内嵌 + 角色默认绑定 + 会话覆盖三层合并；同 uid 以内嵌为准。
-        val boundIds = characters.effectiveWorldBookIds(character.id, conversationId)
+
+        // 群聊：按历史里已有的 assistant 条数轮转发言者（确定性，便于测试与复现）。
+        val groupSpeaker = if (isGroup) {
+            val assistantCount = history.count { it.role == ROLE_ASSISTANT }
+            members[assistantCount % members.size]
+        } else {
+            null
+        }
+        emit(
+            ChatEvent.Started(
+                providerId = provider.id,
+                providerName = provider.name,
+                model = model,
+                speakerId = groupSpeaker?.characterId,
+                speakerName = groupSpeaker?.name,
+            ),
+        )
+
+        // 整张卡 JSON 解析 + system prompt 拼装都在后台线程：聊天路径此前在 Main 上做（审阅 P1）。
+        val parsedGroup = if (isGroup) {
+            withContext(Dispatchers.Default) { members.map { it to CardViewParser.parse(it.cardJson) } }
+        } else {
+            emptyList()
+        }
+        val card = if (isGroup) null else withContext(Dispatchers.Default) { CardViewParser.parse(character!!.cardJson) }
+        val primaryName = if (isGroup) members.joinToString("、") { it.name } else character!!.name
+
+        // M3：世界书注入。单人：卡内嵌 + 角色默认 + 会话覆盖；群聊：全体成员卡内嵌 + 群绑定（会话覆盖优先，否则成员默认并集）。
+        val boundIds = if (isGroup) {
+            characters.effectiveGroupWorldBookIds(conversationId, members.map { it.characterId })
+        } else {
+            characters.effectiveWorldBookIds(character!!.id, conversationId)
+        }
         val externalEntries = characters.worldBookEntries(boundIds)
-        // uid 只是「书内」命名空间（卡内嵌与每本库书都从 0/1 起）。
-        // 身份 = (sourceId, uid, comment)：不同来源的同 uid 条目都保留；跨源不做 content 去重
-        // （那会杀掉「唯一命中关键词」的那条，见审阅 round 2 P1）。
-        val allEntries = WorldBookMerger.merge(card.worldBook, externalEntries)
+        val allEntries: List<WorldInfoEntry> = if (isGroup) {
+            parsedGroup.flatMap { it.second.worldBook } + externalEntries.map { it.entry }
+        } else {
+            WorldBookMerger.merge(card!!.worldBook, externalEntries)
+        }
         // 扫描文本：本次用户消息 + 最近两条，兼顾 ST 的「最近 N 条」默认行为。
         val scanText = history.takeLast(3).joinToString("\n") { it.content }
         val activated = withContext(Dispatchers.Default) {
@@ -158,31 +203,45 @@ class ChatEngine(
         val afterWorld = WorldInfoInjector.afterCharacter(activated)
         val historyInsertions = WorldInfoInjector.historyInsertions(activated)
 
-        // 顺序与字段承载以真实 SillyTavern 请求体为准（见 docs/11-golden-cases.md）：
-        // system prompt → 世界书 before → 描述/性格/场景 → 示例 → 起点标记 → 历史 → PHI。
         val beforeWorldText = beforeWorld.map { it.content }
         val afterWorldText = afterWorld.map { it.content }
         val messages = withContext(Dispatchers.Default) {
             val base = history.map { message ->
                 val role = if (message.role == ROLE_USER) PromptAssembler.ROLE_USER else PromptAssembler.ROLE_ASSISTANT
-                role to message.content
+                val content = if (message.role == ROLE_USER) {
+                    message.content
+                } else {
+                    val speaker = members.firstOrNull { it.characterId == message.speakerId }?.name
+                    if (isGroup && speaker != null) "$speaker: ${message.content}" else message.content
+                }
+                role to content
             }
             val withWorld = WorldInfoInjector.injectHistory(base, historyInsertions)
-            PromptAssembler.assemble(
-                card = card,
-                characterName = character.name,
-                userName = userName(),
-                history = withWorld.map { PromptAssembler.HistoryMessage(it.first, it.second) },
-                beforeWorld = beforeWorldText,
-                afterWorld = afterWorldText,
-            )
+            if (isGroup) {
+                PromptAssembler.assembleGroup(
+                    members = parsedGroup.map { (member, groupCard) -> PromptAssembler.GroupMember(member.name, groupCard) },
+                    userName = userName(),
+                    history = withWorld.map { PromptAssembler.HistoryMessage(it.first, it.second) },
+                    beforeWorld = beforeWorldText,
+                    afterWorld = afterWorldText,
+                )
+            } else {
+                PromptAssembler.assemble(
+                    card = card!!,
+                    characterName = character!!.name,
+                    userName = userName(),
+                    history = withWorld.map { PromptAssembler.HistoryMessage(it.first, it.second) },
+                    beforeWorld = beforeWorldText,
+                    afterWorld = afterWorldText,
+                )
+            }
         }
-        val examples = withContext(Dispatchers.Default) { PromptAssembler.parseExampleBlocks(card.mesExample) }
         TeaTalkLog.i(
             "Prompt",
             "prompt.order",
-            "examples" to examples.size,
-            "phi" to card.postHistoryInstructions.isNotBlank(),
+            "group" to isGroup,
+            "members" to members.size,
+            "phi" to (if (isGroup) parsedGroup.any { it.second.postHistoryInstructions.isNotBlank() } else card!!.postHistoryInstructions.isNotBlank()),
         )
         TeaTalkLog.i(
             "Prompt",
@@ -190,7 +249,7 @@ class ChatEngine(
             "entries" to allEntries.size,
             "activated" to activated.size,
             "chars" to WorldInfoInjector.cost(activated),
-                    "unsupported" to WorldInfoInjector.unsupportedCount(allEntries),
+            "unsupported" to WorldInfoInjector.unsupportedCount(allEntries),
             "bound" to boundIds.size,
         )
         TeaTalkLog.i(
@@ -231,7 +290,7 @@ class ChatEngine(
             messages = messages.drop(1),
             activated = activated,
             worldChars = WorldInfoInjector.cost(activated),
-            characterName = character.name,
+            characterName = primaryName,
             userName = userName(),
         )
 

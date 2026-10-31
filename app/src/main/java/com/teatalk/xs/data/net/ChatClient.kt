@@ -24,7 +24,14 @@ import org.json.JSONObject
 /** 一次流式请求里发生的事。 */
 sealed interface ChatEvent {
     /** 本次请求最终使用的接口与模型（调用方据此落库来源，不再旁路读取）。 */
-    data class Started(val providerId: String, val providerName: String, val model: String) : ChatEvent
+    data class Started(
+        val providerId: String,
+        val providerName: String,
+        val model: String,
+        /** 群聊：本次回复的说话者（成员）；单人会话为 null。 */
+        val speakerId: Long? = null,
+        val speakerName: String? = null,
+    ) : ChatEvent
 
     data class Delta(val text: String) : ChatEvent
 

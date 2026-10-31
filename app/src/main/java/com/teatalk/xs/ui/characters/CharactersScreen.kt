@@ -28,10 +28,17 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import com.teatalk.xs.data.CharacterRepository
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.material3.IconButton
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -90,6 +97,7 @@ private val CARD_MIME_TYPES = arrayOf("image/png", "image/jpeg", "application/js
 fun CharactersScreen(
     viewModel: CharactersViewModel,
     onOpen: (Long) -> Unit,
+    onOpenGroupChat: (Long) -> Unit = {},
 ) {
     val cards by viewModel.cards.collectAsState()
     val query by viewModel.query.collectAsState()
@@ -107,6 +115,10 @@ fun CharactersScreen(
     var pendingDelete by remember { mutableStateOf<CharacterEntity?>(null) }
     var showWarnings by remember { mutableStateOf(false) }
     var creating by remember { mutableStateOf(false) }
+    var showGroupPicker by remember { mutableStateOf(false) }
+    var groupSelected by remember { mutableStateOf(setOf<Long>()) }
+    var groupTitle by remember { mutableStateOf("") }
+    var groupsMenuOpen by remember { mutableStateOf(false) }
 
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) viewModel.importCard(uri)
@@ -152,6 +164,22 @@ fun CharactersScreen(
                         fontSize = TypeScale.s14,
                         fontWeight = FontWeight.Medium,
                     )
+                }
+                Box {
+                    IconButton(onClick = { groupsMenuOpen = true }) {
+                        Icon(Icons.Filled.MoreVert, contentDescription = null, modifier = Modifier.size(20.dp))
+                    }
+                    DropdownMenu(expanded = groupsMenuOpen, onDismissRequest = { groupsMenuOpen = false }) {
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.group_new)) },
+                            onClick = {
+                                groupsMenuOpen = false
+                                groupSelected = emptySet()
+                                groupTitle = ""
+                                showGroupPicker = true
+                            },
+                        )
+                    }
                 }
                 TextButton(onClick = { picker.launch(CARD_MIME_TYPES) }, enabled = !importing) {
                     Icon(Icons.Filled.Add, contentDescription = null, modifier = Modifier.size(16.dp))
@@ -300,6 +328,24 @@ fun CharactersScreen(
             onCreate = { draft ->
                 creating = false
                 viewModel.createCharacter(draft)
+            },
+        )
+    }
+
+    val pickList = cards
+    if (showGroupPicker && pickList != null) {
+        GroupCreateDialog(
+            all = pickList,
+            selected = groupSelected,
+            title = groupTitle,
+            onToggle = { id ->
+                groupSelected = if (id in groupSelected) groupSelected - id else groupSelected + id
+            },
+            onTitleChange = { groupTitle = it },
+            onDismiss = { showGroupPicker = false },
+            onCreate = {
+                showGroupPicker = false
+                viewModel.createGroup(groupSelected.toList(), groupTitle) { id -> onOpenGroupChat(id) }
             },
         )
     }
@@ -673,3 +719,57 @@ private fun sourceLabel(source: String): String = when (source) {
     "CHARX" -> stringResource(R.string.source_charx)
     else -> stringResource(R.string.source_local)
 }
+
+/** 多选角色创建群聊（至少 2 位）。 */
+@Composable
+private fun GroupCreateDialog(
+    all: List<CharacterEntity>,
+    selected: Set<Long>,
+    title: String,
+    onToggle: (Long) -> Unit,
+    onTitleChange: (String) -> Unit,
+    onDismiss: () -> Unit,
+    onCreate: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.group_new)) },
+        text = {
+            Column {
+                Text(
+                    stringResource(R.string.group_select_members),
+                    fontSize = TypeScale.s12,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(6.dp))
+                LazyColumn(Modifier.heightIn(max = 300.dp)) {
+                    items(all, key = { it.id }) { card ->
+                        Row(
+                            Modifier.fillMaxWidth().clickable { onToggle(card.id) }.padding(vertical = 3.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Checkbox(checked = card.id in selected, onCheckedChange = { onToggle(card.id) })
+                            Text(card.name, fontSize = TypeScale.s14, maxLines = 1)
+                        }
+                    }
+                }
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = title,
+                    onValueChange = onTitleChange,
+                    singleLine = true,
+                    label = { Text(stringResource(R.string.group_name_hint)) },
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onCreate, enabled = selected.size >= CharacterRepository.MIN_GROUP_MEMBERS) {
+                Text(stringResource(R.string.group_create))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) }
+        },
+    )
+}
+

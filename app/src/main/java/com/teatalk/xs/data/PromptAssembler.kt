@@ -26,6 +26,65 @@ object PromptAssembler {
     /** 历史消息（已归一化为 OpenAI 角色）。 */
     data class HistoryMessage(val role: String, val content: String)
 
+    /** 群聊成员：展示名 + 卡（顺序即 prompt 顺序，与 ST group 一致）。 */
+    data class GroupMember(val name: String, val card: CardView)
+
+    /**
+     * 群聊拼装：群说明 → 世界书 before → 每个成员（system/description/personality/scenario）
+     * → [Start a new Chat] → history → 每个成员的 PHI → 世界书 after。
+     *
+     * 与 ST 的 group 行为对齐：不使用成员卡的 mes_example（ST 群聊不拼示例），
+     * 历史里的 assistant 消息由调用方加好「Name: 」前缀。
+     */
+    fun assembleGroup(
+        members: List<GroupMember>,
+        userName: String = "User",
+        history: List<HistoryMessage> = emptyList(),
+        beforeWorld: List<String> = emptyList(),
+        afterWorld: List<String> = emptyList(),
+    ): List<Pair<String, String>> {
+        if (members.isEmpty()) return emptyList()
+        val names = members.joinToString(", ") { it.name }
+        val out = ArrayList<Pair<String, String>>(history.size + members.size * 5 + 8)
+        out += ROLE_SYSTEM to
+            "This group chat includes: $names. Write the next reply in a fictional group chat between $names and $userName."
+        if (beforeWorld.isNotEmpty()) {
+            out += ROLE_SYSTEM to beforeWorld.joinToString("\n") { substitute(it, names, userName) }
+        }
+        for (member in members) {
+            val system = member.card.systemPrompt.trim().ifBlank {
+                "Write ${member.name}'s next reply in a fictional chat between ${member.name} and $userName."
+            }
+            out += ROLE_SYSTEM to substitute(system, member.name, userName)
+            member.card.description.ifBlank { null }?.let {
+                out += ROLE_SYSTEM to substitute(it, member.name, userName)
+            }
+            member.card.personality.ifBlank { null }?.let {
+                out += ROLE_SYSTEM to substitute(it, member.name, userName)
+            }
+            member.card.scenario.ifBlank { null }?.let {
+                out += ROLE_SYSTEM to substitute(it, member.name, userName)
+            }
+        }
+        out += ROLE_SYSTEM to CHAT_START_MARKER
+        for (message in history) {
+            val isUser = message.role == ROLE_USER
+            val content = if (isUser) message.content else substitute(message.content, names, userName)
+            out += (if (isUser) ROLE_USER else ROLE_ASSISTANT) to content
+        }
+        for (member in members) {
+            member.card.postHistoryInstructions.trim().ifBlank { null }?.let {
+                out += ROLE_SYSTEM to substitute(it, member.name, userName)
+            }
+        }
+        if (afterWorld.isNotEmpty()) {
+            val index = out.indexOfFirst { it.first == ROLE_SYSTEM && it.second == CHAT_START_MARKER }
+            val insertAt = if (index >= 0) index else out.size
+            out.add(insertAt, ROLE_SYSTEM to afterWorld.joinToString("\n") { substitute(it, names, userName) })
+        }
+        return out
+    }
+
     fun assemble(
         card: CardView,
         characterName: String,

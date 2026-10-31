@@ -22,10 +22,20 @@ data class ConversationEntity(
     /** 会话标题；为空时 UI 回退到角色名。 */
     val title: String = "",
     /**
+     * 会话类型：single（单人，M2 起）/ group（M4 group chats）。
+     * 群聊时 `characterId` 记第一个成员（用于列表头像/兜底），真实成员在 conversation_members。
+     */
+    @androidx.room.ColumnInfo(defaultValue = "single") val kind: String = KIND_SINGLE,
+    /**
      * M3：会话级世界书覆盖（JSON 数组字符串）。
      * null = 继承角色默认绑定；`[]` = 显式不启用；`[1,2]` = 只用这两本。
      */
     val worldBookIdsJson: String? = null,
     val createdAt: Long = 0L,
     val updatedAt: Long = 0L,
-)
+) {
+    companion object {
+        const val KIND_SINGLE = "single"
+        const val KIND_GROUP = "group"
+    }
+}

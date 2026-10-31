@@ -70,6 +70,8 @@ data class MessageEntity(
     val selectedVariant: Int = 0,
     /** complete / stopped（停止生成留下的半截）/ failed（错误前半截）。 */
     val status: String = STATUS_COMPLETE,
+    /** 群聊：这条 assistant 消息由哪个成员说出（单人会话为 null）。 */
+    val speakerId: Long? = null,
 ) {
     companion object {
         const val STATUS_COMPLETE = "complete"

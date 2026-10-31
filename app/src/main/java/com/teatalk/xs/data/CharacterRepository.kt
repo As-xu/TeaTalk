@@ -16,6 +16,8 @@ import com.teatalk.xs.data.db.CharacterEntity
 import com.teatalk.xs.data.db.ConversationDao
 import com.teatalk.xs.data.db.ConversationEntity
 import com.teatalk.xs.data.db.ConversationWithLastMessage
+import com.teatalk.xs.data.db.ConversationMemberEntity
+import com.teatalk.xs.data.db.MemberWithCharacter
 import com.teatalk.xs.data.db.MessageEntity
 import com.teatalk.xs.data.db.WorldBookDao
 import kotlinx.coroutines.Dispatchers
@@ -141,6 +143,87 @@ class CharacterRepository(
         dao.setLinkedWorldBooks(characterId, encodeIds(ids))
         TeaTalkLog.i("Prompt", "worldbook.bind", "scope" to "character", "count" to ids.size)
     }
+
+    /** 群聊世界书：会话覆盖优先；否则取成员默认绑定的并集（保序去重）。 */
+    suspend fun effectiveGroupWorldBookIds(conversationId: Long, memberIds: List<Long>): List<Long> =
+        withContext(Dispatchers.IO) {
+            val override = conversations.find(conversationId)?.worldBookIdsJson
+            if (override != null) return@withContext parseIds(override)
+            val merged = LinkedHashSet<Long>()
+            for (memberId in memberIds) {
+                val character = dao.find(memberId) ?: continue
+                merged += parseIds(character.linkedWorldBookIdsJson)
+            }
+            merged.toList()
+        }
+
+    // ---------------- M5：群聊（多角色会话） ----------------
+
+    fun observeGroupMembers(conversationId: Long) = conversations.observeMembers(conversationId)
+
+    suspend fun groupMembers(conversationId: Long): List<MemberWithCharacter> =
+        withContext(Dispatchers.IO) { conversations.membersOnce(conversationId) }
+
+    /** 建群：至少 [MIN_GROUP_MEMBERS] 人；不插开场白（由 prompt 的群说明引导）。 */
+    suspend fun createGroup(characterIds: List<Long>, title: String = ""): Long? =
+        withContext(Dispatchers.IO) {
+            val characters = characterIds.distinct().mapNotNull { dao.find(it) }
+            if (characters.size < MIN_GROUP_MEMBERS) return@withContext null
+            val now = System.currentTimeMillis()
+            val autoTitle = characters.joinToString("、") { it.name }
+            val id = conversations.insert(
+                ConversationEntity(
+                    characterId = characters.first().id,
+                    title = title.trim().ifBlank { autoTitle },
+                    kind = ConversationEntity.KIND_GROUP,
+                    createdAt = now,
+                    updatedAt = now,
+                ),
+            )
+            conversations.insertMembers(
+                characters.mapIndexed { index, character ->
+                    ConversationMemberEntity(conversationId = id, characterId = character.id, sortIndex = index)
+                },
+            )
+            TeaTalkLog.i("Chat", "group.create", "conversationId" to id, "members" to characters.size)
+            id
+        }
+
+    /** 加成员：仅群聊、去重、上限 [MAX_GROUP_MEMBERS]；返回是否成功。 */
+    suspend fun addGroupMember(conversationId: Long, characterId: Long): Boolean =
+        withContext(Dispatchers.IO) {
+            val conversation = conversations.find(conversationId) ?: return@withContext false
+            if (conversation.kind != ConversationEntity.KIND_GROUP) return@withContext false
+            if (dao.find(characterId) == null) return@withContext false
+            val members = conversations.membersOnce(conversationId)
+            if (members.size >= MAX_GROUP_MEMBERS) return@withContext false
+            if (members.any { it.characterId == characterId }) return@withContext false
+            val next = (conversations.maxSortIndex(conversationId) ?: -1) + 1
+            conversations.insertMembers(
+                listOf(ConversationMemberEntity(conversationId = conversationId, characterId = characterId, sortIndex = next)),
+            )
+            conversations.touch(conversationId, System.currentTimeMillis())
+            TeaTalkLog.i("Chat", "group.member.add", "conversationId" to conversationId, "characterId" to characterId)
+            true
+        }
+
+    /** 删成员：群聊至少留 [MIN_GROUP_MEMBERS] 人；删掉的是列表兜底角色时改指剩余第一位。 */
+    suspend fun removeGroupMember(conversationId: Long, characterId: Long): Boolean =
+        withContext(Dispatchers.IO) {
+            val conversation = conversations.find(conversationId) ?: return@withContext false
+            if (conversation.kind != ConversationEntity.KIND_GROUP) return@withContext false
+            val members = conversations.membersOnce(conversationId)
+            if (members.size <= MIN_GROUP_MEMBERS) return@withContext false
+            if (members.none { it.characterId == characterId }) return@withContext false
+            conversations.deleteMember(conversationId, characterId)
+            val remaining = conversations.membersOnce(conversationId)
+            if (conversation.characterId == characterId && remaining.isNotEmpty()) {
+                conversations.setCharacterId(conversationId, remaining.first().characterId)
+            }
+            conversations.touch(conversationId, System.currentTimeMillis())
+            TeaTalkLog.i("Chat", "group.member.remove", "conversationId" to conversationId, "characterId" to characterId)
+            true
+        }
 
     /** `ids = null` 恢复继承角色默认。 */
     suspend fun setConversationWorldBooks(conversationId: Long, ids: List<Long>?) = withContext(Dispatchers.IO) {
@@ -328,6 +411,8 @@ class CharacterRepository(
     /** 首次进聊天页：插入开场白（原子判空插入，重复进入不会插两条）。 */
     suspend fun ensureGreeting(conversationId: Long) = withContext(Dispatchers.IO) {
         val conversation = conversations.find(conversationId) ?: return@withContext
+        // 群聊没有开场白：群提示由 PromptAssembler 的群说明承担。
+        if (conversation.kind == ConversationEntity.KIND_GROUP) return@withContext
         val character = dao.find(conversation.characterId) ?: return@withContext
         val inserted = dao.insertGreetingIfEmpty(
             conversationId = conversationId,
@@ -379,6 +464,7 @@ class CharacterRepository(
         providerName: String? = null,
         model: String? = null,
         replyToMessageId: Long? = null,
+        speakerId: Long? = null,
     ): Long = replyMutex.withLock {
       withContext(Dispatchers.IO) {
         val body = text.trim()
@@ -426,6 +512,7 @@ class CharacterRepository(
                     providerId = providerId,
                     providerName = providerName,
                     model = model,
+                    speakerId = speakerId,
                 ),
             )
             TeaTalkLog.i("Chat", "reply.insert", "messageId" to id, "chars" to body.length)
@@ -607,7 +694,7 @@ class CharacterRepository(
         return out.toByteArray()
     }
 
-    private companion object {
+    companion object {
         const val AVATAR_DIR = "avatars"
         const val CARD_SOURCE_MANUAL = "manual"
 
@@ -615,6 +702,9 @@ class CharacterRepository(
         const val MAX_CHAT_JSONL_CHARS = 32L * 1024 * 1024
         const val ROLE_USER = "user"
         const val ROLE_ASSISTANT = "assistant"
+
+        const val MIN_GROUP_MEMBERS = 2
+        const val MAX_GROUP_MEMBERS = 8
     }
 
     private fun encodeIds(ids: List<Long>): String = WorldBookIds.encode(ids)

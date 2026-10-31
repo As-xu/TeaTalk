@@ -55,6 +55,7 @@ class AppContainer(context: Context) {
                 TeaTalkDatabase.MIGRATION_6_7,
                 TeaTalkDatabase.MIGRATION_7_8,
                 TeaTalkDatabase.MIGRATION_8_9,
+            TeaTalkDatabase.MIGRATION_9_10,
             )
             .build()
             .also {

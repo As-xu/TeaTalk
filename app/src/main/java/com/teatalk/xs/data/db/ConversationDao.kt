@@ -34,6 +34,9 @@ interface ConversationDao {
     @Query("UPDATE conversations SET title = :title, updatedAt = :at WHERE id = :id")
     suspend fun rename(id: Long, title: String, at: Long)
 
+    @Query("UPDATE conversations SET characterId = :characterId WHERE id = :id")
+    suspend fun setCharacterId(id: Long, characterId: Long)
+
     @Query("UPDATE conversations SET updatedAt = :at WHERE id = :id")
     suspend fun touch(id: Long, at: Long)
 
@@ -53,6 +56,41 @@ interface ConversationDao {
 
     @Query("DELETE FROM conversations WHERE characterId = :characterId")
     suspend fun deleteByCharacter(characterId: Long)
+
+    // ---- group chats（M4）----
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertMembers(members: List<ConversationMemberEntity>)
+
+    @Query(
+        """SELECT m.*, ch.name AS name, ch.avatarPath AS avatarPath, ch.cardJson AS cardJson
+           FROM conversation_members m
+           INNER JOIN characters ch ON ch.id = m.characterId
+           WHERE m.conversationId = :conversationId
+           ORDER BY m.sortIndex ASC, m.characterId ASC"""
+    )
+    fun observeMembers(conversationId: Long): Flow<List<MemberWithCharacter>>
+
+    @Query(
+        """SELECT m.*, ch.name AS name, ch.avatarPath AS avatarPath, ch.cardJson AS cardJson
+           FROM conversation_members m
+           INNER JOIN characters ch ON ch.id = m.characterId
+           WHERE m.conversationId = :conversationId
+           ORDER BY m.sortIndex ASC, m.characterId ASC"""
+    )
+    suspend fun membersOnce(conversationId: Long): List<MemberWithCharacter>
+
+    @Query("SELECT MAX(sortIndex) FROM conversation_members WHERE conversationId = :conversationId")
+    suspend fun maxSortIndex(conversationId: Long): Int?
+
+    @Query("DELETE FROM conversation_members WHERE conversationId = :conversationId AND characterId = :characterId")
+    suspend fun deleteMember(conversationId: Long, characterId: Long)
+
+    @Query("DELETE FROM conversation_members WHERE conversationId = :conversationId")
+    suspend fun deleteMembers(conversationId: Long)
+
+    @Query("SELECT COUNT(*) FROM conversation_members WHERE conversationId = :conversationId")
+    suspend fun memberCount(conversationId: Long): Int
 
     @Query("SELECT COUNT(*) FROM conversations")
     suspend fun countAll(): Int
@@ -76,6 +114,7 @@ interface ConversationDao {
     @Query(
         """
         SELECT c.*, ch.name AS characterName, ch.avatarPath AS characterAvatar,
+            (SELECT COUNT(*) FROM conversation_members cm WHERE cm.conversationId = c.id) AS memberCount,
             (SELECT m.content FROM messages m WHERE m.conversationId = c.id ORDER BY m.createdAt DESC, m.id DESC LIMIT 1) AS lastContent,
             (SELECT m.createdAt FROM messages m WHERE m.conversationId = c.id ORDER BY m.createdAt DESC, m.id DESC LIMIT 1) AS lastAt
         FROM conversations c

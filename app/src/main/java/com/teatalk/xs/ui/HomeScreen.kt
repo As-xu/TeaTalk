@@ -166,6 +166,9 @@ fun HomeScreen(
                     CharactersScreen(
                         viewModel = viewModel(factory = CharactersViewModel.factory(app)),
                         onOpen = { id -> navController.navigate("character/$id") },
+                        onOpenGroupChat = { id ->
+                            navController.navigate("chat/$id") { launchSingleTop = true }
+                        },
                     )
                 }
                 composable(Routes.PROFILE) {

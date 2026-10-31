@@ -278,6 +278,21 @@
     <string name="chat_conversation_title_hint">会话名称</string>
     <string name="chat_conversation_delete">删除会话</string>
     <string name="chat_conversation_delete_message">将删除「%1$s」及其全部消息，无法恢复。</string>
+    <string name="group_members_title">群聊成员</string>
+    <string name="group_members_subtitle">%1$d 位成员</string>
+    <string name="group_add_member">添加成员</string>
+    <string name="group_remove_member">移除</string>
+    <string name="group_members_all_added">所有角色都已在群里</string>
+    <string name="group_member_add_failed">无法添加成员</string>
+    <string name="group_member_remove_failed">无法移除成员</string>
+    <string name="group_mention">@</string>
+    <string name="group_new">新建群聊</string>
+    <string name="group_select_members">选择群成员（至少 2 位）</string>
+    <string name="group_create">创建群聊</string>
+    <string name="group_name_hint">群聊名称（可留空）</string>
+    <string name="group_created">已创建群聊「%1$s」</string>
+    <string name="group_create_failed">无法创建群聊</string>
+
     <string name="chat_conversation_created">已新建会话</string>
     <string name="chat_conversation_deleted_one">已删除「%1$s」（1 条消息）</string>
     <string name="chat_conversation_delete_message_one">将删除「%1$s」及其 1 条消息，无法恢复。</string>

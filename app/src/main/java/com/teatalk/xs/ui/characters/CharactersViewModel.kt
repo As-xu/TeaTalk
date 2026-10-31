@@ -6,6 +6,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
+import com.teatalk.xs.R
 import com.teatalk.xs.TeaTalkApp
 import com.teatalk.xs.data.CardEdit
 import com.teatalk.xs.data.CharacterRepository
@@ -66,6 +67,19 @@ class CharactersViewModel(
 
     private val _importing = MutableStateFlow(false)
     val importing: StateFlow<Boolean> = _importing.asStateFlow()
+
+    /** 用所选角色创建群聊；成功后回调新会话 id。 */
+    fun createGroup(characterIds: List<Long>, title: String = "", onCreated: (Long) -> Unit) {
+        if (characterIds.size < CharacterRepository.MIN_GROUP_MEMBERS) return
+        viewModelScope.launch {
+            val id = repository.createGroup(characterIds, title)
+            if (id == null) {
+                _message.value = UiText.of(R.string.group_create_failed)
+            } else {
+                onCreated(id)
+            }
+        }
+    }
 
     /** 一次性提示（snackbar）。消费后置空。 */
     private val _message = MutableStateFlow<UiText?>(null)

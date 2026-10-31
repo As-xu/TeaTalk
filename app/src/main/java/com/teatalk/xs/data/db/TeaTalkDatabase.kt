@@ -13,8 +13,9 @@ import com.teatalk.core.log.TeaTalkLog
         WorldBookEntity::class,
         ModelProviderEntity::class,
         ConversationEntity::class,
+        ConversationMemberEntity::class,
     ],
-    version = 9,
+    version = 10,
     exportSchema = true,
 )
 abstract class TeaTalkDatabase : RoomDatabase() {
@@ -24,7 +25,7 @@ abstract class TeaTalkDatabase : RoomDatabase() {
     abstract fun conversationDao(): ConversationDao
 
     companion object {
-        const val VERSION = 9
+        const val VERSION = 10
 
         /**
          * v1（M0）→ v2（D6 卡库）：
@@ -179,6 +180,36 @@ abstract class TeaTalkDatabase : RoomDatabase() {
                 db.execSQL("ALTER TABLE characters ADD COLUMN linkedWorldBookIdsJson TEXT NOT NULL DEFAULT '[]'")
                 db.execSQL("ALTER TABLE conversations ADD COLUMN worldBookIdsJson TEXT")
                 TeaTalkLog.i("Db", "db.migrate", "from" to 7, "to" to 8, "ms" to (System.currentTimeMillis() - started))
+            }
+        }
+
+        /**
+         * v9 → v10（M4 group chats）：
+         * - conversations.kind：single/group；characterId 对群聊记第一个成员。
+         * - conversation_members：群聊成员（主键 conversationId+characterId，sortIndex 决定 prompt 顺序）。
+         * - messages.speakerId：群聊里这条 assistant 消息由谁说出（单人会话为 NULL）。
+         *
+         * 存量数据：每条既有会话补一条「成员 = 其 role characterId」的记录，保证单人会话行为不变。
+         */
+        val MIGRATION_9_10 = object : Migration(9, 10) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                val started = System.currentTimeMillis()
+                db.execSQL("ALTER TABLE conversations ADD COLUMN kind TEXT NOT NULL DEFAULT 'single'")
+                db.execSQL("ALTER TABLE messages ADD COLUMN speakerId INTEGER")
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS conversation_members (" +
+                        "conversationId INTEGER NOT NULL, " +
+                        "characterId INTEGER NOT NULL, " +
+                        "sortIndex INTEGER NOT NULL DEFAULT 0, " +
+                        "PRIMARY KEY(conversationId, characterId))",
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_conversation_members_conversationId ON conversation_members(conversationId)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_conversation_members_characterId ON conversation_members(characterId)")
+                db.execSQL(
+                    "INSERT OR IGNORE INTO conversation_members(conversationId, characterId, sortIndex) " +
+                        "SELECT id, characterId, 0 FROM conversations",
+                )
+                TeaTalkLog.i("Db", "db.migrate", "from" to 9, "to" to 10, "ms" to (System.currentTimeMillis() - started))
             }
         }
 

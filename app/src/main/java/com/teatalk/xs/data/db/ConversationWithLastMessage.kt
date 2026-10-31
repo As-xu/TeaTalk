@@ -14,4 +14,5 @@ data class ConversationWithLastMessage(
     val characterAvatar: String?,
     val lastContent: String?,
     val lastAt: Long?,
+    val memberCount: Int = 0,
 )
