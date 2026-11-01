@@ -42,12 +42,20 @@ object PromptAssembler {
         history: List<HistoryMessage> = emptyList(),
         beforeWorld: List<String> = emptyList(),
         afterWorld: List<String> = emptyList(),
+        speaker: String? = null,
     ): List<Pair<String, String>> {
         if (members.isEmpty()) return emptyList()
         val names = members.joinToString(", ") { it.name }
         val out = ArrayList<Pair<String, String>>(history.size + members.size * 5 + 8)
-        out += ROLE_SYSTEM to
-            "This group chat includes: $names. Write the next reply in a fictional group chat between $names and $userName."
+        out += ROLE_SYSTEM to if (speaker.isNullOrBlank()) {
+            "This group chat includes: $names. Write the next reply in a fictional group chat between " +
+                "$names and $userName. Answer only as one of them, and never put a character name " +
+                "before the reply."
+        } else {
+            "This group chat includes: $names. Write the next reply in a fictional group chat between " +
+                "$names and $userName. This turn, reply only as $speaker, in $speaker's own voice. " +
+                "Never put any character's name before the reply."
+        }
         if (beforeWorld.isNotEmpty()) {
             out += ROLE_SYSTEM to beforeWorld.joinToString("\n") { substitute(it, names, userName) }
         }

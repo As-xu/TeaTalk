@@ -224,6 +224,7 @@ class ChatEngine(
                     history = withWorld.map { PromptAssembler.HistoryMessage(it.first, it.second) },
                     beforeWorld = beforeWorldText,
                     afterWorld = afterWorldText,
+                    speaker = groupSpeaker?.name,
                 )
             } else {
                 PromptAssembler.assemble(

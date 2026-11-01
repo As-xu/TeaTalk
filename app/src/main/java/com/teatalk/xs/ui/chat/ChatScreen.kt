@@ -472,10 +472,25 @@ class ChatViewModel(
 
     /** 群聊：模型常会自带「名字: 」前缀，落库前去掉，避免气泡正文重复姓名。 */
     private fun stripSpeakerPrefix(body: String): String {
-        val name = replySpeakerName?.trim().orEmpty()
-        if (name.isEmpty()) return body
-        val prefix = "$name:"
-        return if (body.startsWith(prefix, ignoreCase = true)) body.removePrefix(prefix).trimStart() else body
+        val candidates = buildList {
+            replySpeakerName?.trim()?.takeIf { it.isNotEmpty() }?.let(::add)
+            groupMembers.value.map { it.name.trim() }.filter { it.isNotEmpty() }.forEach(::add)
+        }.distinct().sortedByDescending { it.length }
+        if (candidates.isEmpty()) return body
+        val patterns = candidates.map { Regex("^" + Regex.escape(it) + "\\s*[:：]\\s*") }
+        var out = body.trimStart()
+        var changed = true
+        while (changed) {
+            changed = false
+            for (p in patterns) {
+                val next = p.replaceFirst(out, "")
+                if (next != out) {
+                    out = next.trimStart()
+                    changed = true
+                }
+            }
+        }
+        return out
     }
 
     fun addGroupMember(characterId: Long) {

@@ -33,16 +33,32 @@ class PromptAssemblerGroupTest {
                 PromptAssembler.GroupMember("Aria", card("Aria", description = "aria desc")),
                 PromptAssembler.GroupMember("Bram", card("Bram", scenario = "bram scene")),
             ),
+            speaker = "Aria",
         )
         assertEquals(PromptAssembler.ROLE_SYSTEM, out[0].first)
         assertEquals(
-            "This group chat includes: Aria, Bram. Write the next reply in a fictional group chat between Aria, Bram and User.",
+            "This group chat includes: Aria, Bram. Write the next reply in a fictional group chat " +
+                "between Aria, Bram and User. This turn, reply only as Aria, in Aria's own voice. " +
+                "Never put any character's name before the reply.",
             out[0].second,
         )
         assertTrue(out.any { it.second == "Write Aria's next reply in a fictional chat between Aria and User." })
         assertTrue(out.any { it.second == "Write Bram's next reply in a fictional chat between Bram and User." })
         assertTrue(out.any { it.second == "aria desc" })
         assertTrue(out.any { it.second == "bram scene" })
+    }
+
+    @Test
+    fun `header without speaker keeps the neutral one-of-them line`() {
+        val out = PromptAssembler.assembleGroup(
+            group(PromptAssembler.GroupMember("Aria", card("Aria")), PromptAssembler.GroupMember("Bram", card("Bram"))),
+        )
+        assertEquals(
+            "This group chat includes: Aria, Bram. Write the next reply in a fictional group chat " +
+                "between Aria, Bram and User. Answer only as one of them, and never put a character " +
+                "name before the reply.",
+            out[0].second,
+        )
     }
 
     @Test

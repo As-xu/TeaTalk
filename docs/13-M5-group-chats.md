@@ -21,7 +21,7 @@
 
 顺序（与单聊共用常量与 substitute）：
 
-1. 群说明（system）：`This group chat includes: A, B. Write the next reply in a fictional group chat between A, B and User.`
+1. 群说明（system）：`This group chat includes: A, B. Write the next reply in a fictional group chat between A, B and User. Answer only as one of them, and never put a character name before the reply.`（0.12.1 起加了「不要自称」约束：历史里的 `Name: ` 前缀会被模型模仿，表现为回复正文里又出现一次「角色名：」，气泡上已有名字时重复）
 2. 每个成员一个块（按加入顺序）：成员 system（空则回退 `Write X's next reply in a fictional chat between X and User.`）+ description / personality / scenario
 3. `beforeWorld` 世界书块
 4. `[Start a new Chat]`
@@ -36,8 +36,9 @@
 - 角色页 `⋮ → New group`：多选（≥2）+ 可选群名；创建后直接进入会话
 - 会话头部：群名 + `N members`；`⋮ → Group members` 打开成员面板（增/删，最少 2 人）
 - 输入区 `@` 按钮：成员列表，点选把 `@Name ` 插入输入框
-- 助手气泡：发言人名字 + 发言人头像；发言者按成员轮转
+- 助手气泡：发言人名字 + 发言人头像；发言者按成员轮转（按历史 assistant 条数取模，确定性）
 - 群聊不写开场白（`ensureGreeting` 对 group 直接返回）
+- 0.12.1：群头带 `This turn, reply only as <speaker>`；落库前 `stripSpeakerPrefix` 会剥掉行首任意成员名 + 冒号（含连续多行），修复「气泡上已有名字、正文里又出现一次」
 
 ## 测试
 
@@ -45,7 +46,7 @@
 
 全量：`:core:test` + `:app:testDebugUnitTest` 通过。
 
-## 设备验收（AVD emulator-5554）
+## 设备验收（真机 XPLGL21A22000007，0.12.0/0.12.1）
 
 1. 建群「Tea Trio」（Mira + Aster）→ 头部 `2 members`，进入会话
 2. 发 `Tell me about Eldoria` → 回复气泡带 `Aster` 名字与头像；日志 `prompt.ready msgs=11 sysChars=115`
@@ -53,7 +54,9 @@
 4. 成员面板：Mira / Aster 可 Remove，`Add member` 保留（受最少 2 人约束）
 5. `@` 菜单列出 Mira / Aster
 
-截图：`docs/screenshots/m5/01-create-group.png` … `06-group-prompt-panel.png`。
+真机（API28+ / 1080x2340）额外验证：建群（梁诗月 + 白沐桐）、真实 DeepSeek 流式回复（`chat.req.ok ms=2422 ttftMs=1818 chunks=77`）、发言人气泡头像、`⋮ → 查看本次请求`（系统提示词 109 字符 + 世界书 5 条 7874 字符）、成员面板、`@` 列表。
+
+截图：`docs/screenshots/m5/01-create-group.png` … `06-group-prompt-panel.png`；真机截图 `docs/screenshots/m5-real/`。
 
 ## 已知待办
 
