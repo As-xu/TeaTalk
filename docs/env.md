@@ -91,3 +91,13 @@ git -c http.proxy= -c https.proxy= push origin main
    - 已修：`settings.gradle.kts` 改为**官方源优先**（google / mavenCentral / gradlePluginPortal），阿里云镜像只做兜底并加 `content` 过滤；
    - 同时把 `ksp` 插件从不必要的根工程 `plugins {}` 移除（只在 `:app` 声明），单独构建 `:design` 不再解析 KSP。
 7. **Android Studio 构建请用 Gradle wrapper**：`gradle/wrapper/gradle-wrapper.properties` 指向腾讯镜像 8.9；AS 里 `Settings → Build Tools → Gradle` 选 “Use Gradle from: gradle-wrapper.properties”，Gradle JDK 选 17+（本机用 21）。
+
+8. **推送请走 SSH**：`origin` 已改为 `git@github.com:As-xu/TeaTalk.git`（`~/.ssh/id_rsa` 已在本机可用，`ssh -T git@github.com` 返回 `Hi As-xu!`）。
+   - 原因：https 远端在本机由 Git Credential Manager（`credential.helper=helper-selector`）接管，非交互环境拿不到凭据，`git push` 会**静默挂起数分钟**，`GIT_TERMINAL_PROMPT=0` 时才报 `could not read Username for 'https://github.com': terminal prompts disabled`。
+   - 不要再改回 https；如换机器需要 `git remote set-url origin git@github.com:As-xu/TeaTalk.git`。
+   - 本机 socks 代理 `socks5://127.0.0.1:10793`（PID 常变）只影响 https 拉取，SSH 推送不需要它。
+
+9. **KSP 报 `AccessDeniedException: %TEMP%\kotlin-compiler-in-*.alive`**：杀软/沙箱锁 `%TEMP%` 导致。
+   - 修法：构建前 `export TMP=…/TEMP=…` 指到项目内目录，并给 Gradle 传 `-Djava.io.tmpdir=D:/Project/TeaTalkApp/.tools/tmp`，再执行 `:app:assembleDebug`。
+
+10. **真机换过**：当前测试机 `XPLGL21A22000007`（TAS_AN00，Android 14，1080x2340）；旧记录里的 `PQY0221205009539`（NOH-AN00）已不在线。UI 自动化脚本在 `.tools/rdev.py`（`exec` 复用，按 bounds/坐标点击，中文文本用 `ascii()` 打印）。
