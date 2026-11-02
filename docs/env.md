@@ -103,3 +103,8 @@ git -c http.proxy= -c https.proxy= push origin main
 10. **真机换过**：当前测试机 `XPLGL21A22000007`（TAS_AN00，Android 14，1080x2340）；旧记录里的 `PQY0221205009539`（NOH-AN00）已不在线。UI 自动化脚本在 `.tools/rdev.py`（`exec` 复用，按 bounds/坐标点击，中文文本用 `ascii()` 打印）。
 
 11. AVD `teatalk34` 目前起不来 adb：`emulator.exe -avd teatalk34 -no-snapshot-load -no-boot-anim -gpu swiftshader_indirect` 会留下 2-3 个 `qemu-system-x86_64.exe`，但日志停在 `Found systemPath D:\DevEnv\Android\Sdk\system-images\android-34\google_apis\x86_64\`，`adb devices` 一直空（等待 2 分钟以上）。真机不在线时不要依赖它验收，改用 `XPLGL21A22000007`。
+
+12. **adb 默认 5037 端口被占/隔离时换端口**：`adb devices` 空 + `cannot open C:\Users\…\Temp\adb.log: Permission denied` + `could not read ok from ADB Server` 说明本 shell 连不上另一个会话里的 adb server。
+   - 修法：`export ANDROID_ADB_SERVER_PORT=5038`（配合 `TMP/TEMP=D:/Project/TeaTalkApp/.tools/tmp`），再 `adb -P 5038 devices`，会拉起独立 server 并看到 `XPLGL21A22000007 device … product:TAS-AN00`。
+   - `.tools/rdev.py` 已内置该端口与 TMP 环境；真机 TAS-AN00 为 Android 12 / 1080x2340。
+   - UI 验收要点：聊天列表行「Tea Trio」文本 bounds 只有 `[252,607]-[413,660]`（点 (332,633) 才进得去）；无键盘时输入条 `@` 在 `[79,2216]-[126,2235]`、输入框 `[360,2219]-[804,2235]`，**键盘弹出后整体上移到 y≈1400**（必须重新 dump 取坐标）；中文无法用 `adb shell input text`（改发 ASCII）；`DropdownMenu` 打开时 `uiautomator dump` 只返回弹窗节点，所以要先聚焦输入框、用 `input text` 敲 `@z`、再点 `@` 按钮；发送按钮在无键盘时 `(918,2118)-(1062,2235)`、有键盘时 `(918,1337)-(1062,1481)`。

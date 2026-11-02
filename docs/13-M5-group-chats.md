@@ -1,6 +1,6 @@
 # M5 群聊（Group chats）进度与验收
 
-> 版本 0.12.3 · DB v10 · 2026-11-02
+> 版本 0.12.3 · DB v10 · 2026-11-02 · 真机验收通过
 
 ## 目标
 
@@ -66,9 +66,24 @@
 
 截图：`docs/screenshots/m5/01-create-group.png` … `06-group-prompt-panel.png`；真机截图 `docs/screenshots/m5-real/`。
 
+## 设备验收（真机 TAS-AN00 · Android 12 · 0.12.3，2026-11-02）
+
+真机重连后（adb 走 `ANDROID_ADB_SERVER_PORT=5038`，避开默认 5037 的占用）对 0.12.2/0.12.3 的三处 UI 与硬约束做了实机确认：
+
+| 项 | 操作 | 结果 | 截图 |
+| --- | --- | --- | --- |
+| `@` 前缀过滤 | 输入 `@z` 后点 `@` | 菜单只剩「没有匹配的成员」 | `m5-real-v2/01-mention-filtered-empty.png` |
+| `@` 点选替换 | 尾部为 `@` 时点 `@` → 选「白沐桐」 | 输入框变成 `@白沐桐`，无重复前缀 | `m5-real-v2/02-mention-replaced.png` |
+| 最少成员提示 | 2 人群 `⋮ → 群聊成员` | 顶部显示「群聊至少保留 2 位成员」，Remove 变灰 | `m5-real-v2/03-min-member-hint.png` |
+| 多气泡拆分 | 发 `Liang Shiyue and Bai Mutong, each of you say one line about your mood now.` | 回复拆成两条 assistant 气泡，分别挂「白沐桐」「梁诗月」头像，正文不再带 `Name：` 前缀 | `m5-real-v2/04-multi-bubble.png` |
+| 0.12.3 硬约束 | 发不点名任何人的 `What time is it now?` | 只有「梁诗月」一条气泡（未替白沐桐发言） | `m5-real-v2/05-single-responder.png` |
+
+历史里 0.12.1 之前落库的多行「梁诗月：…」正文不会被改写（只影响显示），新消息按 0.12.2+ 规则处理。
+
 ## 已知待办
 
 - 群聊 golden 仍需接 ST 快照做跨实现对拍（当前 `PromptAssemblerGroupGoldenTest` 是仓库内自锁）
+- 0.12.1 之前落库的群聊历史仍含 `Name：` 前缀（只影响显示，不回写）
 - 模型让「另一个角色」说话时（正文中段的 `Name：`）：0.12.3 只加了 prompt 硬约束降低概率，**文本层仍不拆**（放宽拆分容易误伤叙述中的冒号）；若实测仍频繁出现，再考虑「行首/换行后的 `Name：`」限定拆分
 
 ## 产物
