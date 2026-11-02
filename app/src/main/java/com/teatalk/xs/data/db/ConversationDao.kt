@@ -123,4 +123,20 @@ interface ConversationDao {
         """
     )
     fun observeChats(): Flow<List<ConversationWithLastMessage>>
+
+    /** 全库消息搜索（按时间倒序，限制条数，避免大库全表扫描后一次取回）。 */
+    @Query(
+        """
+        SELECT m.conversationId AS conversationId, m.id AS messageId,
+            c.title AS conversationTitle, ch.name AS characterName,
+            ch.avatarPath AS characterAvatar, m.content AS content, m.createdAt AS createdAt
+        FROM messages m
+        INNER JOIN conversations c ON c.id = m.conversationId
+        INNER JOIN characters ch ON ch.id = c.characterId
+        WHERE m.content LIKE '%' || :query || '%'
+        ORDER BY m.createdAt DESC, m.id DESC
+        LIMIT :limit
+        """
+    )
+    suspend fun searchMessages(query: String, limit: Int): List<MessageSearchHit>
 }

@@ -175,6 +175,9 @@ interface CharacterDao {
     suspend fun findMessage(id: Long): MessageEntity?
 
     /** 某会话最后一条消息（按时间倒序），用于「重试上一条回复」。 */
+    @Query("SELECT * FROM messages WHERE id = :id LIMIT 1")
+    suspend fun messageById(id: Long): MessageEntity?
+
     @Query("SELECT * FROM messages WHERE conversationId = :conversationId ORDER BY createdAt DESC, id DESC LIMIT 1")
     suspend fun lastMessage(conversationId: Long): MessageEntity?
 

@@ -16,6 +16,7 @@ import com.teatalk.xs.data.db.CharacterEntity
 import com.teatalk.xs.data.db.ConversationDao
 import com.teatalk.xs.data.db.ConversationEntity
 import com.teatalk.xs.data.db.ConversationWithLastMessage
+import com.teatalk.xs.data.db.MessageSearchHit
 import com.teatalk.xs.data.db.ConversationMemberEntity
 import com.teatalk.xs.data.db.MemberWithCharacter
 import com.teatalk.xs.data.db.MessageEntity
@@ -74,6 +75,9 @@ class CharacterRepository(
         dao.observeRecentMessages(conversationId, limit)
 
     /** 聊天页翻页：取严格早于 [anchorCreatedAt]/[anchorId] 的一页（时间正序）。 */
+    /** 按消息 id 取一条（搜索跳转定位用）。 */
+    suspend fun messageById(id: Long): MessageEntity? = withContext(Dispatchers.IO) { dao.messageById(id) }
+
     suspend fun messagesBefore(
         conversationId: Long,
         anchorCreatedAt: Long,
@@ -84,6 +88,10 @@ class CharacterRepository(
     }
 
     fun observeChats(): Flow<List<ConversationWithLastMessage>> = conversations.observeChats()
+
+    /** 全库消息搜索（V1：聊天记录搜索）。 */
+    suspend fun searchMessages(query: String, limit: Int = 50): List<MessageSearchHit> =
+        withContext(Dispatchers.IO) { conversations.searchMessages(query.trim(), limit) }
 
     /** 某角色下的所有会话（会话切换面板用），按最近活跃排序。 */
     fun observeConversations(characterId: Long): Flow<List<ConversationEntity>> =

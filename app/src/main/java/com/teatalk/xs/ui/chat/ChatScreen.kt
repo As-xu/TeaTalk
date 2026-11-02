@@ -195,6 +195,9 @@ class ChatViewModel(
     /** 已向前翻出的更早消息（时间正序，越往前越靠前）。 */
     private val olderMessages = MutableStateFlow<List<MessageEntity>>(emptyList())
 
+    /** 从搜索结果跳转时进入「聚焦模式」：只显示命中处那一页，避免与尾部窗口之间出现巨大空档。 */
+    private val _focusMode = MutableStateFlow(false)
+
     /** 是否还能继续向前翻（尾部满页后才允许翻页，避免短会话多点一次空查询）。 */
     private val _canLoadOlder = MutableStateFlow(true)
     val canLoadOlder: StateFlow<Boolean> = _canLoadOlder.asStateFlow()
@@ -203,8 +206,30 @@ class ChatViewModel(
     val loadingOlder: StateFlow<Boolean> = _loadingOlder.asStateFlow()
 
     val messages: StateFlow<List<MessageEntity>> =
-        combine(tailMessages, olderMessages) { tail, older -> mergePaged(older, tail) }
-            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+        combine(tailMessages, olderMessages, _focusMode) { tail, older, focused ->
+            if (focused) older else mergePaged(older, tail)
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /**
+     * 从搜索结果跳进来：直接以目标消息的 createdAt 取一页上下文，避免从尾部逐页翻几千条。
+     * 取回后 [messages] 会包含目标消息，UI 侧再 scrollToItem。
+     */
+    fun focusOnMessage(messageId: Long) {
+        viewModelScope.launch {
+            val target = repository.messageById(messageId) ?: return@launch
+            val page = repository.messagesBefore(
+                conversationId = conversationId,
+                anchorCreatedAt = target.createdAt + 1,
+                anchorId = Long.MAX_VALUE,
+                limit = PAGE_SIZE,
+            )
+            if (page.isNotEmpty()) {
+                _focusMode.value = true
+                olderMessages.value = page
+                _canLoadOlder.value = page.size >= PAGE_SIZE
+            }
+        }
+    }
 
     /** 向前翻一页；到达顶部或正在加载时忽略。 */
     fun loadOlder() {
@@ -308,6 +333,7 @@ class ChatViewModel(
     }
 
     fun send(text: String) {
+        _focusMode.value = false
         val trimmed = text.trim()
         if (trimmed.isEmpty()) return
         if (job != null || stopping) {
@@ -710,6 +736,7 @@ fun ChatScreen(
     viewModel: ChatViewModel,
     onBack: () -> Unit,
     onOpenConversation: (Long) -> Unit = {},
+    focusMessageId: Long? = null,
 ) {
     val character by viewModel.character.collectAsState()
     val conversation by viewModel.conversation.collectAsState()
@@ -815,6 +842,19 @@ fun ChatScreen(
     }
 
     // 上滑到顶（第 0 项是「今天」分隔行，所以阈值取 2）：自动向前翻一页。
+    // 从搜索结果跳进来：按消息 id 取一页上下文，再滚动到目标。
+    LaunchedEffect(focusMessageId, conversation?.id) {
+        val target = focusMessageId ?: return@LaunchedEffect
+        viewModel.focusOnMessage(target)
+        var guard = 0
+        while (guard < 40 && messages.none { it.id == target }) {
+            kotlinx.coroutines.delay(50)
+            guard++
+        }
+        val index = messages.indexOfFirst { it.id == target }
+        if (index >= 0) listState.scrollToItem(index)
+    }
+
     LaunchedEffect(listState, canLoadOlder, messages.size) {
         snapshotFlow { listState.firstVisibleItemIndex }
             .collect { index ->

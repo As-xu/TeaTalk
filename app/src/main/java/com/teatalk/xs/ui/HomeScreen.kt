@@ -169,7 +169,10 @@ fun HomeScreen(
                 composable(Routes.CHATS) {
                     ChatListScreen(
                         viewModel = viewModel(factory = ChatListViewModel.factory(app)),
-                        onOpenChat = { id -> navController.navigate("chat/$id") { launchSingleTop = true } },
+                        onOpenChat = { id, messageId ->
+                            val extra = if (messageId != null) "?messageId=$messageId" else ""
+                            navController.navigate("chat/$id$extra") { launchSingleTop = true }
+                        },
                         onGoCharacters = { switchTab(Routes.CHARACTERS) },
                     )
                 }
@@ -229,15 +232,24 @@ fun HomeScreen(
                 }
                 composable(
                     route = Routes.CHAT,
-                    arguments = listOf(navArgument(ARG_CONVERSATION_ID) { type = NavType.LongType }),
+                    arguments = listOf(
+                        navArgument(ARG_CONVERSATION_ID) { type = NavType.LongType },
+                        navArgument(ARG_MESSAGE_ID) {
+                            type = NavType.LongType
+                            defaultValue = -1L
+                        },
+                    ),
                 ) { entry ->
                     val conversationId = entry.arguments?.getLong(ARG_CONVERSATION_ID) ?: 0L
+                    val focusMessageId = entry.arguments?.getLong(ARG_MESSAGE_ID)
+                        ?.takeIf { it > 0L }
                     ChatScreen(
                         viewModel = viewModel(
                             key = "chat-$conversationId",
                             factory = ChatViewModel.factory(app, conversationId),
                         ),
                         onBack = { navController.popBackStack() },
+                        focusMessageId = focusMessageId,
                         onOpenConversation = { other ->
                             navController.navigate("chat/$other") {
                                 launchSingleTop = true
@@ -256,7 +268,7 @@ private object Routes {
     const val CHARACTERS = "characters"
     const val PROFILE = "profile"
     const val CHARACTER_DETAIL = "character/{id}"
-    const val CHAT = "chat/{conversationId}"
+    const val CHAT = "chat/{conversationId}?messageId={messageId}"
     const val WORLD_BOOKS = "worldbooks"
     const val PROVIDERS = "providers"
         const val ABOUT = "about"
@@ -264,6 +276,7 @@ private object Routes {
 
 private const val ARG_ID = "id"
 private const val ARG_CONVERSATION_ID = "conversationId"
+private const val ARG_MESSAGE_ID = "messageId"
 
 private val TAB_ROUTES = setOf(Routes.CHATS, Routes.CHARACTERS, Routes.PROFILE)
 
