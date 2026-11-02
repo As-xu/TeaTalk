@@ -86,6 +86,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -108,6 +109,8 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.teatalk.xs.R
+import com.teatalk.core.log.TeaTalkLog
+import com.teatalk.xs.log.PerfLog
 import com.teatalk.xs.TeaTalkApp
 import com.teatalk.xs.data.CharacterRepository
 import com.teatalk.xs.data.GroupReplySplitter
@@ -121,6 +124,9 @@ import com.teatalk.xs.data.db.CharacterEntity
 import com.teatalk.xs.data.db.ConversationEntity
 import com.teatalk.xs.data.db.MemberWithCharacter
 import com.teatalk.xs.data.db.MessageEntity
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
@@ -147,6 +153,19 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import com.teatalk.xs.ui.theme.TypeScale
 
+/** 聊天分页：一次订阅/一次翻页加载的消息条数。 */
+private const val PAGE_SIZE = 120
+
+/** 合并「更早的一页」与「尾部流」，按 (createdAt, id) 去重排序。 */
+private fun mergePaged(older: List<MessageEntity>, tail: List<MessageEntity>): List<MessageEntity> {
+    if (older.isEmpty()) return tail
+    val seen = HashSet<Long>(older.size + tail.size)
+    val merged = ArrayList<MessageEntity>(older.size + tail.size)
+    for (message in older + tail) if (seen.add(message.id)) merged.add(message)
+    merged.sortWith(compareBy({ it.createdAt }, { it.id }))
+    return merged
+}
+
 class ChatViewModel(
     private val repository: CharacterRepository,
     private val engine: ChatEngine,
@@ -168,8 +187,59 @@ class ChatViewModel(
         .flatMapLatest { id -> if (id == null) flowOf(emptyList()) else repository.observeConversations(id) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
-    val messages: StateFlow<List<MessageEntity>> = repository.observeMessages(conversationId)
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+    /** 尾部一页的消息（分页：打开只订阅最近 [PAGE_SIZE] 条）。 */
+    private val tailMessages: StateFlow<List<MessageEntity>> =
+        repository.observeRecentMessages(conversationId, PAGE_SIZE)
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /** 已向前翻出的更早消息（时间正序，越往前越靠前）。 */
+    private val olderMessages = MutableStateFlow<List<MessageEntity>>(emptyList())
+
+    /** 是否还能继续向前翻（尾部满页后才允许翻页，避免短会话多点一次空查询）。 */
+    private val _canLoadOlder = MutableStateFlow(true)
+    val canLoadOlder: StateFlow<Boolean> = _canLoadOlder.asStateFlow()
+
+    private val _loadingOlder = MutableStateFlow(false)
+    val loadingOlder: StateFlow<Boolean> = _loadingOlder.asStateFlow()
+
+    val messages: StateFlow<List<MessageEntity>> =
+        combine(tailMessages, olderMessages) { tail, older -> mergePaged(older, tail) }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /** 向前翻一页；到达顶部或正在加载时忽略。 */
+    fun loadOlder() {
+        if (_loadingOlder.value || !_canLoadOlder.value) return
+        val first = messages.value.firstOrNull() ?: return
+        _loadingOlder.value = true
+        viewModelScope.launch {
+            try {
+                val page = repository.messagesBefore(
+                    conversationId = conversationId,
+                    anchorCreatedAt = first.createdAt,
+                    anchorId = first.id,
+                    limit = PAGE_SIZE,
+                )
+                if (page.size < PAGE_SIZE) _canLoadOlder.value = false
+                if (page.isNotEmpty()) {
+                    olderMessages.value = page + olderMessages.value
+                    PerfLog.event("chat.page", "rows" to page.size, "older" to olderMessages.value.size)
+                }
+            } finally {
+                _loadingOlder.value = false
+            }
+        }
+    }
+
+    init {
+        // 打开会话耗时：从 ViewModel 创建到首条消息可见（回归口径，真机冷/热启动都看这个）。
+        val startedAt = SystemClock.elapsedRealtime()
+        viewModelScope.launch {
+            runCatching {
+                messages.filter { it.isNotEmpty() }.first()
+                PerfLog.event("chat.open", "ms" to SystemClock.elapsedRealtime() - startedAt)
+            }
+        }
+    }
 
     /** 群聊成员（单人会话为空列表）。 */
     val groupMembers: StateFlow<List<MemberWithCharacter>> =
@@ -672,6 +742,8 @@ fun ChatScreen(
     var pickMember by remember { mutableStateOf(false) }
     val deleteInfo by viewModel.deleteInfo.collectAsState()
     val deletedConversation by viewModel.deletedConversation.collectAsState()
+    val loadingOlder by viewModel.loadingOlder.collectAsState()
+    val canLoadOlder by viewModel.canLoadOlder.collectAsState()
     val lastAssistantId = remember(messages) {
         messages.lastOrNull()?.takeIf { it.role == "assistant" }?.id
     }
@@ -740,6 +812,14 @@ fun ChatScreen(
             val lastVisible = info.visibleItemsInfo.lastOrNull()?.index ?: -1
             lastVisible >= info.totalItemsCount - 2
         }
+    }
+
+    // 上滑到顶（第 0 项是「今天」分隔行，所以阈值取 2）：自动向前翻一页。
+    LaunchedEffect(listState, canLoadOlder, messages.size) {
+        snapshotFlow { listState.firstVisibleItemIndex }
+            .collect { index ->
+                if (index <= 2 && canLoadOlder) viewModel.loadOlder()
+            }
     }
 
     // 生成中按返回：先停止并留在页面（回执可见），再按一次才真正返回。
@@ -843,13 +923,21 @@ fun ChatScreen(
             ) {
                 item {
                     Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                        Text(
-                            messages.firstOrNull()?.let {
-                                stringResource(R.string.chat_today_header, timeOf(it.createdAt))
-                            } ?: stringResource(R.string.chat_intro_default),
-                            fontSize = TypeScale.s11,
-                            color = cs.onSurfaceVariant,
-                        )
+                        if (loadingOlder) {
+                            Text(
+                                stringResource(R.string.chat_loading_older),
+                                fontSize = TypeScale.s11,
+                                color = cs.onSurfaceVariant,
+                            )
+                        } else {
+                            Text(
+                                messages.firstOrNull()?.let {
+                                    stringResource(R.string.chat_today_header, timeOf(it.createdAt))
+                                } ?: stringResource(R.string.chat_intro_default),
+                                fontSize = TypeScale.s11,
+                                color = cs.onSurfaceVariant,
+                            )
+                        }
                     }
                 }
                 items(messages, key = { it.id }) { message ->

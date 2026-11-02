@@ -69,6 +69,20 @@ class CharacterRepository(
 
     fun observeMessages(conversationId: Long): Flow<List<MessageEntity>> = dao.observeMessages(conversationId)
 
+    /** 聊天页用：只订阅尾部 [limit] 条，向前翻页走 [messagesBefore]。 */
+    fun observeRecentMessages(conversationId: Long, limit: Int): Flow<List<MessageEntity>> =
+        dao.observeRecentMessages(conversationId, limit)
+
+    /** 聊天页翻页：取严格早于 [anchorCreatedAt]/[anchorId] 的一页（时间正序）。 */
+    suspend fun messagesBefore(
+        conversationId: Long,
+        anchorCreatedAt: Long,
+        anchorId: Long,
+        limit: Int,
+    ): List<MessageEntity> = withContext(Dispatchers.IO) {
+        dao.messagesBefore(conversationId, anchorCreatedAt, anchorId, limit)
+    }
+
     fun observeChats(): Flow<List<ConversationWithLastMessage>> = conversations.observeChats()
 
     /** 某角色下的所有会话（会话切换面板用），按最近活跃排序。 */

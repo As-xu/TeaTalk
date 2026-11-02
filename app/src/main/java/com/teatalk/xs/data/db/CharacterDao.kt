@@ -66,6 +66,40 @@ interface CharacterDao {
     @Query("SELECT * FROM messages WHERE conversationId = :conversationId ORDER BY createdAt ASC, id ASC")
     fun observeMessages(conversationId: Long): Flow<List<MessageEntity>>
 
+    /**
+     * 分页：只订阅最近 [limit] 条（按时间正序返回）。
+     *
+     * 长会话（万条级）整表流式订阅会在打开时一次性把全部实体读进内存并触发一次大重组，
+     * 真机实测 1 万条约 3.3s；改为「尾部 N 条 + 按需向前翻页」后打开只付 N 条的代价。
+     */
+    @Query(
+        """
+        SELECT * FROM (
+            SELECT * FROM messages WHERE conversationId = :conversationId
+            ORDER BY createdAt DESC, id DESC LIMIT :limit
+        ) ORDER BY createdAt ASC, id ASC
+        """,
+    )
+    fun observeRecentMessages(conversationId: Long, limit: Int): Flow<List<MessageEntity>>
+
+    /** 向前翻页：取严格早于 (createdAt, id) 的最近 [limit] 条，按时间正序返回。 */
+    @Query(
+        """
+        SELECT * FROM (
+            SELECT * FROM messages
+            WHERE conversationId = :conversationId
+              AND (createdAt < :createdAt OR (createdAt = :createdAt AND id < :id))
+            ORDER BY createdAt DESC, id DESC LIMIT :limit
+        ) ORDER BY createdAt ASC, id ASC
+        """,
+    )
+    suspend fun messagesBefore(
+        conversationId: Long,
+        createdAt: Long,
+        id: Long,
+        limit: Int,
+    ): List<MessageEntity>
+
     /** 一次性取最近 N 条（组装 prompt 用），按时间正序返回。 */
     @Query(
         """

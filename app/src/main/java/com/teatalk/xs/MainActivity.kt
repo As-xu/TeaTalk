@@ -32,6 +32,10 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // 调试构建下的崩溃自测入口（验证崩溃记录链路）；release 中不存在。
+        if (BuildConfig.DEBUG && intent.getBooleanExtra("teatalk.crash", false)) {
+            throw IllegalStateException("TeaTalk crash test")
+        }
         languageTag = LanguagePrefs.read(this)
         // 跟随系统深浅色：透明 scrim 让 App 背景透到状态栏，图标明暗由 Compose 侧
         // （TeaTalkTheme 里的 WindowStyleEffect）随主题切换。

@@ -100,6 +100,7 @@
     <string name="chat_online_status">在线 · 角色扮演模式</string>
     <string name="chat_input_hint">说点什么…</string>
     <string name="chat_intro_default">开始一段角色扮演</string>
+    <string name="chat_loading_older">正在加载更早的消息…</string>
     <string name="chat_today_header">今天 %1$s</string>
 
     <!-- 我的 -->
@@ -419,5 +420,13 @@
     <string name="backup_exported">备份已保存</string>
     <string name="backup_restored">恢复完成：角色 %1$d、世界书 %2$d、会话 %3$d、消息 %4$d（跳过重复 %5$d）</string>
     <string name="backup_failed">备份文件读取失败</string>
+    <string name="crash_entry">崩溃记录（%1$d）</string>
+    <string name="crash_entry_none">崩溃记录</string>
+    <string name="crash_entry_sub">崩溃时自动保存堆栈与最近日志，不含聊天内容</string>
+    <string name="crash_dialog_title">崩溃记录</string>
+    <string name="crash_dialog_empty">还没有崩溃记录。</string>
+    <string name="crash_share_latest">分享最近一次</string>
+    <string name="crash_clear">清除全部</string>
+    <string name="crash_close">关闭</string>
 </resources>
 

@@ -13,8 +13,8 @@ android {
         applicationId = "com.teatalk.xs"
         minSdk = 28
         targetSdk = 34
-        versionCode = 33
-        versionName = "0.12.3"
+        versionCode = 34
+        versionName = "0.13.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

@@ -97,6 +97,7 @@
     <string name="chat_online_status">Online · Roleplay mode</string>
     <string name="chat_input_hint">Say something…</string>
     <string name="chat_intro_default">Start a roleplay</string>
+    <string name="chat_loading_older">Loading earlier messages…</string>
     <string name="chat_today_header">Today %1$s</string>
 
     <string name="profile_persona_name">Traveler</string>
@@ -414,5 +415,13 @@
     <string name="backup_exported">Backup saved</string>
     <string name="backup_restored">Restored: characters %1$d, world books %2$d, chats %3$d, messages %4$d (skipped %5$d)</string>
     <string name="backup_failed">Could not read the backup file</string>
+    <string name="crash_entry">Crash logs (%1$d)</string>
+    <string name="crash_entry_none">Crash logs</string>
+    <string name="crash_entry_sub">Saved automatically on crash; stack trace and logs only, no chat content</string>
+    <string name="crash_dialog_title">Crash logs</string>
+    <string name="crash_dialog_empty">No crashes recorded yet.</string>
+    <string name="crash_share_latest">Share latest</string>
+    <string name="crash_clear">Clear all</string>
+    <string name="crash_close">Close</string>
 </resources>
 

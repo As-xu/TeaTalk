@@ -21,9 +21,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -44,6 +46,7 @@ import com.teatalk.xs.BuildConfig
 import com.teatalk.xs.R
 import com.teatalk.xs.TeaTalkApp
 import com.teatalk.xs.data.db.TeaTalkDatabase
+import com.teatalk.xs.log.CrashLogStore
 import com.teatalk.xs.log.Diagnostics
 import com.teatalk.xs.ui.components.Hairline
 import kotlinx.coroutines.delay
@@ -57,6 +60,9 @@ fun AboutScreen(onBack: () -> Unit) {
     val cs = MaterialTheme.colorScheme
     var debugEnabled by remember { mutableStateOf(container.logSettings.debugEnabled) }
     var lines by remember { mutableStateOf(List(0) { "" }) }
+
+    var crashFiles by remember { mutableStateOf(CrashLogStore.files(context)) }
+    var showCrashes by remember { mutableStateOf(false) }
 
     // 打开期间每 2 秒刷新一次缓冲快照（演示/排查用，量小无压力）
     LaunchedEffect(Unit) {
@@ -134,6 +140,15 @@ fun AboutScreen(onBack: () -> Unit) {
                         container.logRing.clear()
                         TeaTalkLog.i("Ui", "log.clear")
                     }
+                    Hairline()
+                    ActionRow(
+                        title = if (crashFiles.isEmpty()) {
+                            stringResource(R.string.crash_entry_none)
+                        } else {
+                            stringResource(R.string.crash_entry, crashFiles.size)
+                        },
+                        subtitle = stringResource(R.string.crash_entry_sub),
+                    ) { showCrashes = true }
                 }
                 Spacer(Modifier.height(18.dp))
             }
@@ -167,6 +182,53 @@ fun AboutScreen(onBack: () -> Unit) {
             }
             item { Spacer(Modifier.height(24.dp)) }
         }
+    }
+
+    if (showCrashes) {
+        val shareSubject = stringResource(R.string.crash_dialog_title)
+        val shareText = remember(crashFiles) {
+            crashFiles.firstOrNull()?.let { file -> runCatching { file.readText() }.getOrNull() }.orEmpty()
+        }
+        AlertDialog(
+            onDismissRequest = { showCrashes = false },
+            title = { Text(stringResource(R.string.crash_dialog_title)) },
+            text = {
+                Column {
+                    if (crashFiles.isEmpty()) {
+                        Text(stringResource(R.string.crash_dialog_empty), fontSize = TypeScale.s13, color = cs.onSurfaceVariant)
+                    } else {
+                        crashFiles.take(6).forEach { file ->
+                            Text(file.name, fontSize = TypeScale.s11, fontFamily = FontFamily.Monospace, color = cs.onSurfaceVariant)
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = shareText.isNotBlank(),
+                    onClick = {
+                        val intent = Intent(Intent.ACTION_SEND).apply {
+                            type = "text/plain"
+                            putExtra(Intent.EXTRA_SUBJECT, shareSubject)
+                            putExtra(Intent.EXTRA_TEXT, shareText)
+                        }
+                        runCatching { context.startActivity(Intent.createChooser(intent, null)) }
+                    },
+                ) { Text(stringResource(R.string.crash_share_latest)) }
+            },
+            dismissButton = {
+                Row {
+                    TextButton(
+                        enabled = crashFiles.isNotEmpty(),
+                        onClick = {
+                            CrashLogStore.clear(context)
+                            crashFiles = CrashLogStore.files(context)
+                        },
+                    ) { Text(stringResource(R.string.crash_clear)) }
+                    TextButton(onClick = { showCrashes = false }) { Text(stringResource(R.string.crash_close)) }
+                }
+            },
+        )
     }
 }
 

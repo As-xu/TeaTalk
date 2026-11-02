@@ -2,6 +2,7 @@ package com.teatalk.xs
 
 import android.app.Application
 import com.teatalk.xs.data.AppContainer
+import com.teatalk.xs.log.CrashLogStore
 
 /**
  * M0 手工 DI：Application 持有单例容器。
@@ -14,6 +15,7 @@ class TeaTalkApp : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        CrashLogStore.install(this)
         container = AppContainer(this)
     }
 }

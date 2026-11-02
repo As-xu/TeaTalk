@@ -27,6 +27,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import android.os.Process
+import android.os.SystemClock
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavType
@@ -35,6 +37,8 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.teatalk.core.log.TeaTalkLog
+import com.teatalk.xs.log.PerfLog
 import com.teatalk.xs.R
 import com.teatalk.xs.TeaTalkApp
 import com.teatalk.xs.data.UiText
@@ -79,6 +83,13 @@ fun HomeScreen(
     }
 
     val start = startRoute ?: return
+    // 启动埋点：进程启动 → 首页首帧可组合（真机冷启动回归口径；am start -W 在该 ROM 不可用）。
+    LaunchedEffect(Unit) {
+        PerfLog.event(
+            "app.home_ready",
+            "ms" to SystemClock.elapsedRealtime() - Process.getStartElapsedRealtime(),
+        )
+    }
     val navController = rememberNavController()
     val scope = rememberCoroutineScope()
     val backStackEntry by navController.currentBackStackEntryAsState()
