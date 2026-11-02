@@ -64,7 +64,7 @@ class PromptAssemblerGroupGoldenTest {
             PromptAssembler.ROLE_SYSTEM to
                 "This group chat includes: Aria, Bram. Write the next reply in a fictional group chat " +
                 "between Aria, Bram and User. Answer only as one of them, and never put a character " +
-                "name before the reply.",
+                "name before the reply. Do not speak or act for the other members.",
             PromptAssembler.ROLE_SYSTEM to "before Aria, Bram",
             PromptAssembler.ROLE_SYSTEM to "SYS-A",
             PromptAssembler.ROLE_SYSTEM to "desc-a Aria/User",
@@ -94,7 +94,8 @@ class PromptAssemblerGroupGoldenTest {
         assertEquals(
             "This group chat includes: Aria, Bram. Write the next reply in a fictional group chat " +
                 "between Aria, Bram and User. This turn, reply only as Bram, in Bram's own voice. " +
-                "Never put any character's name before the reply.",
+                "Never put any character's name before the reply. Do not speak or act for the other " +
+                "members; only Bram reacts.",
             spoken.first().second,
         )
         // 只有群说明随 speaker 变化，其余逐条一致。

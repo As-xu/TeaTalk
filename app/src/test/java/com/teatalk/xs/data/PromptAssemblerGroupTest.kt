@@ -39,7 +39,8 @@ class PromptAssemblerGroupTest {
         assertEquals(
             "This group chat includes: Aria, Bram. Write the next reply in a fictional group chat " +
                 "between Aria, Bram and User. This turn, reply only as Aria, in Aria's own voice. " +
-                "Never put any character's name before the reply.",
+                "Never put any character's name before the reply. Do not speak or act for the other " +
+                "members; only Aria reacts.",
             out[0].second,
         )
         assertTrue(out.any { it.second == "Write Aria's next reply in a fictional chat between Aria and User." })
@@ -56,7 +57,7 @@ class PromptAssemblerGroupTest {
         assertEquals(
             "This group chat includes: Aria, Bram. Write the next reply in a fictional group chat " +
                 "between Aria, Bram and User. Answer only as one of them, and never put a character " +
-                "name before the reply.",
+                "name before the reply. Do not speak or act for the other members.",
             out[0].second,
         )
     }

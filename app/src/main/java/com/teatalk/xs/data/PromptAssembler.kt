@@ -50,11 +50,12 @@ object PromptAssembler {
         out += ROLE_SYSTEM to if (speaker.isNullOrBlank()) {
             "This group chat includes: $names. Write the next reply in a fictional group chat between " +
                 "$names and $userName. Answer only as one of them, and never put a character name " +
-                "before the reply."
+                "before the reply. Do not speak or act for the other members."
         } else {
             "This group chat includes: $names. Write the next reply in a fictional group chat between " +
                 "$names and $userName. This turn, reply only as $speaker, in $speaker's own voice. " +
-                "Never put any character's name before the reply."
+                "Never put any character's name before the reply. Do not speak or act for the other " +
+                "members; only $speaker reacts."
         }
         if (beforeWorld.isNotEmpty()) {
             out += ROLE_SYSTEM to beforeWorld.joinToString("\n") { substitute(it, names, userName) }

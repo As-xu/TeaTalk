@@ -1,6 +1,6 @@
 # M5 群聊（Group chats）进度与验收
 
-> 版本 0.12.2 · DB v10 · 2026-11-02
+> 版本 0.12.3 · DB v10 · 2026-11-02
 
 ## 目标
 
@@ -21,7 +21,7 @@
 
 顺序（与单聊共用常量与 substitute）：
 
-1. 群说明（system）：`This group chat includes: A, B. Write the next reply in a fictional group chat between A, B and User. Answer only as one of them, and never put a character name before the reply.`（0.12.1 起加了「不要自称」约束：历史里的 `Name: ` 前缀会被模型模仿，表现为回复正文里又出现一次「角色名：」，气泡上已有名字时重复）
+1. 群说明（system）：`This group chat includes: A, B. Write the next reply in a fictional group chat between A, B and User. Answer only as one of them, and never put a character name before the reply. Do not speak or act for the other members.`（0.12.1 加了「不要自称」约束：历史里的 `Name: ` 前缀会被模型模仿，表现为回复正文里又出现一次「角色名：」，气泡上已有名字时重复；0.12.3 再加「不要替其他成员发言」硬约束 —— 有 speaker 时是 `Do not speak or act for the other members; only <speaker> reacts.`，减少正文中段冒出别的角色台词）
 2. 每个成员一个块（按加入顺序）：成员 system（空则回退 `Write X's next reply in a fictional chat between X and User.`）+ description / personality / scenario
 3. `beforeWorld` 世界书块
 4. `[Start a new Chat]`
@@ -42,6 +42,7 @@
 - 0.12.2：群聊回复按「行首成员名 + 冒号」拆成多条气泡（`GroupReplySplitter`），每段各自带 `speakerId` 落库；只有一段时仍走 `appendAssistantReply`（保留「重新生成 = 追加变体」语义），多段时走 `appendGroupReplies` 并先清掉锚点之后的旧助手消息
 - 0.12.2：输入框 `@` 支持前缀补全 —— 只在输入尾部有 `@前缀` 时按前缀过滤候选；点选替换该前缀而不是叠加；无匹配时提示「没有匹配的成员」
 - 0.12.2：成员面板在只剩 `MIN_GROUP_MEMBERS`（2）人时，移除按钮变灰并显示「群聊至少保留 2 位成员」
+- 0.12.3：群说明加「不要替其他成员发言」硬约束（neutral / speaker 两版都带），降低正文中段出现「另一角色：台词」的概率；文本层仍不做强制拆分（避免误伤叙述里的冒号）
 
 ## 测试
 
@@ -68,9 +69,9 @@
 ## 已知待办
 
 - 群聊 golden 仍需接 ST 快照做跨实现对拍（当前 `PromptAssemblerGroupGoldenTest` 是仓库内自锁）
-- 模型让「另一个角色」说话时（正文中段的 `Name：`），目前只有行首前缀会被剥离，未拆成多段
+- 模型让「另一个角色」说话时（正文中段的 `Name：`）：0.12.3 只加了 prompt 硬约束降低概率，**文本层仍不拆**（放宽拆分容易误伤叙述中的冒号）；若实测仍频繁出现，再考虑「行首/换行后的 `Name：`」限定拆分
 
 ## 产物
 
-- APK：`dist/TeaTalk-0.12.2-debug.apk`
-- sha256：`39bfa5ed7256d81355137f42ffe59fc29251e3ebdc5a878a3e8554359b8ffaae`
+- APK：`dist/TeaTalk-0.12.3-debug.apk`
+- sha256：`095adc5a673d4d3d178734b9c8bd1d9437aa4696ada68160779c69e864a46b78`
