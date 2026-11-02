@@ -283,6 +283,8 @@
     <string name="group_add_member">添加成员</string>
     <string name="group_remove_member">移除</string>
     <string name="group_members_all_added">所有角色都已在群里</string>
+    <string name="group_min_members_hint">群聊至少保留 %1$d 位成员</string>
+    <string name="group_mention_no_match">没有匹配的成员</string>
     <string name="group_member_add_failed">无法添加成员</string>
     <string name="group_member_remove_failed">无法移除成员</string>
     <string name="group_mention">@</string>

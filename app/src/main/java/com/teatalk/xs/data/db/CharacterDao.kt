@@ -84,6 +84,18 @@ interface CharacterDao {
     suspend fun insertMessage(message: MessageEntity): Long
 
     /**
+     * 重试群聊回复时先清掉锚点之后的气泡。
+     *
+     * 群聊一条回复可能被拆成多条 assistant 气泡；重试若不先清理，会出现
+     * 「旧的三条 + 新的三条」叠在一起。锚点是用户那条消息，之后的全是助手侧。
+     */
+    @Query(
+        "DELETE FROM messages WHERE conversationId = :conversationId " +
+            "AND role = 'assistant' AND id > :anchorId",
+    )
+    suspend fun deleteAssistantRepliesAfter(conversationId: Long, anchorId: Long): Int
+
+    /**
      * 原子地"没有消息才插开场白"。
      * @return true=插入成功；false=已有消息，未插入。
      * 用 @Transaction 消除 count→insert 竞态（详情页连点两次「开始聊天」不会再插两条）。

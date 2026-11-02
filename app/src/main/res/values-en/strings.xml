@@ -278,6 +278,8 @@
     <string name="group_add_member">Add member</string>
     <string name="group_remove_member">Remove</string>
     <string name="group_members_all_added">Everyone is already in this group</string>
+    <string name="group_min_members_hint">A group keeps at least %1$d members</string>
+    <string name="group_mention_no_match">No matching member</string>
     <string name="group_member_add_failed">Couldn\'t add that member</string>
     <string name="group_member_remove_failed">Couldn\'t remove that member</string>
     <string name="group_mention">@</string>

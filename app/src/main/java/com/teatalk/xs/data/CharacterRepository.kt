@@ -521,6 +521,70 @@ class CharacterRepository(
       }
     }
 
+    /**
+     * 群聊多气泡落库：一条模型回复按说话者拆成多段，各段独立成条。
+     *
+     * 为什么要先删：群聊重试是「重新生成当前这一轮」。若上一轮已被拆成 3 条气泡，
+     * 重试后不清掉就会叠成 6 条。锚点是用户那条消息，之后的全是助手侧。
+     *
+     * 与 [appendAssistantReply] 一样走 [replyMutex]：进程内只有这一个写者，
+     * 用串行化代替事务（仓库没有 database 句柄），避免停止/完成两条路径互相覆盖。
+     *
+     * @return 新插入的气泡 id（空内容返回空列表）。
+     */
+    suspend fun appendGroupReplies(
+        conversationId: Long,
+        anchorMessageId: Long?,
+        segments: List<GroupReplySplitter.Segment>,
+        status: String,
+        providerId: String? = null,
+        providerName: String? = null,
+        model: String? = null,
+    ): List<Long> = replyMutex.withLock {
+        withContext(Dispatchers.IO) {
+            val conversation = conversations.find(conversationId) ?: return@withContext emptyList()
+            if (dao.find(conversation.characterId) == null) return@withContext emptyList()
+            val bodies = segments.mapNotNull { segment ->
+                val text = segment.text.trim()
+                if (text.isEmpty()) null else (segment.speakerName to text)
+            }
+            if (bodies.isEmpty()) return@withContext emptyList()
+            // MemberWithCharacter 把角色展示字段平铺在成员行上（name/characterId），没有嵌套 character。
+            val speakerIds = conversations.membersOnce(conversationId)
+                .associate { it.name.trim() to it.characterId }
+            if (anchorMessageId != null) {
+                dao.deleteAssistantRepliesAfter(conversationId, anchorMessageId)
+            }
+            val ids = bodies.map { (speakerName, text) ->
+                dao.insertMessage(
+                    MessageEntity(
+                        characterId = conversation.characterId,
+                        conversationId = conversationId,
+                        role = ROLE_ASSISTANT,
+                        content = text,
+                        createdAt = System.currentTimeMillis(),
+                        variantsJson = MessageVariants.encode(listOf(text)),
+                        variantStatusJson = MessageVariants.encodeStatuses(listOf(status)),
+                        selectedVariant = 0,
+                        status = status,
+                        providerId = providerId,
+                        providerName = providerName,
+                        model = model,
+                        speakerId = speakerName?.let { speakerIds[it] },
+                    ),
+                )
+            }
+            TeaTalkLog.i(
+                "Chat",
+                "reply.insertGroup",
+                "bubbles" to ids.size,
+                "chars" to bodies.sumOf { it.second.length },
+            )
+            touchConversation(conversationId)
+            ids
+        }
+    }
+
     /** 切换某条消息的版本；返回切换后的文本（null 表示下标无效）。 */
     suspend fun selectVariant(messageId: Long, index: Int): String? = withContext(Dispatchers.IO) {
         val message = dao.findMessage(messageId) ?: return@withContext null

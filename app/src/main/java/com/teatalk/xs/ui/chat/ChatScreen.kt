@@ -110,6 +110,7 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import com.teatalk.xs.R
 import com.teatalk.xs.TeaTalkApp
 import com.teatalk.xs.data.CharacterRepository
+import com.teatalk.xs.data.GroupReplySplitter
 import com.teatalk.xs.data.DeletedConversationStore
 import com.teatalk.xs.data.MessageVariants
 import com.teatalk.xs.data.PromptDebugStore
@@ -560,22 +561,46 @@ class ChatViewModel(
      * 保证同一轮生成最多写一条：先到者为准，后到者静默丢弃。
      */
     private suspend fun commitOnce(gen: Int, status: String, raw: String) {
-        val body = stripSpeakerPrefix(raw.trim())
-        if (body.isEmpty()) return
+        // 群聊：一条回复里可能有多位角色轮流说话，按「成员名:」拆成多条气泡，
+        // 这样每条的说话者都能对上（否则头像/名字是甲、正文以「乙：」开头）。
+        val members = groupMembers.value
+        val isGroupReply =
+            conversation.value?.kind == ConversationEntity.KIND_GROUP &&
+                members.size >= CharacterRepository.MIN_GROUP_MEMBERS
+        val segments = if (isGroupReply) {
+            GroupReplySplitter.split(raw, members.map { it.name }, replySpeakerName)
+        } else {
+            emptyList()
+        }
+        val body = if (isGroupReply) "" else stripSpeakerPrefix(raw.trim())
+        if (isGroupReply && segments.isEmpty()) return
+        if (!isGroupReply && body.isEmpty()) return
         commitMutex.withLock {
             if (gen != generation || committed) return
             committed = true
             try {
-                repository.appendAssistantReply(
-                    conversationId = conversationId,
-                    text = body,
-                    status = status,
-                    providerId = replyProvider?.providerId,
-                    providerName = replyProvider?.providerName,
-                    model = replyProvider?.model,
-                    replyToMessageId = replyAnchorId,
-                    speakerId = replySpeakerId,
-                )
+                if (isGroupReply) {
+                    repository.appendGroupReplies(
+                        conversationId = conversationId,
+                        anchorMessageId = replyAnchorId,
+                        segments = segments,
+                        status = status,
+                        providerId = replyProvider?.providerId,
+                        providerName = replyProvider?.providerName,
+                        model = replyProvider?.model,
+                    )
+                } else {
+                    repository.appendAssistantReply(
+                        conversationId = conversationId,
+                        text = body,
+                        status = status,
+                        providerId = replyProvider?.providerId,
+                        providerName = replyProvider?.providerName,
+                        model = replyProvider?.model,
+                        replyToMessageId = replyAnchorId,
+                        speakerId = replySpeakerId,
+                    )
+                }
             } catch (cancelled: CancellationException) {
                 // 写库被取消：可能已回滚，放开标记让停止路径重试
                 committed = false
@@ -927,17 +952,43 @@ fun ChatScreen(
                 ) {
                     if (isGroup && groupMembers.isNotEmpty()) {
                         var mentionOpen by remember { mutableStateOf(false) }
+                        // 只认输入尾部正在输入的 `@前缀`：输到一半就按前缀过滤，点选时替换而不是叠加。
+                        val mentionMatch = remember(input) { Regex("@([^@\\s]*)$").find(input) }
+                        val mentionQuery = mentionMatch?.groupValues?.get(1).orEmpty()
+                        val mentionCandidates = remember(mentionQuery, groupMembers) {
+                            if (mentionQuery.isEmpty()) {
+                                groupMembers
+                            } else {
+                                groupMembers.filter { it.name.contains(mentionQuery, ignoreCase = true) }
+                            }
+                        }
                         Box {
-                            IconButton(onClick = { mentionOpen = true }) {
+                            IconButton(onClick = {
+                                if (mentionMatch == null) {
+                                    input = (input.trimEnd() + " @").trimStart()
+                                }
+                                mentionOpen = true
+                            }) {
                                 Text("@", fontSize = TypeScale.s16, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                             DropdownMenu(expanded = mentionOpen, onDismissRequest = { mentionOpen = false }) {
-                                groupMembers.forEach { member ->
+                                if (mentionCandidates.isEmpty()) {
+                                    DropdownMenuItem(
+                                        text = { Text(stringResource(R.string.group_mention_no_match)) },
+                                        onClick = { mentionOpen = false },
+                                    )
+                                }
+                                mentionCandidates.forEach { member ->
                                     DropdownMenuItem(
                                         text = { Text(member.name) },
                                         onClick = {
                                             mentionOpen = false
-                                            input = (input.trimEnd() + " @" + member.name + " ").trimStart()
+                                            val tail = mentionMatch
+                                            input = if (tail != null) {
+                                                input.replaceRange(tail.range, "@" + member.name + " ")
+                                            } else {
+                                                (input.trimEnd() + " @" + member.name + " ").trimStart()
+                                            }
                                         },
                                     )
                                 }
@@ -1774,6 +1825,14 @@ private fun GroupMembersSheet(
                 color = cs.onBackground,
                 modifier = Modifier.padding(horizontal = 20.dp, vertical = 10.dp),
             )
+            if (!canRemove) {
+                Text(
+                    stringResource(R.string.group_min_members_hint, CharacterRepository.MIN_GROUP_MEMBERS),
+                    fontSize = TypeScale.s12,
+                    color = cs.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 20.dp).padding(bottom = 6.dp),
+                )
+            }
             LazyColumn(Modifier.fillMaxWidth().heightIn(max = 360.dp)) {
                 items(members, key = { it.characterId }) { member ->
                     Row(

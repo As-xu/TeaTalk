@@ -1,6 +1,6 @@
 # M5 群聊（Group chats）进度与验收
 
-> 版本 0.12.0 · DB v10 · 2026-10-31
+> 版本 0.12.2 · DB v10 · 2026-11-02
 
 ## 目标
 
@@ -39,10 +39,17 @@
 - 助手气泡：发言人名字 + 发言人头像；发言者按成员轮转（按历史 assistant 条数取模，确定性）
 - 群聊不写开场白（`ensureGreeting` 对 group 直接返回）
 - 0.12.1：群头带 `This turn, reply only as <speaker>`；落库前 `stripSpeakerPrefix` 会剥掉行首任意成员名 + 冒号（含连续多行），修复「气泡上已有名字、正文里又出现一次」
+- 0.12.2：群聊回复按「行首成员名 + 冒号」拆成多条气泡（`GroupReplySplitter`），每段各自带 `speakerId` 落库；只有一段时仍走 `appendAssistantReply`（保留「重新生成 = 追加变体」语义），多段时走 `appendGroupReplies` 并先清掉锚点之后的旧助手消息
+- 0.12.2：输入框 `@` 支持前缀补全 —— 只在输入尾部有 `@前缀` 时按前缀过滤候选；点选替换该前缀而不是叠加；无匹配时提示「没有匹配的成员」
+- 0.12.2：成员面板在只剩 `MIN_GROUP_MEMBERS`（2）人时，移除按钮变灰并显示「群聊至少保留 2 位成员」
 
 ## 测试
 
 `app/src/test/java/com/teatalk/xs/data/PromptAssemblerGroupTest.kt`（5 条）：群头与成员回退 system、world 块与 `[Start a new Chat]` 顺序、成员 PHI 顺序与历史前缀、群聊不含 example、空成员返回空。
+
+`app/src/test/java/com/teatalk/xs/data/PromptAssemblerGroupGoldenTest.kt`（2 条全量等值）：整条消息列表逐条钉死（群说明 → before 世界书 → 成员块 → after 世界书 → `[Start a new Chat]` → 历史 → PHI）；speaker 只改群说明、后续逐条不变。
+
+`app/src/test/java/com/teatalk/xs/data/GroupReplySplitterTest.kt`（7 条）：两人分行并剥前缀、续行归属、无前缀归 fallback、行内出现名字不拆、相邻同说话者合并、未知说话者前缀不拆、空白回复 0 段。
 
 全量：`:core:test` + `:app:testDebugUnitTest` 通过。
 
@@ -60,11 +67,10 @@
 
 ## 已知待办
 
-- 群聊 golden case 与单聊对拍脚本打通（当前 5 条断言覆盖结构，未接 ST 快照）
-- 最后一名成员不可移除时的文案/禁用态更明确
-- `@` 输入补全（当前为插入文本，不做过滤提示）
+- 群聊 golden 仍需接 ST 快照做跨实现对拍（当前 `PromptAssemblerGroupGoldenTest` 是仓库内自锁）
+- 模型让「另一个角色」说话时（正文中段的 `Name：`），目前只有行首前缀会被剥离，未拆成多段
 
 ## 产物
 
-- APK：`dist/TeaTalk-0.12.0-debug.apk`
-- sha256：`74851599ffa1359d011d1ca940a5f57c53e777403d8b001b3447f074651a7c1f`
+- APK：`dist/TeaTalk-0.12.2-debug.apk`
+- sha256：`39bfa5ed7256d81355137f42ffe59fc29251e3ebdc5a878a3e8554359b8ffaae`
