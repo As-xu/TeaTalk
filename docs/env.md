@@ -101,3 +101,5 @@ git -c http.proxy= -c https.proxy= push origin main
    - 修法：构建前 `export TMP=…/TEMP=…` 指到项目内目录，并给 Gradle 传 `-Djava.io.tmpdir=D:/Project/TeaTalkApp/.tools/tmp`，再执行 `:app:assembleDebug`。
 
 10. **真机换过**：当前测试机 `XPLGL21A22000007`（TAS_AN00，Android 14，1080x2340）；旧记录里的 `PQY0221205009539`（NOH-AN00）已不在线。UI 自动化脚本在 `.tools/rdev.py`（`exec` 复用，按 bounds/坐标点击，中文文本用 `ascii()` 打印）。
+
+11. AVD `teatalk34` 目前起不来 adb：`emulator.exe -avd teatalk34 -no-snapshot-load -no-boot-anim -gpu swiftshader_indirect` 会留下 2-3 个 `qemu-system-x86_64.exe`，但日志停在 `Found systemPath D:\DevEnv\Android\Sdk\system-images\android-34\google_apis\x86_64\`，`adb devices` 一直空（等待 2 分钟以上）。真机不在线时不要依赖它验收，改用 `XPLGL21A22000007`。
