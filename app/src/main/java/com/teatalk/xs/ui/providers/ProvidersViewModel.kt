@@ -157,7 +157,7 @@ class ProvidersViewModel(
                     busy = false,
                     note = result.fold(
                         onSuccess = { models -> UiText.providerTestOk(models.size) },
-                        onFailure = { error -> UiText.providerTestFail(error.message ?: "error") },
+                        onFailure = { error -> UiText.providerFailure(error) },
                     ),
                     noteIsError = result.isFailure,
                 )
@@ -188,7 +188,7 @@ class ProvidersViewModel(
                     onFailure = { error ->
                         it.copy(
                             busy = false,
-                            note = UiText.providerTestFail(error.message ?: "error"),
+                            note = UiText.providerFailure(error),
                             noteIsError = true,
                         )
                     },

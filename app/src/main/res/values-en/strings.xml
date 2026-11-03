@@ -245,6 +245,17 @@
     <string name="chat_error_network">Network unavailable. Check your connection</string>
     <string name="chat_error_http">Server returned an error (HTTP %1$d). Try again later</string>
     <string name="chat_error_bad_response">The model returned no content. Try again</string>
+    <string name="chat_error_server">Service error: %1$s</string>
+    <string name="providers_fail_unauthorized">API key is invalid or expired (401)</string>
+    <string name="providers_fail_forbidden">This key has no permission (403)</string>
+    <string name="providers_fail_not_found">Endpoint may be wrong (404). Check whether the base URL includes /v1</string>
+    <string name="providers_fail_rate_limited">Too many requests or quota exhausted (429)</string>
+    <string name="providers_fail_server">Service unavailable (HTTP %1$d). Try again later</string>
+    <string name="providers_fail_timeout">Connection timed out. Check network or proxy and retry</string>
+    <string name="providers_fail_network">Network unavailable. Check your connection and retry</string>
+    <string name="providers_fail_bad_url">Base URL looks incomplete. Start it with http:// or https://</string>
+    <string name="providers_fail_unknown">Connection failed. Check the endpoint and key</string>
+
     <string name="chat_stop">Stop</string>
     <string name="chat_stopped">Generation stopped</string>
     <string name="chat_retry">Retry</string>

@@ -74,7 +74,46 @@ data class UiText(
             com.teatalk.xs.data.net.ChatError.TIMEOUT -> of(R.string.chat_error_timeout)
             com.teatalk.xs.data.net.ChatError.NETWORK -> of(R.string.chat_error_network)
             is com.teatalk.xs.data.net.ChatError.HTTP -> of(R.string.chat_error_http, error.code)
+            is com.teatalk.xs.data.net.ChatError.SERVER -> of(R.string.chat_error_server, error.message.take(160))
             com.teatalk.xs.data.net.ChatError.BAD_RESPONSE -> of(R.string.chat_error_bad_response)
+        }
+
+        /**
+         * Provider「测试连接 / 拉取模型」失败文案。
+         *
+         * 以前直接把 [Throwable.message] 塞进「连接失败：%s」，用户会看到英文 `HTTP 401 Unauthorized`。
+         * 这里按状态码/异常类型给出可操作的中文提示，未知错误才退回到短消息。
+         */
+        fun providerFailure(error: Throwable): UiText {
+            // OkHttp 对缺少 scheme 的地址会抛 IllegalArgumentException("Expected URL scheme ...")，
+            // 给用户一句能改的建议，而不是英文原文。
+            if (error is IllegalArgumentException && error.message?.contains("URL scheme", true) == true) {
+                return of(R.string.providers_fail_bad_url)
+            }
+            if (error is com.teatalk.xs.data.net.HttpStatusException) {
+                return when (error.status) {
+                    401 -> of(R.string.providers_fail_unauthorized)
+                    403 -> of(R.string.providers_fail_forbidden)
+                    404 -> of(R.string.providers_fail_not_found)
+                    429 -> of(R.string.providers_fail_rate_limited)
+                    in 500..599 -> of(R.string.providers_fail_server, error.status)
+                    else -> of(R.string.providers_test_fail, "HTTP ${error.status}")
+                }
+            }
+            if (error is java.net.SocketTimeoutException ||
+                error is java.io.InterruptedIOException
+            ) {
+                return of(R.string.providers_fail_timeout)
+            }
+            if (error is java.io.IOException) {
+                return of(R.string.providers_fail_network)
+            }
+            val short = error.message?.trim()?.take(160)
+            return if (short.isNullOrEmpty()) {
+                of(R.string.providers_fail_unknown)
+            } else {
+                of(R.string.providers_test_fail, short)
+            }
         }
 
         fun chatStopped(): UiText = of(R.string.chat_stopped)

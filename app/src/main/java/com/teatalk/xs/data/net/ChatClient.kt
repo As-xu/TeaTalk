@@ -57,6 +57,14 @@ sealed interface ChatError {
     /** 其它 4xx/5xx：带状态码，便于用户投诉/排查。 */
     data class HTTP(val code: Int) : ChatError
 
+    /**
+     * 流已建立但服务端中途报错（`{"error":{...}}`）。
+     *
+     * 这类响应 HTTP 状态码往往是 200，用 [HTTP] 表示会让文案自相矛盾（「返回错误（HTTP 200）」），
+     * 所以单独一类，并把服务端原文带到提示里（多为额度或内容审核原因）。
+     */
+    data class SERVER(val message: String) : ChatError
+
     data object TIMEOUT : ChatError
 
     data object NETWORK : ChatError
@@ -76,6 +84,7 @@ val ChatError.label: String
         ChatError.NETWORK -> "NETWORK"
         ChatError.BAD_RESPONSE -> "BAD_RESPONSE"
         is ChatError.HTTP -> "HTTP_${code}"
+        is ChatError.SERVER -> "SERVER"
     }
 
 /**
@@ -174,7 +183,7 @@ class ChatClient(
                             "kind" to "STREAM_ERROR",
                             "ms" to (System.currentTimeMillis() - started),
                         )
-                        emit(ChatEvent.Failed(ChatError.HTTP(200), message))
+                        emit(ChatEvent.Failed(ChatError.SERVER(message), message.take(200)))
                         return@use
                     }
                     if (Sse.isDone(data)) {

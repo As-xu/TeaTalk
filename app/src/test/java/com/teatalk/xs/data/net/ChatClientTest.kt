@@ -102,7 +102,8 @@ class ChatClientTest {
         val events = run(client())
         assertTrue(events.any { it is ChatEvent.Delta })
         val failed = events.filterIsInstance<ChatEvent.Failed>().single()
-        assertEquals(ChatError.HTTP(200), failed.error)
+        // 状态码是 200，只是流里带错误帧：必须是 SERVER（带服务端原文），不能是 HTTP(200)
+        assertEquals(ChatError.SERVER("quota exceeded"), failed.error)
         assertTrue(failed.detail!!.contains("quota exceeded"))
     }
 

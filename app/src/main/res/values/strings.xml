@@ -250,6 +250,17 @@
     <string name="chat_error_network">网络不可用，请检查连接</string>
     <string name="chat_error_http">服务端返回错误（HTTP %1$d），请稍后重试</string>
     <string name="chat_error_bad_response">模型没有返回内容，请重试</string>
+    <string name="chat_error_server">服务返回错误：%1$s</string>
+    <string name="providers_fail_unauthorized">API Key 无效或已过期（401）</string>
+    <string name="providers_fail_forbidden">这个 Key 没有访问权限（403）</string>
+    <string name="providers_fail_not_found">接口地址可能不对（404），检查 Base URL 是否包含 /v1</string>
+    <string name="providers_fail_rate_limited">请求太频繁或额度用尽（429）</string>
+    <string name="providers_fail_server">服务端暂时不可用（HTTP %1$d），请稍后重试</string>
+    <string name="providers_fail_timeout">连接超时，检查网络或代理后重试</string>
+    <string name="providers_fail_network">网络不可用，检查连接后重试</string>
+    <string name="providers_fail_bad_url">接口地址看起来不完整，请以 http:// 或 https:// 开头</string>
+    <string name="providers_fail_unknown">连接失败，请检查接口地址与 Key</string>
+
     <string name="chat_stop">停止</string>
     <string name="chat_stopped">已停止生成</string>
     <string name="chat_retry">重试</string>
