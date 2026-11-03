@@ -58,6 +58,9 @@
 
 - 0.17.0：V1 摘要记忆 —— 历史窗口（最近 20 条）之外再取 200 条，由 `MemoryDigest` 做确定性抽样（最多 10 行、单行 140 字、总计 1200 字）生成 `[Earlier conversation]` 摘要，注入到「世界书之后、角色定义之前」；`memory = null` 时输出与改造前逐条一致，既有 ST golden 对拍不受影响。详见 `docs/15-V1-摘要记忆.md`。
 
+- 0.18.0：V1 正则/变量 —— 新增 DB v11 `regex_rules` / `chat_variables` 两表；`RegexEngine`（flags i/m/s/g、编译缓存、坏正则跳过）与 `MacroEngine`（getvar/setvar/addvar、user/char、time/date/datetime/weekday、random/pick，最多 5 轮展开）均可在 prompt 出站时链式生效并写回变量；display 规则只改气泡显示、不改库内正文；设置页新增「正则脚本」管理（CRUD + 实时预览）。详见 `docs/16-正则与变量.md`。
+
 ## 已知问题
 
 - 上滑触发 `chat.page` 的日志证据尚未取到（`logcat -s TeaTalkPerf:V` 无输出）；但 `chat.open ms=419` 与尾部消息截图说明分页生效，待下次真机复盘（可能与滑动方向/首次可见索引未到阈值有关）。
+- 0.18.0 未做真机验收：真机 `XPLGL21A22000007` 掉线，模拟器因 DSH 沙箱拒写 `C:\Users\xusong\.android`（`snapshot.lock.lock` / `emu-last-feature-flags.protobuf.lock` 均 `error: 5`）无法启动；本轮口径为 21 例单测 + `assembleDebug` 通过，正则页 CRUD/预览、prompt 与 display 生效、变量落库待设备恢复后补验。

@@ -193,6 +193,38 @@
     
     <string name="worldbook_imported">已导入「%1$s」（%2$d 条）</string>
     <string name="worldbook_deleted">已删除「%1$s」</string>
+
+    <!-- V1 正则脚本 -->
+    <string name="profile_regex">正则脚本</string>
+    <string name="profile_regex_sub">替换提示词与显示文本</string>
+    <string name="regex_title">正则脚本</string>
+    <string name="regex_new">新建</string>
+    <string name="regex_edit_title">编辑规则</string>
+    <string name="regex_new_title">新建规则</string>
+    <string name="regex_empty_title">还没有正则脚本</string>
+    <string name="regex_empty_body">按 SillyTavern 的写法，对提示词或显示文本做替换</string>
+    <string name="regex_empty_cta">新建规则</string>
+    <string name="regex_name">名称</string>
+    <string name="regex_pattern">匹配（正则）</string>
+    <string name="regex_replacement">替换为（可留空表示删除）</string>
+    <string name="regex_flags">标志（i / m / s / g）</string>
+    <string name="regex_scope">作用域</string>
+    <string name="regex_scope_prompt">提示词</string>
+    <string name="regex_scope_display">显示</string>
+    <string name="regex_scope_both">两者</string>
+    <string name="regex_sort">排序（小的先执行）</string>
+    <string name="regex_enabled">启用</string>
+    <string name="regex_preview">预览</string>
+    <string name="regex_preview_hint">粘贴一段文本，查看替换结果</string>
+    <string name="regex_saved">已保存规则</string>
+    <string name="regex_saved_named">已保存「%1$s」</string>
+    <string name="regex_deleted">已删除规则</string>
+    <string name="regex_save_failed">保存失败</string>
+    <string name="regex_delete_failed">删除失败</string>
+    <string name="regex_pattern_required">匹配不能为空</string>
+    <string name="regex_invalid">规则「%1$s」无法编译：%2$s</string>
+    <string name="regex_delete_title">删除规则</string>
+    <string name="regex_delete_body">确定删除「%1$s」？</string>
     <string name="worldbook_delete_title">删除世界书</string>
     <string name="worldbook_delete_confirm">确定删除「%1$s」？</string>
     <string name="worldbook_entry_keys">关键词：%1$s</string>

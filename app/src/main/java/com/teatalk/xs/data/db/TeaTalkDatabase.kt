@@ -14,8 +14,10 @@ import com.teatalk.core.log.TeaTalkLog
         ModelProviderEntity::class,
         ConversationEntity::class,
         ConversationMemberEntity::class,
+        RegexRuleEntity::class,
+        ChatVariableEntity::class,
     ],
-    version = 10,
+    version = 11,
     exportSchema = true,
 )
 abstract class TeaTalkDatabase : RoomDatabase() {
@@ -23,9 +25,11 @@ abstract class TeaTalkDatabase : RoomDatabase() {
     abstract fun worldBookDao(): WorldBookDao
     abstract fun modelProviderDao(): ModelProviderDao
     abstract fun conversationDao(): ConversationDao
+    abstract fun regexRuleDao(): RegexRuleDao
+    abstract fun chatVariableDao(): ChatVariableDao
 
     companion object {
-        const val VERSION = 10
+        const val VERSION = 11
 
         /**
          * v1（M0）→ v2（D6 卡库）：
@@ -213,8 +217,45 @@ abstract class TeaTalkDatabase : RoomDatabase() {
             }
         }
 
-        val MIGRATION_8_9 = object : Migration(8, 9) {
+        /**
+         * v10 → v11（V1 正则/变量）：
+         * - `regex_rules`：出站/入站正则脚本（纯新增表）
+         * - `chat_variables`：会话级变量（`{{getvar}}`/`{{setvar}}` 的落点，按会话隔离）
+         *
+         * 两张表都是新增，不改既有列，迁移是纯增量。
+         */
+        val MIGRATION_10_11 = object : Migration(10, 11) {
             override fun migrate(db: SupportSQLiteDatabase) {
+                val started = System.currentTimeMillis()
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS regex_rules (" +
+                        "id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                        "name TEXT NOT NULL, " +
+                        "pattern TEXT NOT NULL, " +
+                        "replacement TEXT NOT NULL, " +
+                        "flags TEXT NOT NULL DEFAULT 'g', " +
+                        "scope TEXT NOT NULL DEFAULT 'prompt', " +
+                        "enabled INTEGER NOT NULL DEFAULT 1, " +
+                        "sortIndex INTEGER NOT NULL DEFAULT 0, " +
+                        "createdAt INTEGER NOT NULL DEFAULT 0)",
+                )
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS chat_variables (" +
+                        "conversationId INTEGER NOT NULL, " +
+                        "`key` TEXT NOT NULL, " +
+                        "value TEXT NOT NULL, " +
+                        "updatedAt INTEGER NOT NULL DEFAULT 0, " +
+                        "PRIMARY KEY(conversationId, `key`))",
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS index_chat_variables_conversationId " +
+                        "ON chat_variables(conversationId)",
+                )
+                TeaTalkLog.i("Db", "db.migrate", "from" to 10, "to" to 11, "ms" to (System.currentTimeMillis() - started))
+            }
+        }
+
+        val MIGRATION_8_9 = object : Migration(8, 9) {            override fun migrate(db: SupportSQLiteDatabase) {
                 val started = System.currentTimeMillis()
                 db.execSQL("ALTER TABLE model_providers ADD COLUMN topP REAL")
                 db.execSQL("ALTER TABLE model_providers ADD COLUMN maxTokens INTEGER")

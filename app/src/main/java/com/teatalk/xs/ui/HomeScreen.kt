@@ -63,6 +63,8 @@ import com.teatalk.xs.ui.providers.ProvidersViewModel
 import com.teatalk.xs.ui.about.AboutScreen
 import com.teatalk.xs.ui.worldbook.WorldBooksScreen
 import com.teatalk.xs.ui.worldbook.WorldBooksViewModel
+import com.teatalk.xs.ui.regex.RegexRulesScreen
+import com.teatalk.xs.ui.regex.RegexRulesViewModel
 
 /**
  * 导航骨架：底部三 Tab（聊天/角色/我的）+ 两级全屏页面（角色详情 / 聊天）。
@@ -202,6 +204,7 @@ fun HomeScreen(
                         onLanguageChange = onChangeLanguage,
                         onOpenModelSettings = { navController.navigate(Routes.PROVIDERS) },
                         onOpenWorldBooks = { navController.navigate(Routes.WORLD_BOOKS) },
+                        onOpenRegex = { navController.navigate(Routes.REGEX_RULES) },
                         onOpenAbout = { navController.navigate(Routes.ABOUT) },
                     )
                 }
@@ -217,6 +220,12 @@ fun HomeScreen(
                 composable(Routes.WORLD_BOOKS) {
                     WorldBooksScreen(
                         viewModel = viewModel(factory = WorldBooksViewModel.factory(app)),
+                        onBack = { navController.popBackStack() },
+                    )
+                }
+                composable(Routes.REGEX_RULES) {
+                    RegexRulesScreen(
+                        viewModel = viewModel(factory = RegexRulesViewModel.factory(app)),
                         onBack = { navController.popBackStack() },
                     )
                 }
@@ -281,6 +290,7 @@ private object Routes {
     const val CHARACTER_DETAIL = "character/{id}"
     const val CHAT = "chat/{conversationId}?messageId={messageId}"
     const val WORLD_BOOKS = "worldbooks"
+    const val REGEX_RULES = "regexrules"
     const val PROVIDERS = "providers"
         const val ABOUT = "about"
 }

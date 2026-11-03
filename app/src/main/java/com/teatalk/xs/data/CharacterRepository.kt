@@ -13,6 +13,8 @@ import com.teatalk.core.worldinfo.WorldInfoEntry
 import com.teatalk.core.worldinfo.WorldInfoParser
 import com.teatalk.xs.data.db.CharacterDao
 import com.teatalk.xs.data.db.CharacterEntity
+import com.teatalk.xs.data.db.ChatVariableDao
+import com.teatalk.xs.data.db.ChatVariableEntity
 import com.teatalk.xs.data.db.ConversationDao
 import com.teatalk.xs.data.db.ConversationEntity
 import com.teatalk.xs.data.db.ConversationWithLastMessage
@@ -20,9 +22,12 @@ import com.teatalk.xs.data.db.MessageSearchHit
 import com.teatalk.xs.data.db.ConversationMemberEntity
 import com.teatalk.xs.data.db.MemberWithCharacter
 import com.teatalk.xs.data.db.MessageEntity
+import com.teatalk.xs.data.db.RegexRuleDao
+import com.teatalk.xs.data.db.RegexRuleEntity
 import com.teatalk.xs.data.db.WorldBookDao
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -51,6 +56,8 @@ class CharacterRepository(
     private val dao: CharacterDao,
     private val conversations: ConversationDao,
     private val worldBookDao: WorldBookDao,
+    private val regexRuleDao: RegexRuleDao,
+    private val chatVariableDao: ChatVariableDao,
     /** 个人资料名：导入开场白时替换 `{{user}}`。 */
     private val userName: () -> String = { "User" },
 ) {
@@ -92,6 +99,58 @@ class CharacterRepository(
     /** 全库消息搜索（V1：聊天记录搜索）。 */
     suspend fun searchMessages(query: String, limit: Int = 50): List<MessageSearchHit> =
         withContext(Dispatchers.IO) { conversations.searchMessages(query.trim(), limit) }
+
+    // ---- V1 正则/变量 ----
+
+    /** 正则脚本列表（设置页与管理页共用一个流）。 */
+    fun observeRegexRules(): Flow<List<RegexRule>> =
+        regexRuleDao.observeAll().map { list -> list.map(RegexRule::from) }
+
+    suspend fun regexRules(): List<RegexRule> = withContext(Dispatchers.IO) {
+        regexRuleDao.all().map(RegexRule::from)
+    }
+
+    /** 新建或更新；返回行 id。 */
+    suspend fun saveRegexRule(rule: RegexRule): Long = withContext(Dispatchers.IO) {
+        val now = System.currentTimeMillis()
+        val entity = RegexRuleEntity(
+            id = rule.id,
+            name = rule.name,
+            pattern = rule.pattern,
+            replacement = rule.replacement,
+            flags = rule.flags,
+            scope = rule.scope,
+            enabled = rule.enabled,
+            sortIndex = rule.sortIndex,
+            createdAt = now,
+        )
+        if (rule.id == 0L) {
+            regexRuleDao.upsert(entity)
+        } else {
+            // 保留原 createdAt：规则列表按 sortIndex 排序，createdAt 只用于排查。
+            val existing = regexRuleDao.all().firstOrNull { it.id == rule.id }
+            regexRuleDao.update(entity.copy(createdAt = existing?.createdAt ?: now))
+            rule.id
+        }
+    }
+
+    suspend fun deleteRegexRule(id: Long) = withContext(Dispatchers.IO) { regexRuleDao.deleteById(id) }
+
+    /** 会话变量（`{{getvar}}` 读这里）。 */
+    suspend fun variables(conversationId: Long): Map<String, String> = withContext(Dispatchers.IO) {
+        chatVariableDao.all(conversationId).associate { it.key to it.value }
+    }
+
+    /** 把 `{{setvar}}` 产生的写入落库（只写变化的 key）。 */
+    suspend fun putVariables(conversationId: Long, writes: Map<String, String>) {
+        if (writes.isEmpty()) return
+        withContext(Dispatchers.IO) {
+            val now = System.currentTimeMillis()
+            chatVariableDao.upsertAll(
+                writes.map { (key, value) -> ChatVariableEntity(conversationId, key, value, now) },
+            )
+        }
+    }
 
     /** 某角色下的所有会话（会话切换面板用），按最近活跃排序。 */
     fun observeConversations(characterId: Long): Flow<List<ConversationEntity>> =

@@ -79,6 +79,7 @@ private val LANGUAGE_OPTIONS = listOf(
 fun ProfileScreen(
     onOpenModelSettings: () -> Unit = {},
     onOpenWorldBooks: () -> Unit = {},
+    onOpenRegex: () -> Unit = {},
     onOpenAbout: () -> Unit = {},
     onOpenCharacters: () -> Unit = {},
     onShowComingSoon: (Int) -> Unit = {},
@@ -250,6 +251,7 @@ fun ProfileScreen(
             SettingRow(Icons.Filled.Language, R.string.profile_language, null, { showLanguageDialog = true }, trailing = currentLabel)
             SettingRow(Icons.Filled.UploadFile, R.string.profile_import, R.string.profile_import_sub, onOpenCharacters)
             SettingRow(Icons.Filled.MenuBook, R.string.profile_worldbook, R.string.profile_worldbook_sub, onOpenWorldBooks)
+            SettingRow(Icons.Filled.Tune, R.string.profile_regex, R.string.profile_regex_sub, onOpenRegex)
             SettingRow(
                 Icons.Filled.Tune,
                 R.string.profile_preset,

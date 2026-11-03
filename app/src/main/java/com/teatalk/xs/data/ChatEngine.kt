@@ -222,7 +222,16 @@ class ChatEngine(
 
         val beforeWorldText = beforeWorld.map { it.content }
         val afterWorldText = afterWorld.map { it.content }
-        val messages = withContext(Dispatchers.Default) {
+        // V1 正则/变量：先按 prompt 作用域做正则替换，再解析宏（setvar 的写入稍后落库）。
+        val promptRules = withContext(Dispatchers.IO) { characters.regexRules() }
+            .filter { it.affectsPrompt }
+        val variablesBefore = withContext(Dispatchers.IO) { characters.variables(conversationId) }
+        val macroContext = MacroContext(
+            variables = variablesBefore.toMutableMap(),
+            userName = userName(),
+            characterName = primaryName,
+        )
+        val baseMessages = withContext(Dispatchers.Default) {
             val base = history.map { message ->
                 val role = if (message.role == ROLE_USER) PromptAssembler.ROLE_USER else PromptAssembler.ROLE_ASSISTANT
                 val content = if (message.role == ROLE_USER) {
@@ -255,6 +264,24 @@ class ChatEngine(
                     memory = memoryDigest,
                 )
             }
+        }
+        val messages = withContext(Dispatchers.Default) {
+            if (promptRules.isEmpty()) {
+                baseMessages.map { (role, text) -> role to MacroEngine.resolve(text, macroContext) }
+            } else {
+                baseMessages.map { (role, text) ->
+                    role to MacroEngine.resolve(RegexEngine.apply(text, promptRules, promptScope = true), macroContext)
+                }
+            }
+        }
+        // setvar/addvar 只写变化的键，避免每轮都刷库。
+        val variableWrites = macroContext.variables.filter { (key, value) -> variablesBefore[key] != value }
+        if (variableWrites.isNotEmpty()) {
+            withContext(Dispatchers.IO) { characters.putVariables(conversationId, variableWrites) }
+            TeaTalkLog.i("Macro", "macro.vars.write", "count" to variableWrites.size)
+        }
+        if (promptRules.isNotEmpty()) {
+            TeaTalkLog.i("Regex", "regex.prompt.apply", "rules" to promptRules.size)
         }
         TeaTalkLog.i(
             "Prompt",

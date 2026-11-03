@@ -127,6 +127,8 @@ import com.teatalk.xs.data.MessageVariants
 import com.teatalk.xs.data.PromptDebugStore
 import com.teatalk.xs.data.PromptSnapshot
 import com.teatalk.xs.data.ChatEngine
+import com.teatalk.xs.data.RegexEngine
+import com.teatalk.xs.data.RegexRule
 import com.teatalk.xs.data.UiText
 import com.teatalk.xs.data.db.CharacterEntity
 import com.teatalk.xs.data.db.ConversationEntity
@@ -183,6 +185,11 @@ class ChatViewModel(
     /** 当前会话（用于拿 characterId 与标题）。 */
     val conversation: StateFlow<ConversationEntity?> = repository.observeConversation(conversationId)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    /** display 作用域正则：只影响气泡显示，不改库里正文。 */
+    val displayRules: StateFlow<List<RegexRule>> = repository.observeRegexRules()
+        .map { rules -> rules.filter { it.affectsDisplay } }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     val character: StateFlow<CharacterEntity?> = conversation
         .map { it?.characterId }
@@ -751,6 +758,7 @@ fun ChatScreen(
     val conversations by viewModel.conversations.collectAsState()
     val messages by viewModel.messages.collectAsState()
     val groupMembers by viewModel.groupMembers.collectAsState()
+    val displayRules by viewModel.displayRules.collectAsState()
     val allCharacters by viewModel.allCharacters.collectAsState()
     val isGroup = conversation?.kind == ConversationEntity.KIND_GROUP
     val streaming by viewModel.streaming.collectAsState()
@@ -992,7 +1000,12 @@ fun ChatScreen(
                     }
                     items(messages, key = { it.id }) { message ->
                         if (message.role == "user") {
-                            UserBubble(message.content, onLongPress = { preview = message })
+                            UserBubble(
+                                text = remember(message.content, displayRules) {
+                                    RegexEngine.apply(message.content, displayRules)
+                                },
+                                onLongPress = { preview = message },
+                            )
                         } else {
                             val variants = remember(message) { MessageVariants.of(message) }
                             val speaker = if (isGroup) {
@@ -1001,7 +1014,9 @@ fun ChatScreen(
                                 null
                             }
                             AssistantBubble(
-                                text = message.content,
+                                text = remember(message.content, displayRules) {
+                                    RegexEngine.apply(message.content, displayRules)
+                                },
                                 character = character,
                                 speakerName = speaker?.name,
                                 speakerAvatar = speaker?.avatarPath,
@@ -1028,7 +1043,9 @@ fun ChatScreen(
                     if (streaming) {
                         item(key = "streaming") {
                             AssistantBubble(
-                                text = streamText,
+                                text = remember(streamText, displayRules) {
+                                    RegexEngine.apply(streamText, displayRules)
+                                },
                                 character = character,
                                 speakerAvatar = if (isGroup) groupMembers.firstOrNull()?.avatarPath else null,
                                 thinking = streamText.isEmpty(),
