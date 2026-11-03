@@ -58,7 +58,8 @@ class AppContainer(context: Context) {
                 TeaTalkDatabase.MIGRATION_9_10,
                 TeaTalkDatabase.MIGRATION_10_11,
                 TeaTalkDatabase.MIGRATION_11_12,
-                    TeaTalkDatabase.MIGRATION_12_13,
+                TeaTalkDatabase.MIGRATION_12_13,
+                TeaTalkDatabase.MIGRATION_13_14,
             )
             .build()
             .also {
@@ -97,6 +98,20 @@ class AppContainer(context: Context) {
     val modelListClient: ModelListClient by lazy { ModelListClient() }
 
     val chatClient: com.teatalk.xs.data.net.ChatClient by lazy { com.teatalk.xs.data.net.ChatClient() }
+
+    val translationClient: com.teatalk.xs.data.net.TranslationClient by lazy {
+        com.teatalk.xs.data.net.TranslationClient()
+    }
+
+    /** 0.21.0 翻译：缓存优先 + 独立「翻译接口」配置。 */
+    val translationRepository: TranslationRepository by lazy {
+        TranslationRepository(
+            database.translationDao(),
+            providerRepository,
+            translationClient,
+            appPrefs,
+        )
+    }
 
     val chatEngine: ChatEngine by lazy {
         ChatEngine(

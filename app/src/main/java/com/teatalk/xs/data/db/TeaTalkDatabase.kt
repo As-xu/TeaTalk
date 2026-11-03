@@ -17,8 +17,9 @@ import com.teatalk.core.log.TeaTalkLog
         RegexRuleEntity::class,
         ChatVariableEntity::class,
         QuickReplyEntity::class,
+        TranslationEntity::class,
     ],
-    version = 13,
+    version = 14,
     exportSchema = true,
 )
 abstract class TeaTalkDatabase : RoomDatabase() {
@@ -29,9 +30,10 @@ abstract class TeaTalkDatabase : RoomDatabase() {
     abstract fun regexRuleDao(): RegexRuleDao
     abstract fun chatVariableDao(): ChatVariableDao
     abstract fun quickReplyDao(): QuickReplyDao
+    abstract fun translationDao(): TranslationDao
 
     companion object {
-        const val VERSION = 13
+        const val VERSION = 14
 
         /**
          * v1（M0）→ v2（D6 卡库）：
@@ -296,6 +298,33 @@ abstract class TeaTalkDatabase : RoomDatabase() {
                 "db.migrate",
                 "from" to 12,
                 "to" to 13,
+                "ms" to (System.currentTimeMillis() - start),
+            )
+        }
+    }
+
+    /**
+     * 0.21.0 翻译缓存：`translations` 按 (目标语言 + 原文 hash) 去重。
+     *
+     * 建表 SQL 不写 DEFAULT、列全部 NOT NULL，与 [TranslationEntity] 对齐（沿用 0.18.1 的教训）。
+     */
+    val MIGRATION_13_14 = object : Migration(13, 14) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            val start = System.currentTimeMillis()
+            db.execSQL(
+                "CREATE TABLE IF NOT EXISTS `translations` (" +
+                    "`hash` TEXT NOT NULL, " +
+                    "`targetLang` TEXT NOT NULL, " +
+                    "`text` TEXT NOT NULL, " +
+                    "`engine` TEXT NOT NULL, " +
+                    "`createdAt` INTEGER NOT NULL, " +
+                    "PRIMARY KEY(`hash`))",
+            )
+            TeaTalkLog.i(
+                "Db",
+                "db.migrate",
+                "from" to 13,
+                "to" to 14,
                 "ms" to (System.currentTimeMillis() - start),
             )
         }

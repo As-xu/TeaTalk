@@ -82,6 +82,7 @@ fun ProfileScreen(
     onOpenWorldBooks: () -> Unit = {},
     onOpenRegex: () -> Unit = {},
     onOpenQuickReplies: () -> Unit = {},
+    onOpenTranslation: () -> Unit = {},
     onOpenAbout: () -> Unit = {},
     onOpenCharacters: () -> Unit = {},
     onShowComingSoon: (Int) -> Unit = {},
@@ -255,6 +256,7 @@ fun ProfileScreen(
             SettingRow(Icons.Filled.MenuBook, R.string.profile_worldbook, R.string.profile_worldbook_sub, onOpenWorldBooks)
             SettingRow(Icons.Filled.Tune, R.string.profile_regex, R.string.profile_regex_sub, onOpenRegex)
             SettingRow(Icons.Filled.Edit, R.string.profile_quick_replies, R.string.profile_quick_replies_sub, onOpenQuickReplies)
+            SettingRow(Icons.Filled.Language, R.string.profile_translate, R.string.profile_translate_sub, onOpenTranslation)
             SettingRow(
                 Icons.Filled.Tune,
                 R.string.profile_preset,

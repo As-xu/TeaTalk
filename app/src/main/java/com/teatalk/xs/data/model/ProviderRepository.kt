@@ -95,8 +95,11 @@ class ProviderRepository(
      * 之前统一返回 null，导致聊天把「没选模型」当成「没配置」并拿角色名兜底，
      * 现在由引擎映射成 NO_PROVIDER / NO_KEY / NO_MODEL 三种明确错误。
      */
-    suspend fun resolve(): ProviderResolution {
-        val id = prefs.activeProviderId ?: return ProviderResolution.NoProvider
+    /**
+     * [preferredId] 用于「翻译接口」这类独立配置：传了就优先用它，没传才回落到聊天默认项。
+     */
+    suspend fun resolve(preferredId: String? = null): ProviderResolution {
+        val id = preferredId ?: prefs.activeProviderId ?: return ProviderResolution.NoProvider
         val row = dao.find(id) ?: return ProviderResolution.NoProvider
         val key = secrets.get(id)?.takeIf { it.isNotBlank() } ?: return ProviderResolution.NoKey(row)
         return ProviderResolution.Ok(

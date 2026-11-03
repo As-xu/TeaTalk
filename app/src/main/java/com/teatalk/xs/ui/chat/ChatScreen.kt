@@ -130,6 +130,10 @@ import com.teatalk.xs.data.PromptSnapshot
 import com.teatalk.xs.data.ChatEngine
 import com.teatalk.xs.data.RegexEngine
 import com.teatalk.xs.data.RegexRule
+import com.teatalk.xs.data.TranslationFailure
+import com.teatalk.xs.data.TranslationRepository
+import com.teatalk.xs.data.TranslationResult
+import com.teatalk.xs.data.model.AppPrefs
 import com.teatalk.xs.data.UiText
 import com.teatalk.xs.data.db.CharacterEntity
 import com.teatalk.xs.data.db.ConversationEntity
@@ -181,6 +185,8 @@ private fun mergePaged(older: List<MessageEntity>, tail: List<MessageEntity>): L
 class ChatViewModel(
     private val repository: CharacterRepository,
     private val engine: ChatEngine,
+    private val translation: TranslationRepository,
+    private val prefs: AppPrefs,
     val conversationId: Long,
 ) : ViewModel() {
 
@@ -217,6 +223,70 @@ class ChatViewModel(
     val displayRules: StateFlow<List<RegexRule>> = repository.observeRegexRules()
         .map { rules -> rules.filter { it.affectsDisplay } }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    // 0.21.0 翻译：原文不动，译文只作为展示层附加物。
+    private val _translations = MutableStateFlow<Map<Long, String>>(emptyMap())
+    val translations: StateFlow<Map<Long, String>> = _translations.asStateFlow()
+    private val _translating = MutableStateFlow<Set<Long>>(emptySet())
+    val translating: StateFlow<Set<Long>> = _translating.asStateFlow()
+
+    /** 翻译一条已落库的回复；结果进内存映射，同时按 (目标语言, 原文) 落缓存表。 */
+    fun translateMessage(messageId: Long, text: String, force: Boolean = false) {
+        if (text.isBlank()) return
+        if (!force && _translations.value.containsKey(messageId)) return
+        viewModelScope.launch {
+            _translating.value = _translating.value + messageId
+            try {
+                when (val result = translation.translate(text, force = force)) {
+                    is TranslationResult.Ok ->
+                        _translations.value = _translations.value + (messageId to result.text)
+                    is TranslationResult.Failed -> _notice.value = translationFailure(result.failure)
+                }
+            } finally {
+                _translating.value = _translating.value - messageId
+            }
+        }
+    }
+
+    fun hideTranslation(messageId: Long) {
+        _translations.value = _translations.value - messageId
+    }
+
+    private val _sendTranslation = MutableStateFlow<String?>(null)
+    val sendTranslation: StateFlow<String?> = _sendTranslation.asStateFlow()
+    private val _preparingSend = MutableStateFlow(false)
+    val preparingSend: StateFlow<Boolean> = _preparingSend.asStateFlow()
+
+    /** 出站翻译：把输入译成目标语言，成功的译文交给界面预览后再发送。 */
+    fun prepareSendTranslation(text: String) {
+        val source = text.trim()
+        if (source.isEmpty() || _preparingSend.value) return
+        _preparingSend.value = true
+        viewModelScope.launch {
+            when (val result = translation.translate(source)) {
+                is TranslationResult.Ok -> _sendTranslation.value = result.text
+                is TranslationResult.Failed -> _notice.value = translationFailure(result.failure)
+            }
+            _preparingSend.value = false
+        }
+    }
+
+    fun consumeSendTranslation() {
+        _sendTranslation.value = null
+    }
+
+    /** 出站翻译：只取译文，发不发由输入框决定。 */
+    suspend fun translateForSend(text: String): TranslationResult = translation.translate(text)
+
+    private fun translationFailure(failure: TranslationFailure): UiText = when (failure) {
+        TranslationFailure.NO_PROVIDER -> UiText.of(R.string.translate_no_provider)
+        TranslationFailure.NO_KEY -> UiText.of(R.string.translate_no_key)
+        TranslationFailure.NO_MODEL -> UiText.of(R.string.translate_no_model)
+        TranslationFailure.EMPTY_RESULT -> UiText.of(R.string.translate_empty_result)
+        TranslationFailure.NETWORK -> UiText.of(R.string.translate_network)
+        TranslationFailure.EMPTY_TEXT, TranslationFailure.UNKNOWN ->
+            UiText.of(R.string.translate_failed)
+    }
 
     val character: StateFlow<CharacterEntity?> = conversation
         .map { it?.characterId }
@@ -713,12 +783,13 @@ class ChatViewModel(
         val body = if (isGroupReply) "" else stripSpeakerPrefix(raw.trim())
         if (isGroupReply && segments.isEmpty()) return
         if (!isGroupReply && body.isEmpty()) return
+        var appended: List<Pair<Long, String>> = emptyList()
         commitMutex.withLock {
             if (gen != generation || committed) return
             committed = true
             try {
                 if (isGroupReply) {
-                    repository.appendGroupReplies(
+                    val ids = repository.appendGroupReplies(
                         conversationId = conversationId,
                         anchorMessageId = replyAnchorId,
                         segments = segments,
@@ -727,8 +798,9 @@ class ChatViewModel(
                         providerName = replyProvider?.providerName,
                         model = replyProvider?.model,
                     )
+                    appended = ids.zip(segments.map { it.text.trim() })
                 } else {
-                    repository.appendAssistantReply(
+                    val newId = repository.appendAssistantReply(
                         conversationId = conversationId,
                         text = body,
                         status = status,
@@ -738,12 +810,16 @@ class ChatViewModel(
                         replyToMessageId = replyAnchorId,
                         speakerId = replySpeakerId,
                     )
+                    if (newId > 0L) appended = listOf(newId to body)
                 }
             } catch (cancelled: CancellationException) {
                 // 写库被取消：可能已回滚，放开标记让停止路径重试
                 committed = false
                 throw cancelled
             }
+        }
+        if (status == MessageEntity.STATUS_COMPLETE && prefs.autoTranslateReplies) {
+            appended.forEach { (id, text) -> translateMessage(id, text) }
         }
     }
 
@@ -765,6 +841,8 @@ class ChatViewModel(
                 ChatViewModel(
                     repository = app.container.characterRepository,
                     engine = app.container.chatEngine,
+                    translation = app.container.translationRepository,
+                    prefs = app.container.appPrefs,
                     conversationId = conversationId,
                 )
             }
@@ -786,6 +864,8 @@ fun ChatScreen(
     val messages by viewModel.messages.collectAsState()
     val groupMembers by viewModel.groupMembers.collectAsState()
     val displayRules by viewModel.displayRules.collectAsState()
+    val translations by viewModel.translations.collectAsState()
+    val translatingIds by viewModel.translating.collectAsState()
     val allCharacters by viewModel.allCharacters.collectAsState()
     val isGroup = conversation?.kind == ConversationEntity.KIND_GROUP
     val streaming by viewModel.streaming.collectAsState()
@@ -813,6 +893,10 @@ fun ChatScreen(
     var pickMember by remember { mutableStateOf(false) }
     // 0.19.0 快速回复面板
     var showQuickReplies by remember { mutableStateOf(false) }
+    // 0.21.0 出站翻译：译文可先改再发
+    val sendTranslation by viewModel.sendTranslation.collectAsState()
+    val preparingSend by viewModel.preparingSend.collectAsState()
+    var sendDraft by remember(sendTranslation) { mutableStateOf(sendTranslation.orEmpty()) }
     var quickReplyRows by remember { mutableStateOf<List<QuickReplyEntity>?>(null) }
     val deleteInfo by viewModel.deleteInfo.collectAsState()
     val deletedConversation by viewModel.deletedConversation.collectAsState()
@@ -1067,6 +1151,10 @@ fun ChatScreen(
                                 onOpenPreview = { preview = message },
                                 onCopy = { clipboard.setText(AnnotatedString(message.content)) },
                                 onFork = { forkCandidate = message.id },
+                                translatedText = translations[message.id],
+                                translating = message.id in translatingIds,
+                                onTranslate = { viewModel.translateMessage(message.id, message.content) },
+                                onShowOriginal = { viewModel.hideTranslation(message.id) },
                                 onRetry = if (message.id == lastAssistantId) viewModel::retry else null,
                                 onDelete = if (message.id == lastAssistantId) ({ deleteTarget = message }) else null,
                             )
@@ -1227,6 +1315,20 @@ fun ChatScreen(
                     TextButton(onClick = { showQuickReplies = true }) {
                         Text("/", fontSize = TypeScale.s16, color = cs.onSurfaceVariant)
                     }
+                    TextButton(
+                        onClick = { viewModel.prepareSendTranslation(input) },
+                        enabled = !preparingSend,
+                    ) {
+                        Text(
+                            text = if (preparingSend) {
+                                stringResource(R.string.translate_translating)
+                            } else {
+                                stringResource(R.string.translate_input_action)
+                            },
+                            fontSize = TypeScale.s14_5,
+                            color = cs.onSurfaceVariant,
+                        )
+                    }
                     IconButton(onClick = {}) {
                         Icon(
                             Icons.Filled.Add,
@@ -1320,6 +1422,39 @@ fun ChatScreen(
                 viewModel.consumeForkTarget()
                 onOpenConversation(target)
             }
+        }
+
+        if (sendTranslation != null) {
+            AlertDialog(
+                onDismissRequest = {
+                    viewModel.consumeSendTranslation()
+                },
+                title = { Text(stringResource(R.string.translate_input_title)) },
+                text = {
+                    OutlinedTextField(
+                        value = sendDraft,
+                        onValueChange = { sendDraft = it },
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 120.dp),
+                    )
+                },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            val text = sendDraft.trim()
+                            viewModel.consumeSendTranslation()
+                            if (text.isNotEmpty()) {
+                                input = ""
+                                viewModel.send(text)
+                            }
+                        },
+                    ) { Text(stringResource(R.string.translate_send_translated)) }
+                },
+                dismissButton = {
+                    TextButton(onClick = { viewModel.consumeSendTranslation() }) {
+                        Text(stringResource(R.string.cancel))
+                    }
+                },
+            )
         }
 
         forkCandidate?.let { messageId ->
@@ -1736,6 +1871,10 @@ private fun AssistantBubble(
     onFork: (() -> Unit)? = null,
     onRetry: (() -> Unit)? = null,
     onDelete: (() -> Unit)? = null,
+    translatedText: String? = null,
+    translating: Boolean = false,
+    onTranslate: (() -> Unit)? = null,
+    onShowOriginal: (() -> Unit)? = null,
 ) {
     val cs = MaterialTheme.colorScheme
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Start, verticalAlignment = Alignment.Top) {
@@ -1791,6 +1930,25 @@ private fun AssistantBubble(
                     text = { Text(stringResource(R.string.common_copy)) },
                     onClick = { actionsOpen = false; onCopy() },
                 )
+                onTranslate?.let { translate ->
+                    DropdownMenuItem(
+                        text = {
+                            Text(
+                                stringResource(
+                                    if (translatedText == null) R.string.translate_action
+                                    else R.string.translate_again,
+                                ),
+                            )
+                        },
+                        onClick = { actionsOpen = false; translate() },
+                    )
+                }
+                if (translatedText != null) {
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.translate_show_original)) },
+                        onClick = { actionsOpen = false; onShowOriginal?.invoke() },
+                    )
+                }
                 onFork?.let { fork ->
                     DropdownMenuItem(
                         text = { Text(stringResource(R.string.chat_fork_action)) },
@@ -1810,6 +1968,9 @@ private fun AssistantBubble(
                     )
                 }
             }
+            }
+            if (translatedText != null || translating) {
+                TranslationCard(text = translatedText, translating = translating)
             }
             val status = variantStatuses.getOrNull(selected) ?: MessageEntity.STATUS_COMPLETE
             val statusText = when (status) {
@@ -1875,6 +2036,28 @@ private fun AssistantBubble(
                     modifier = Modifier.padding(top = 1.dp),
                 )
             }
+        }
+    }
+}
+
+@Composable
+private fun TranslationCard(text: String?, translating: Boolean) {
+    val cs = MaterialTheme.colorScheme
+    Box(
+        Modifier
+            .padding(top = 6.dp)
+            .widthIn(max = 268.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .background(cs.surfaceContainerHighest)
+            .padding(horizontal = 10.dp, vertical = 8.dp),
+    ) {
+        when {
+            text != null -> MarkdownText(text = text, color = cs.onSurface)
+            translating -> Text(
+                stringResource(R.string.translate_translating),
+                fontSize = TypeScale.s12,
+                color = cs.onSurfaceVariant,
+            )
         }
     }
 }
