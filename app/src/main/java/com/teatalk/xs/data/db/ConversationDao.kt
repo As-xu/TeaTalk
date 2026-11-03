@@ -89,6 +89,10 @@ interface ConversationDao {
     @Query("DELETE FROM conversation_members WHERE conversationId = :conversationId")
     suspend fun deleteMembers(conversationId: Long)
 
+    /** 分支复制用：原始成员行（membersOnce 是 join 投影，不能回写）。 */
+    @Query("SELECT * FROM conversation_members WHERE conversationId = :conversationId")
+    suspend fun membersOnly(conversationId: Long): List<ConversationMemberEntity>
+
     @Query("SELECT COUNT(*) FROM conversation_members WHERE conversationId = :conversationId")
     suspend fun memberCount(conversationId: Long): Int
 

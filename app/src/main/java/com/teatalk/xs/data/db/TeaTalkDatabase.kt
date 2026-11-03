@@ -18,7 +18,7 @@ import com.teatalk.core.log.TeaTalkLog
         ChatVariableEntity::class,
         QuickReplyEntity::class,
     ],
-    version = 12,
+    version = 13,
     exportSchema = true,
 )
 abstract class TeaTalkDatabase : RoomDatabase() {
@@ -31,7 +31,7 @@ abstract class TeaTalkDatabase : RoomDatabase() {
     abstract fun quickReplyDao(): QuickReplyDao
 
     companion object {
-        const val VERSION = 12
+        const val VERSION = 13
 
         /**
          * v1（M0）→ v2（D6 卡库）：
@@ -279,7 +279,28 @@ abstract class TeaTalkDatabase : RoomDatabase() {
             }
         }
 
-        val MIGRATION_8_9 = object : Migration(8, 9) {            override fun migrate(db: SupportSQLiteDatabase) {
+        /**
+     * 0.20.0 分支树：conversations 增三个可空列（父会话 / 分叉点 / 分支名）。
+     *
+     * 三列全部可空、SQL 不写 DEFAULT——`ALTER TABLE ... ADD COLUMN ... NOT NULL`
+     * 在 SQLite 上必须带默认值，可空列既省事又和实体默认值一致。
+     */
+    val MIGRATION_12_13 = object : Migration(12, 13) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            val start = System.currentTimeMillis()
+            db.execSQL("ALTER TABLE conversations ADD COLUMN parentConversationId INTEGER")
+            db.execSQL("ALTER TABLE conversations ADD COLUMN forkMessageId INTEGER")
+            db.execSQL("ALTER TABLE conversations ADD COLUMN forkLabel TEXT")
+            TeaTalkLog.i(
+                "Db",
+                "db.migrate",
+                "from" to 12,
+                "to" to 13,
+                "ms" to (System.currentTimeMillis() - start),
+            )
+        }
+    }
+    val MIGRATION_8_9 = object : Migration(8, 9) {            override fun migrate(db: SupportSQLiteDatabase) {
                 val started = System.currentTimeMillis()
                 db.execSQL("ALTER TABLE model_providers ADD COLUMN topP REAL")
                 db.execSQL("ALTER TABLE model_providers ADD COLUMN maxTokens INTEGER")

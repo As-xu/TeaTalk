@@ -495,4 +495,11 @@
     <string name="quick_reply_delete_body">Delete “%1$s”? This cannot be undone.</string>
     <string name="chat_quick_replies">Quick replies</string>
     <string name="chat_quick_replies_empty">No quick replies yet. Add them in Me → Quick replies</string>
+    <string name="chat_fork_action">Branch from here</string>
+    <string name="chat_fork_title">Branch from here</string>
+    <string name="chat_fork_body">Only this message and earlier ones are copied.</string>
+    <string name="chat_fork_label">Branch name (optional)</string>
+    <string name="chat_fork_confirm">Create branch</string>
+    <string name="chat_fork_failed">Could not create branch</string>
+    <string name="chatlist_branch_badge">Branch</string>
 </resources>

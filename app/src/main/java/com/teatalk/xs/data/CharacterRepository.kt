@@ -179,6 +179,33 @@ class CharacterRepository(
 
     suspend fun deleteQuickReply(id: Long) = withContext(Dispatchers.IO) { quickReplyDao.deleteById(id) }
 
+    // ---- 0.20.0 分支树 ----
+
+    /**
+     * 从 [conversationId] 的第 [upToMessageId] 条消息处开一条新分支。
+     *
+     * 新会话继承角色、世界书与（群聊的）成员，只复制分叉点及之前的消息；
+     * 返回新会话 id，源会话/目标消息不存在时返回 null。
+     */
+    suspend fun forkConversation(
+        conversationId: Long,
+        upToMessageId: Long,
+        label: String?,
+    ): Long? = withContext(Dispatchers.IO) {
+        val source = conversations.find(conversationId) ?: return@withContext null
+        val history = dao.allMessages(conversationId)
+        val plan = BranchFork.plan(source, history, upToMessageId, label, System.currentTimeMillis())
+            ?: return@withContext null
+        val newId = conversations.insertWithMessages(plan.conversation, plan.messages)
+        if (source.kind == ConversationEntity.KIND_GROUP) {
+            val members = conversations.membersOnly(conversationId)
+            if (members.isNotEmpty()) {
+                conversations.insertMembers(members.map { it.copy(conversationId = newId) })
+            }
+        }
+        newId
+    }
+
     /** 某角色下的所有会话（会话切换面板用），按最近活跃排序。 */
     fun observeConversations(characterId: Long): Flow<List<ConversationEntity>> =
         conversations.observeByCharacter(characterId)

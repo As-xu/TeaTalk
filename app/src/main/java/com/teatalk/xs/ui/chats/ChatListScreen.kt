@@ -416,6 +416,18 @@ private fun ChatRow(chat: ConversationWithLastMessage, onClick: () -> Unit) {
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f, fill = false),
                     )
+                    if (chat.conversation.parentConversationId != null) {
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            stringResource(R.string.chatlist_branch_badge),
+                            fontSize = TypeScale.s10,
+                            color = cs.primary,
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(cs.primaryContainer)
+                                .padding(horizontal = 5.dp, vertical = 1.dp),
+                        )
+                    }
                     Spacer(Modifier.weight(1f))
                     Text(
                         chat.lastAt?.let { formatChatTime(it) } ?: "",

@@ -33,6 +33,12 @@ data class ConversationEntity(
     val worldBookIdsJson: String? = null,
     val createdAt: Long = 0L,
     val updatedAt: Long = 0L,
+    /** 0.20.0 分支树：来源会话（null = 主线根节点）。 */
+    val parentConversationId: Long? = null,
+    /** 分叉点消息 id（该消息及其之前的历史被复制到新会话）。 */
+    val forkMessageId: Long? = null,
+    /** 用户给分支起的名字（可空）。 */
+    val forkLabel: String? = null,
 ) {
     companion object {
         const val KIND_SINGLE = "single"

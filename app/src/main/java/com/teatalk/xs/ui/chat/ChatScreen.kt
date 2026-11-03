@@ -70,6 +70,7 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
@@ -190,6 +191,28 @@ class ChatViewModel(
     /** display 作用域正则：只影响气泡显示，不改库里正文。 */
     /** 0.19.0 快速回复：打开面板时读一次。 */
     suspend fun quickReplies(): List<QuickReplyEntity> = repository.enabledQuickReplies()
+
+    // ---- 0.20.0 分支树 ----
+
+    /** 分叉完成后待跳转的新会话 id（界面消费后清空）。 */
+    private val _forkTarget = MutableStateFlow<Long?>(null)
+    val forkTarget: StateFlow<Long?> = _forkTarget
+
+    /** 从某条消息开分支；label 为用户输入的分支名（可空）。 */
+    fun forkFrom(messageId: Long, label: String?) {
+        viewModelScope.launch {
+            val newId = runCatching { repository.forkConversation(conversationId, messageId, label) }.getOrNull()
+            if (newId == null) {
+                _notice.value = UiText.of(R.string.chat_fork_failed)
+            } else {
+                _forkTarget.value = newId
+            }
+        }
+    }
+
+    fun consumeForkTarget() {
+        _forkTarget.value = null
+    }
 
     val displayRules: StateFlow<List<RegexRule>> = repository.observeRegexRules()
         .map { rules -> rules.filter { it.affectsDisplay } }
@@ -777,6 +800,7 @@ fun ChatScreen(
     // 长按气泡：弹层看全文 + 复制 / 重试 / 删除（气泡 max 268dp，长回复会被截在可视区里）
     var preview by remember { mutableStateOf<MessageEntity?>(null) }
     var deleteTarget by remember { mutableStateOf<MessageEntity?>(null) }
+    var forkCandidate by remember { mutableStateOf<Long?>(null) }
     // 会话管理（M2 多会话）：菜单 → 新建 / 切换面板（面板内可重命名、删除）
     var menuOpen by remember { mutableStateOf(false) }
     var showConversations by remember { mutableStateOf(false) }
@@ -1042,6 +1066,7 @@ fun ChatScreen(
                                 onSelectVariant = { viewModel.selectVariant(message.id, it) },
                                 onOpenPreview = { preview = message },
                                 onCopy = { clipboard.setText(AnnotatedString(message.content)) },
+                                onFork = { forkCandidate = message.id },
                                 onRetry = if (message.id == lastAssistantId) viewModel::retry else null,
                                 onDelete = if (message.id == lastAssistantId) ({ deleteTarget = message }) else null,
                             )
@@ -1288,6 +1313,53 @@ fun ChatScreen(
                 }
             }
         }
+        val forkTarget by viewModel.forkTarget.collectAsState()
+        LaunchedEffect(forkTarget) {
+            val target = forkTarget
+            if (target != null) {
+                viewModel.consumeForkTarget()
+                onOpenConversation(target)
+            }
+        }
+
+        forkCandidate?.let { messageId ->
+            var label by remember(messageId) { mutableStateOf("") }
+            AlertDialog(
+                onDismissRequest = { forkCandidate = null },
+                title = { Text(stringResource(R.string.chat_fork_title)) },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(
+                            text = stringResource(R.string.chat_fork_body),
+                            fontSize = TypeScale.s12,
+                            color = cs.onSurfaceVariant,
+                        )
+                        OutlinedTextField(
+                            value = label,
+                            onValueChange = { label = it.take(40) },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth(),
+                            placeholder = { Text(stringResource(R.string.chat_fork_label)) },
+                        )
+                    }
+                },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            val current = messageId
+                            forkCandidate = null
+                            viewModel.forkFrom(current, label)
+                        },
+                    ) { Text(stringResource(R.string.chat_fork_confirm)) }
+                },
+                dismissButton = {
+                    TextButton(onClick = { forkCandidate = null }) {
+                        Text(stringResource(R.string.cancel))
+                    }
+                },
+            )
+        }
+
         preview?.let { message ->
             val clipboard = LocalClipboardManager.current
             val copied = stringResource(R.string.common_copied)
@@ -1661,6 +1733,7 @@ private fun AssistantBubble(
     onSelectVariant: (Int) -> Unit = {},
     onOpenPreview: () -> Unit = {},
     onCopy: () -> Unit = {},
+    onFork: (() -> Unit)? = null,
     onRetry: (() -> Unit)? = null,
     onDelete: (() -> Unit)? = null,
 ) {
@@ -1718,6 +1791,12 @@ private fun AssistantBubble(
                     text = { Text(stringResource(R.string.common_copy)) },
                     onClick = { actionsOpen = false; onCopy() },
                 )
+                onFork?.let { fork ->
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.chat_fork_action)) },
+                        onClick = { actionsOpen = false; fork() },
+                    )
+                }
                 onRetry?.let { retry ->
                     DropdownMenuItem(
                         text = { Text(stringResource(R.string.chat_action_retry)) },

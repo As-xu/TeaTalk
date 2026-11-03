@@ -79,6 +79,12 @@
   可停用、可排序，聊天输入条新增 `/` 按钮弹出已启用片段，点选即追加进输入框（只插入不发送）；
   删除走二次确认。真机验证：新建/列表/`/` 插入/删除四个路径全过。详见 `docs/17-快速回复.md`。
 
+
+- 0.20.0：V1 分支树 —— `conversations` 增加 `parentConversationId/forkMessageId/forkLabel`（均可空，
+  避开 `ALTER TABLE … NOT NULL` 需要 `DEFAULT` 的坑）；assistant 气泡长按菜单新增「从此分支」，
+  可命名，创建后自动进入新会话且历史正好截到该条；原会话不受影响，群聊分支会复制成员；
+  会话列表对分支显示「分支」标签。逻辑抽成纯函数 `BranchFork.plan` 并有 7 例单测。
+  详见 `docs/18-分支树.md`。
 ## 已知问题
 
 - 上滑触发 `chat.page` 的日志证据尚未取到（`logcat -s TeaTalkPerf:V` 无输出）；但 `chat.open ms=419` 与尾部消息截图说明分页生效，待下次真机复盘（可能与滑动方向/首次可见索引未到阈值有关）。
