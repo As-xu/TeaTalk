@@ -233,18 +233,18 @@ abstract class TeaTalkDatabase : RoomDatabase() {
                         "name TEXT NOT NULL, " +
                         "pattern TEXT NOT NULL, " +
                         "replacement TEXT NOT NULL, " +
-                        "flags TEXT NOT NULL DEFAULT 'g', " +
-                        "scope TEXT NOT NULL DEFAULT 'prompt', " +
-                        "enabled INTEGER NOT NULL DEFAULT 1, " +
-                        "sortIndex INTEGER NOT NULL DEFAULT 0, " +
-                        "createdAt INTEGER NOT NULL DEFAULT 0)",
+                        "flags TEXT NOT NULL, " +
+                        "scope TEXT NOT NULL, " +
+                        "enabled INTEGER NOT NULL, " +
+                        "sortIndex INTEGER NOT NULL, " +
+                        "createdAt INTEGER NOT NULL)",
                 )
                 db.execSQL(
                     "CREATE TABLE IF NOT EXISTS chat_variables (" +
                         "conversationId INTEGER NOT NULL, " +
                         "`key` TEXT NOT NULL, " +
                         "value TEXT NOT NULL, " +
-                        "updatedAt INTEGER NOT NULL DEFAULT 0, " +
+                        "updatedAt INTEGER NOT NULL, " +
                         "PRIMARY KEY(conversationId, `key`))",
                 )
                 db.execSQL(

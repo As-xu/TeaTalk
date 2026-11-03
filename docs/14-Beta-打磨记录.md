@@ -60,7 +60,20 @@
 
 - 0.18.0：V1 正则/变量 —— 新增 DB v11 `regex_rules` / `chat_variables` 两表；`RegexEngine`（flags i/m/s/g、编译缓存、坏正则跳过）与 `MacroEngine`（getvar/setvar/addvar、user/char、time/date/datetime/weekday、random/pick，最多 5 轮展开）均可在 prompt 出站时链式生效并写回变量；display 规则只改气泡显示、不改库内正文；设置页新增「正则脚本」管理（CRUD + 实时预览）。详见 `docs/16-正则与变量.md`。
 
+- 0.18.1：修 0.18.0 的真机启动崩溃 —— `MIGRATION_10_11` 建表 SQL 带了 `DEFAULT` 且多建了
+  `conversationId` 索引，与实体 `ChatVariableEntity` 不一致，Room 迁移校验失败
+  （`Migration didn't properly handle: chat_variables`）。改为「迁移 SQL 无默认值 + 实体声明
+  `indices = [Index("conversationId")]`」，让 schema 与实体严格对齐，identityHash 同时更新
+  （v11 刚发布、所有人都会在迁移处崩溃回滚到 v10，因此改 identityHash 安全）。
+
+- 0.18.2：真机验收又抓出两个只在设备上暴露的问题 —— ① `MacroEngine` 的 `}}` 正则在 Android ICU 下
+  非法，一进聊天就 `ExceptionInInitializerError`（JVM 单测全绿），已转义为 `\}\}`；
+  ② `RegexEngine.apply(promptScope = true)` 默认值让三处 display 调用被误当 prompt 过滤，
+  display 规则静默失效，已在三个调用点显式传 `promptScope = false`。
+  真机四项验完：display 改气泡不改库、prompt 在「查看本次请求」可见、`{{setvar}}` 落库、
+  重启后 `{{getvar}}` 仍读得到。详见 `docs/16-正则与变量.md` 的「验证」段。
+
 ## 已知问题
 
 - 上滑触发 `chat.page` 的日志证据尚未取到（`logcat -s TeaTalkPerf:V` 无输出）；但 `chat.open ms=419` 与尾部消息截图说明分页生效，待下次真机复盘（可能与滑动方向/首次可见索引未到阈值有关）。
-- 0.18.0 未做真机验收：真机 `XPLGL21A22000007` 掉线，模拟器因 DSH 沙箱拒写 `C:\Users\xusong\.android`（`snapshot.lock.lock` / `emu-last-feature-flags.protobuf.lock` 均 `error: 5`）无法启动；本轮口径为 21 例单测 + `assembleDebug` 通过，正则页 CRUD/预览、prompt 与 display 生效、变量落库待设备恢复后补验。
+- 0.18.0 的真机验收已在 0.18.1/0.18.2 补齐（迁移崩溃、ICU 正则、display 作用域三个问题修复后，正则页 CRUD、display 改气泡、prompt 面板、变量落库与跨重启保留均通过）。

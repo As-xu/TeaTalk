@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 11,
-    "identityHash": "dddd603da6117ff3b025a9b5f1930225",
+    "identityHash": "0c1e347cdc1fb66ca4df9589ada46341",
     "entities": [
       {
         "tableName": "characters",
@@ -584,14 +584,24 @@
             "key"
           ]
         },
-        "indices": [],
+        "indices": [
+          {
+            "name": "index_chat_variables_conversationId",
+            "unique": false,
+            "columnNames": [
+              "conversationId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_chat_variables_conversationId` ON `${TABLE_NAME}` (`conversationId`)"
+          }
+        ],
         "foreignKeys": []
       }
     ],
     "views": [],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'dddd603da6117ff3b025a9b5f1930225')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '0c1e347cdc1fb66ca4df9589ada46341')"
     ]
   }
 }

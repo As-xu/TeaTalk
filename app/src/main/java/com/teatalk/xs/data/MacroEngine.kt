@@ -36,7 +36,9 @@ class MacroContext(
 object MacroEngine {
     const val MAX_PASSES = 5
 
-    private val TOKEN = Regex("\\{\\{([^{}]+)}}")
+    // 注意：Android 走 ICU 正则实现，未转义的右花括号 `}}` 会抛 PatternSyntaxException，
+    // 和 JVM 版 java.util.regex 的宽容行为不同——单测在 JVM 上通过不代表真机能跑。
+    private val TOKEN = Regex("\\{\\{([^{}]+)\\}\\}")
 
     fun resolve(text: String, context: MacroContext): String {
         if (text.isEmpty() || !text.contains("{{")) return text

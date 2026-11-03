@@ -1002,7 +1002,7 @@ fun ChatScreen(
                         if (message.role == "user") {
                             UserBubble(
                                 text = remember(message.content, displayRules) {
-                                    RegexEngine.apply(message.content, displayRules)
+                                    RegexEngine.apply(message.content, displayRules, promptScope = false)
                                 },
                                 onLongPress = { preview = message },
                             )
@@ -1015,7 +1015,7 @@ fun ChatScreen(
                             }
                             AssistantBubble(
                                 text = remember(message.content, displayRules) {
-                                    RegexEngine.apply(message.content, displayRules)
+                                    RegexEngine.apply(message.content, displayRules, promptScope = false)
                                 },
                                 character = character,
                                 speakerName = speaker?.name,
@@ -1044,7 +1044,7 @@ fun ChatScreen(
                         item(key = "streaming") {
                             AssistantBubble(
                                 text = remember(streamText, displayRules) {
-                                    RegexEngine.apply(streamText, displayRules)
+                                    RegexEngine.apply(streamText, displayRules, promptScope = false)
                                 },
                                 character = character,
                                 speakerAvatar = if (isGroup) groupMembers.firstOrNull()?.avatarPath else null,

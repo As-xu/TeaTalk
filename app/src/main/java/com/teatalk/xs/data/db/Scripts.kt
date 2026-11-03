@@ -3,6 +3,7 @@ package com.teatalk.xs.data.db
 import androidx.room.Dao
 import androidx.room.Delete
 import androidx.room.Entity
+import androidx.room.Index
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.PrimaryKey
@@ -49,7 +50,11 @@ data class RegexRuleEntity(
  *
  * 按会话隔离：同一张角色卡开两条会话，变量互不干扰（ST 的 chat 变量语义）。
  */
-@Entity(tableName = "chat_variables", primaryKeys = ["conversationId", "key"])
+@Entity(
+    tableName = "chat_variables",
+    primaryKeys = ["conversationId", "key"],
+    indices = [Index("conversationId")],
+)
 data class ChatVariableEntity(
     val conversationId: Long,
     val key: String,
