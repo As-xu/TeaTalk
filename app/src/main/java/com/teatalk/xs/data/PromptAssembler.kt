@@ -43,6 +43,7 @@ object PromptAssembler {
         beforeWorld: List<String> = emptyList(),
         afterWorld: List<String> = emptyList(),
         speaker: String? = null,
+        memory: String? = null,
     ): List<Pair<String, String>> {
         if (members.isEmpty()) return emptyList()
         val names = members.joinToString(", ") { it.name }
@@ -59,6 +60,10 @@ object PromptAssembler {
         }
         if (beforeWorld.isNotEmpty()) {
             out += ROLE_SYSTEM to beforeWorld.joinToString("\n") { substitute(it, names, userName) }
+        }
+        // 2.5 更早对话的摘要（摘要记忆）：放在世界书之后、角色定义之前
+        if (!memory.isNullOrBlank()) {
+            out += ROLE_SYSTEM to substitute(memory, names, userName)
         }
         for (member in members) {
             val system = member.card.systemPrompt.trim().ifBlank {
@@ -101,6 +106,7 @@ object PromptAssembler {
         history: List<HistoryMessage>,
         beforeWorld: List<String> = emptyList(),
         afterWorld: List<String> = emptyList(),
+        memory: String? = null,
     ): List<Pair<String, String>> {
         val name = card.name.ifBlank { characterName }
         val out = ArrayList<Pair<String, String>>(history.size + 8)
@@ -114,6 +120,11 @@ object PromptAssembler {
         // 2. 世界书 before_char 块（ST 把它作为独立 system 消息放在角色定义之前）
         if (beforeWorld.isNotEmpty()) {
             out += ROLE_SYSTEM to beforeWorld.joinToString("\n") { substitute(it, name, userName) }
+        }
+
+        // 2.5 更早对话的摘要（摘要记忆）：放在世界书之后、角色定义之前
+        if (!memory.isNullOrBlank()) {
+            out += ROLE_SYSTEM to substitute(memory, name, userName)
         }
 
         // 3. 角色定义三段

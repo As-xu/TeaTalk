@@ -163,6 +163,23 @@ class ChatEngine(
         } else {
             null
         }
+        // 摘要记忆：prompt 只带最近 HISTORY_LIMIT 条，更早的部分压成一段确定性摘要注入，
+        // 让模型知道窗口之外发生过什么；不额外调模型，摘要由内容抽样 + 截断生成。
+        val memoryDigest = withContext(Dispatchers.IO) {
+            val oldest = history.firstOrNull()
+            if (oldest == null) {
+                null
+            } else {
+                val older = characters.messagesBefore(
+                    conversationId,
+                    oldest.createdAt,
+                    oldest.id,
+                    MEMORY_WINDOW,
+                )
+                MemoryDigest.build(older.map { it.role to it.content })
+            }
+        }
+
         emit(
             ChatEvent.Started(
                 providerId = provider.id,
@@ -225,6 +242,7 @@ class ChatEngine(
                     beforeWorld = beforeWorldText,
                     afterWorld = afterWorldText,
                     speaker = groupSpeaker?.name,
+                    memory = memoryDigest,
                 )
             } else {
                 PromptAssembler.assemble(
@@ -234,6 +252,7 @@ class ChatEngine(
                     history = withWorld.map { PromptAssembler.HistoryMessage(it.first, it.second) },
                     beforeWorld = beforeWorldText,
                     afterWorld = afterWorldText,
+                    memory = memoryDigest,
                 )
             }
         }
@@ -356,6 +375,9 @@ class ChatEngine(
         private const val ROLE_USER = "user"
         private const val ROLE_ASSISTANT = "assistant"
         private const val HISTORY_LIMIT = 20
+
+    /** 摘要记忆：从历史窗口往前再看多少条（只用于生成摘要，不进 prompt）。 */
+    private const val MEMORY_WINDOW = 200
         /** 角色卡各段系统提示的单段上限（世界书另用 [MAX_WORLD_BOOK_CHARS]）。 */
 private const val MAX_SYSTEM_CHARS = 6000
 
