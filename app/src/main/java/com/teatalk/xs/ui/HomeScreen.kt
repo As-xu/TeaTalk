@@ -30,6 +30,9 @@ import androidx.compose.ui.res.stringResource
 import android.os.Process
 import android.os.SystemClock
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.core.tween
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -165,7 +168,15 @@ fun HomeScreen(
                 .padding(innerPadding)
                 .consumeWindowInsets(innerPadding),
         ) {
-            NavHost(navController = navController, startDestination = start) {
+            NavHost(
+                navController = navController,
+                startDestination = start,
+                // D1：路由切换用短淡入淡出，避免默认的整屏「跳」一下。
+                enterTransition = { fadeIn(animationSpec = tween(180)) },
+                exitTransition = { fadeOut(animationSpec = tween(120)) },
+                popEnterTransition = { fadeIn(animationSpec = tween(180)) },
+                popExitTransition = { fadeOut(animationSpec = tween(120)) },
+            ) {
                 composable(Routes.CHATS) {
                     ChatListScreen(
                         viewModel = viewModel(factory = ChatListViewModel.factory(app)),

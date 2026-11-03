@@ -41,6 +41,11 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -50,6 +55,7 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
@@ -58,6 +64,8 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.outlined.SentimentSatisfied
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.FloatingActionButtonDefaults
+import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -955,78 +963,107 @@ fun ChatScreen(
                 },
             )
             Hairline()
-            LazyColumn(
-                state = listState,
-                modifier = Modifier.weight(1f).fillMaxWidth(),
-                contentPadding = PaddingValues(start = 14.dp, end = 14.dp, top = 14.dp, bottom = 12.dp),
-                verticalArrangement = Arrangement.spacedBy(14.dp),
-            ) {
-                item {
-                    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                        if (loadingOlder) {
-                            Text(
-                                stringResource(R.string.chat_loading_older),
-                                fontSize = TypeScale.s11,
-                                color = cs.onSurfaceVariant,
-                            )
+            // D1：滚动到上方时给一个「回到最新」的小按钮；到底后自动淡出。
+            Box(Modifier.weight(1f).fillMaxWidth()) {
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(start = 14.dp, end = 14.dp, top = 14.dp, bottom = 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp),
+                ) {
+                    item {
+                        Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                            if (loadingOlder) {
+                                Text(
+                                    stringResource(R.string.chat_loading_older),
+                                    fontSize = TypeScale.s11,
+                                    color = cs.onSurfaceVariant,
+                                )
+                            } else {
+                                Text(
+                                    messages.firstOrNull()?.let {
+                                        stringResource(R.string.chat_today_header, timeOf(it.createdAt))
+                                    } ?: stringResource(R.string.chat_intro_default),
+                                    fontSize = TypeScale.s11,
+                                    color = cs.onSurfaceVariant,
+                                )
+                            }
+                        }
+                    }
+                    items(messages, key = { it.id }) { message ->
+                        if (message.role == "user") {
+                            UserBubble(message.content, onLongPress = { preview = message })
                         } else {
-                            Text(
-                                messages.firstOrNull()?.let {
-                                    stringResource(R.string.chat_today_header, timeOf(it.createdAt))
-                                } ?: stringResource(R.string.chat_intro_default),
-                                fontSize = TypeScale.s11,
-                                color = cs.onSurfaceVariant,
+                            val variants = remember(message) { MessageVariants.of(message) }
+                            val speaker = if (isGroup) {
+                                groupMembers.firstOrNull { it.characterId == message.speakerId }
+                            } else {
+                                null
+                            }
+                            AssistantBubble(
+                                text = message.content,
+                                character = character,
+                                speakerName = speaker?.name,
+                                speakerAvatar = speaker?.avatarPath,
+                                variants = variants,
+                                variantStatuses = remember(message) { MessageVariants.statuses(message) },
+                                providerHint = message.providerId
+                                    ?.takeIf { it != activeProviderId }
+                                    ?.let {
+                                        stringResource(
+                                            R.string.chat_generated_by,
+                                            message.providerName ?: "?",
+                                            message.model ?: "?",
+                                        )
+                                    },
+                                selected = message.selectedVariant.coerceIn(0, (variants.size - 1).coerceAtLeast(0)),
+                                onSelectVariant = { viewModel.selectVariant(message.id, it) },
+                                onOpenPreview = { preview = message },
+                                onCopy = { clipboard.setText(AnnotatedString(message.content)) },
+                                onRetry = if (message.id == lastAssistantId) viewModel::retry else null,
+                                onDelete = if (message.id == lastAssistantId) ({ deleteTarget = message }) else null,
+                            )
+                        }
+                    }
+                    if (streaming) {
+                        item(key = "streaming") {
+                            AssistantBubble(
+                                text = streamText,
+                                character = character,
+                                speakerAvatar = if (isGroup) groupMembers.firstOrNull()?.avatarPath else null,
+                                thinking = streamText.isEmpty(),
+                                streaming = true,
                             )
                         }
                     }
                 }
-                items(messages, key = { it.id }) { message ->
-                    if (message.role == "user") {
-                        UserBubble(message.content, onLongPress = { preview = message })
-                    } else {
-                        val variants = remember(message) { MessageVariants.of(message) }
-                        val speaker = if (isGroup) {
-                            groupMembers.firstOrNull { it.characterId == message.speakerId }
-                        } else {
-                            null
-                        }
-                        AssistantBubble(
-                            text = message.content,
-                            character = character,
-                            speakerName = speaker?.name,
-                            speakerAvatar = speaker?.avatarPath,
-                            variants = variants,
-                            variantStatuses = remember(message) { MessageVariants.statuses(message) },
-                            providerHint = message.providerId
-                                ?.takeIf { it != activeProviderId }
-                                ?.let {
-                                    stringResource(
-                                        R.string.chat_generated_by,
-                                        message.providerName ?: "?",
-                                        message.model ?: "?",
-                                    )
-                                },
-                            selected = message.selectedVariant.coerceIn(0, (variants.size - 1).coerceAtLeast(0)),
-                            onSelectVariant = { viewModel.selectVariant(message.id, it) },
-                            onOpenPreview = { preview = message },
-                            onCopy = { clipboard.setText(AnnotatedString(message.content)) },
-                            onRetry = if (message.id == lastAssistantId) viewModel::retry else null,
-                            onDelete = if (message.id == lastAssistantId) ({ deleteTarget = message }) else null,
+
+                val latestIndex by remember(messages.size, streaming) {
+                    derivedStateOf { (messages.size + if (streaming) 1 else 0).coerceAtLeast(0) }
+                }
+                androidx.compose.animation.AnimatedVisibility(
+                    visible = !stickToBottom && messages.isNotEmpty(),
+                    enter = fadeIn(tween(150)) + slideInVertically(tween(150)) { it / 2 },
+                    exit = fadeOut(tween(100)),
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(end = 12.dp, bottom = 10.dp),
+                ) {
+                    SmallFloatingActionButton(
+                        onClick = { scope.launch { listState.animateScrollToItem(latestIndex) } },
+                        containerColor = cs.surfaceContainerHigh,
+                        contentColor = cs.primary,
+                        elevation = FloatingActionButtonDefaults.elevation(2.dp, 4.dp),
+                        shape = CircleShape,
+                    ) {
+                        Icon(
+                            Icons.Filled.KeyboardArrowDown,
+                            contentDescription = stringResource(R.string.chat_back_to_bottom),
+                            modifier = Modifier.size(22.dp),
                         )
                     }
                 }
-                if (streaming) {
-                    item(key = "streaming") {
-                        AssistantBubble(
-                            text = streamText,
-                            character = character,
-                            speakerAvatar = if (isGroup) groupMembers.firstOrNull()?.avatarPath else null,
-                            thinking = streamText.isEmpty(),
-                            streaming = true,
-                        )
-                    }
                 }
-            }
 
             if (showMembers) {
                 GroupMembersSheet(

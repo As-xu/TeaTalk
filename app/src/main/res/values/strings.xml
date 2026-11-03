@@ -101,6 +101,7 @@
     <string name="chat_input_hint">说点什么…</string>
     <string name="chat_intro_default">开始一段角色扮演</string>
     <string name="chat_loading_older">正在加载更早的消息…</string>
+    <string name="chat_back_to_bottom">回到最新</string>
     <string name="chat_today_header">今天 %1$s</string>
 
     <!-- 我的 -->

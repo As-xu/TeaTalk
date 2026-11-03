@@ -98,6 +98,7 @@
     <string name="chat_input_hint">Say something…</string>
     <string name="chat_intro_default">Start a roleplay</string>
     <string name="chat_loading_older">Loading earlier messages…</string>
+    <string name="chat_back_to_bottom">Jump to latest</string>
     <string name="chat_today_header">Today %1$s</string>
 
     <string name="profile_persona_name">Traveler</string>

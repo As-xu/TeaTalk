@@ -142,7 +142,12 @@ fun ProvidersScreen(viewModel: ProvidersViewModel, onBack: () -> Unit) {
                     Icon(Icons.Filled.CheckCircle, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 Spacer(Modifier.height(14.dp))
-                Text(stringResource(R.string.providers_empty_title), fontSize = TypeScale.s16, fontWeight = FontWeight.Medium)
+                Text(
+                    stringResource(R.string.providers_empty_title),
+                    fontSize = TypeScale.s17,
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.onBackground,
+                )
                 Spacer(Modifier.height(6.dp))
                 Text(
                     stringResource(R.string.providers_empty_hint),
