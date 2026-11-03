@@ -57,6 +57,7 @@ class AppContainer(context: Context) {
                 TeaTalkDatabase.MIGRATION_8_9,
                 TeaTalkDatabase.MIGRATION_9_10,
                 TeaTalkDatabase.MIGRATION_10_11,
+                TeaTalkDatabase.MIGRATION_11_12,
             )
             .build()
             .also {
@@ -72,6 +73,7 @@ class AppContainer(context: Context) {
             database.worldBookDao(),
             database.regexRuleDao(),
             database.chatVariableDao(),
+            database.quickReplyDao(),
             userName = { appPrefs.userName },
         )
     }

@@ -472,5 +472,27 @@
     <string name="chatlist_search_empty">No chats or messages match “%1$s”</string>
     <string name="chatlist_section_conversations">Chats</string>
     <string name="chatlist_section_messages">Messages</string>
+    <!-- 0.19.0 quick replies -->
+    <string name="profile_quick_replies">Quick replies</string>
+    <string name="profile_quick_replies_sub">Save snippets and insert them in one tap</string>
+    <string name="quick_replies_title">Quick replies</string>
+    <string name="quick_replies_new">New</string>
+    <string name="quick_replies_new_title">New quick reply</string>
+    <string name="quick_reply_edit_title">Edit quick reply</string>
+    <string name="quick_replies_empty_title">No quick replies yet</string>
+    <string name="quick_replies_empty_body">Store narration templates, OOC notes or scene switches, then insert them while chatting</string>
+    <string name="quick_replies_empty_cta">New quick reply</string>
+    <string name="quick_reply_title_field">Title (optional)</string>
+    <string name="quick_reply_content">Content</string>
+    <string name="quick_reply_content_required">Content cannot be empty</string>
+    <string name="quick_reply_sort">Order (lower first)</string>
+    <string name="quick_reply_enabled">Enabled</string>
+    <string name="quick_reply_saved">Quick reply saved</string>
+    <string name="quick_reply_save_failed">Failed to save quick reply</string>
+    <string name="quick_reply_deleted">Quick reply deleted</string>
+    <string name="quick_reply_delete_failed">Failed to delete quick reply</string>
+    <string name="quick_reply_delete_title">Delete quick reply</string>
+    <string name="quick_reply_delete_body">Delete “%1$s”? This cannot be undone.</string>
+    <string name="chat_quick_replies">Quick replies</string>
+    <string name="chat_quick_replies_empty">No quick replies yet. Add them in Me → Quick replies</string>
 </resources>
-

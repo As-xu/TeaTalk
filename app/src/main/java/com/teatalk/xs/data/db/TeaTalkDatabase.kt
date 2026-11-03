@@ -16,8 +16,9 @@ import com.teatalk.core.log.TeaTalkLog
         ConversationMemberEntity::class,
         RegexRuleEntity::class,
         ChatVariableEntity::class,
+        QuickReplyEntity::class,
     ],
-    version = 11,
+    version = 12,
     exportSchema = true,
 )
 abstract class TeaTalkDatabase : RoomDatabase() {
@@ -27,9 +28,10 @@ abstract class TeaTalkDatabase : RoomDatabase() {
     abstract fun conversationDao(): ConversationDao
     abstract fun regexRuleDao(): RegexRuleDao
     abstract fun chatVariableDao(): ChatVariableDao
+    abstract fun quickReplyDao(): QuickReplyDao
 
     companion object {
-        const val VERSION = 11
+        const val VERSION = 12
 
         /**
          * v1（M0）→ v2（D6 卡库）：
@@ -252,6 +254,28 @@ abstract class TeaTalkDatabase : RoomDatabase() {
                         "ON chat_variables(conversationId)",
                 )
                 TeaTalkLog.i("Db", "db.migrate", "from" to 10, "to" to 11, "ms" to (System.currentTimeMillis() - started))
+            }
+        }
+
+        /**
+         * v11（0.18.0 正则/变量）→ v12（0.19.0 快速回复）：纯新增表。
+         *
+         * 建表 SQL 不写 DEFAULT、列全部 NOT NULL，与 `QuickReplyEntity` 对齐
+         * —— 0.18.0 的 `Migration didn't properly handle` 就是这么踩的。
+         */
+        val MIGRATION_11_12 = object : Migration(11, 12) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                val started = System.currentTimeMillis()
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS quick_replies (" +
+                        "id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                        "title TEXT NOT NULL, " +
+                        "content TEXT NOT NULL, " +
+                        "sortIndex INTEGER NOT NULL, " +
+                        "enabled INTEGER NOT NULL, " +
+                        "createdAt INTEGER NOT NULL)",
+                )
+                TeaTalkLog.i("Db", "db.migrate", "from" to 11, "to" to 12, "ms" to (System.currentTimeMillis() - started))
             }
         }
 

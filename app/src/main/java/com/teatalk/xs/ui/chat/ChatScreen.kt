@@ -133,6 +133,7 @@ import com.teatalk.xs.data.UiText
 import com.teatalk.xs.data.db.CharacterEntity
 import com.teatalk.xs.data.db.ConversationEntity
 import com.teatalk.xs.data.db.MemberWithCharacter
+import com.teatalk.xs.data.db.QuickReplyEntity
 import com.teatalk.xs.data.db.MessageEntity
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.filter
@@ -187,6 +188,9 @@ class ChatViewModel(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     /** display 作用域正则：只影响气泡显示，不改库里正文。 */
+    /** 0.19.0 快速回复：打开面板时读一次。 */
+    suspend fun quickReplies(): List<QuickReplyEntity> = repository.enabledQuickReplies()
+
     val displayRules: StateFlow<List<RegexRule>> = repository.observeRegexRules()
         .map { rules -> rules.filter { it.affectsDisplay } }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
@@ -783,6 +787,9 @@ fun ChatScreen(
     // 群聊：成员面板 / 添加成员挑选
     var showMembers by remember { mutableStateOf(false) }
     var pickMember by remember { mutableStateOf(false) }
+    // 0.19.0 快速回复面板
+    var showQuickReplies by remember { mutableStateOf(false) }
+    var quickReplyRows by remember { mutableStateOf<List<QuickReplyEntity>?>(null) }
     val deleteInfo by viewModel.deleteInfo.collectAsState()
     val deletedConversation by viewModel.deletedConversation.collectAsState()
     val loadingOlder by viewModel.loadingOlder.collectAsState()
@@ -1082,6 +1089,21 @@ fun ChatScreen(
                 }
                 }
 
+            LaunchedEffect(showQuickReplies) {
+                if (showQuickReplies) quickReplyRows = viewModel.quickReplies()
+            }
+
+            if (showQuickReplies) {
+                QuickReplySheet(
+                    rows = quickReplyRows,
+                    onDismiss = { showQuickReplies = false },
+                    onPick = { row ->
+                        showQuickReplies = false
+                        input = (input.trimEnd() + " " + row.content).trimStart()
+                    },
+                )
+            }
+
             if (showMembers) {
                 GroupMembersSheet(
                     members = groupMembers,
@@ -1176,6 +1198,9 @@ fun ChatScreen(
                                 }
                             }
                         }
+                    }
+                    TextButton(onClick = { showQuickReplies = true }) {
+                        Text("/", fontSize = TypeScale.s16, color = cs.onSurfaceVariant)
                     }
                     IconButton(onClick = {}) {
                         Icon(
@@ -1984,6 +2009,60 @@ private fun buildPromptJson(snapshot: PromptSnapshot): String = buildJsonObject 
         }
     }
 }.toString()
+
+/** 快速回复面板：列出启用的片段，点一下插进输入框。 */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun QuickReplySheet(
+    rows: List<QuickReplyEntity>?,
+    onDismiss: () -> Unit,
+    onPick: (QuickReplyEntity) -> Unit,
+) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
+        Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 24.dp)) {
+            Text(
+                stringResource(R.string.chat_quick_replies),
+                fontSize = TypeScale.s16,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Spacer(Modifier.height(8.dp))
+            when {
+                rows == null -> Unit
+                rows.isEmpty() -> Text(
+                    stringResource(R.string.chat_quick_replies_empty),
+                    fontSize = TypeScale.s13,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(vertical = 12.dp),
+                )
+                else -> LazyColumn(Modifier.fillMaxWidth().heightIn(max = 360.dp)) {
+                    items(rows.size, key = { rows[it].id }) { index ->
+                        val row = rows[index]
+                        Column(
+                            Modifier
+                                .fillMaxWidth()
+                                .clickable { onPick(row) }
+                                .padding(vertical = 10.dp),
+                        ) {
+                            Text(
+                                row.displayLabel(),
+                                fontSize = TypeScale.s14,
+                                color = MaterialTheme.colorScheme.onSurface,
+                            )
+                            Text(
+                                row.content.lineSequence().firstOrNull { it.isNotBlank() }.orEmpty(),
+                                fontSize = TypeScale.s12,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
 
 /** 群聊成员面板：列成员、可移除（≥2 人时）、可添加（<8 人时）。 */
 @OptIn(ExperimentalMaterial3Api::class)

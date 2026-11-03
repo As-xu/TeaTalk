@@ -63,6 +63,8 @@ import com.teatalk.xs.ui.providers.ProvidersViewModel
 import com.teatalk.xs.ui.about.AboutScreen
 import com.teatalk.xs.ui.worldbook.WorldBooksScreen
 import com.teatalk.xs.ui.worldbook.WorldBooksViewModel
+import com.teatalk.xs.ui.quick.QuickRepliesScreen
+import com.teatalk.xs.ui.quick.QuickRepliesViewModel
 import com.teatalk.xs.ui.regex.RegexRulesScreen
 import com.teatalk.xs.ui.regex.RegexRulesViewModel
 
@@ -205,6 +207,7 @@ fun HomeScreen(
                         onOpenModelSettings = { navController.navigate(Routes.PROVIDERS) },
                         onOpenWorldBooks = { navController.navigate(Routes.WORLD_BOOKS) },
                         onOpenRegex = { navController.navigate(Routes.REGEX_RULES) },
+                        onOpenQuickReplies = { navController.navigate(Routes.QUICK_REPLIES) },
                         onOpenAbout = { navController.navigate(Routes.ABOUT) },
                     )
                 }
@@ -226,6 +229,12 @@ fun HomeScreen(
                 composable(Routes.REGEX_RULES) {
                     RegexRulesScreen(
                         viewModel = viewModel(factory = RegexRulesViewModel.factory(app)),
+                        onBack = { navController.popBackStack() },
+                    )
+                }
+                composable(Routes.QUICK_REPLIES) {
+                    QuickRepliesScreen(
+                        viewModel = viewModel(factory = QuickRepliesViewModel.factory(app)),
                         onBack = { navController.popBackStack() },
                     )
                 }
@@ -291,6 +300,7 @@ private object Routes {
     const val CHAT = "chat/{conversationId}?messageId={messageId}"
     const val WORLD_BOOKS = "worldbooks"
     const val REGEX_RULES = "regexrules"
+    const val QUICK_REPLIES = "quickreplies"
     const val PROVIDERS = "providers"
         const val ABOUT = "about"
 }

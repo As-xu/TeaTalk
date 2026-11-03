@@ -24,6 +24,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.MenuBook
@@ -80,6 +81,7 @@ fun ProfileScreen(
     onOpenModelSettings: () -> Unit = {},
     onOpenWorldBooks: () -> Unit = {},
     onOpenRegex: () -> Unit = {},
+    onOpenQuickReplies: () -> Unit = {},
     onOpenAbout: () -> Unit = {},
     onOpenCharacters: () -> Unit = {},
     onShowComingSoon: (Int) -> Unit = {},
@@ -252,6 +254,7 @@ fun ProfileScreen(
             SettingRow(Icons.Filled.UploadFile, R.string.profile_import, R.string.profile_import_sub, onOpenCharacters)
             SettingRow(Icons.Filled.MenuBook, R.string.profile_worldbook, R.string.profile_worldbook_sub, onOpenWorldBooks)
             SettingRow(Icons.Filled.Tune, R.string.profile_regex, R.string.profile_regex_sub, onOpenRegex)
+            SettingRow(Icons.Filled.Edit, R.string.profile_quick_replies, R.string.profile_quick_replies_sub, onOpenQuickReplies)
             SettingRow(
                 Icons.Filled.Tune,
                 R.string.profile_preset,

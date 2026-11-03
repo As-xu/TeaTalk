@@ -25,6 +25,8 @@ import com.teatalk.xs.data.db.MessageEntity
 import com.teatalk.xs.data.db.RegexRuleDao
 import com.teatalk.xs.data.db.RegexRuleEntity
 import com.teatalk.xs.data.db.WorldBookDao
+import com.teatalk.xs.data.db.QuickReplyDao
+import com.teatalk.xs.data.db.QuickReplyEntity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -58,6 +60,7 @@ class CharacterRepository(
     private val worldBookDao: WorldBookDao,
     private val regexRuleDao: RegexRuleDao,
     private val chatVariableDao: ChatVariableDao,
+    private val quickReplyDao: QuickReplyDao,
     /** 个人资料名：导入开场白时替换 `{{user}}`。 */
     private val userName: () -> String = { "User" },
 ) {
@@ -151,6 +154,30 @@ class CharacterRepository(
             )
         }
     }
+
+    // ---- 0.19.0 快速回复 ----
+
+    /** 快速回复列表（管理页与聊天页 sheet 共用一个流，按 sortIndex 排序）。 */
+    fun observeQuickReplies(): Flow<List<QuickReplyEntity>> = quickReplyDao.observeAll()
+
+    /** 只取启用项，聊天页 sheet 用。 */
+    suspend fun enabledQuickReplies(): List<QuickReplyEntity> = withContext(Dispatchers.IO) {
+        quickReplyDao.all().filter { it.enabled }
+    }
+
+    /** 新建或更新；返回行 id。 */
+    suspend fun saveQuickReply(row: QuickReplyEntity): Long = withContext(Dispatchers.IO) {
+        val now = System.currentTimeMillis()
+        if (row.id == 0L) {
+            quickReplyDao.upsert(row.copy(createdAt = now))
+        } else {
+            val existing = quickReplyDao.all().firstOrNull { it.id == row.id }
+            quickReplyDao.update(row.copy(createdAt = existing?.createdAt ?: now))
+            row.id
+        }
+    }
+
+    suspend fun deleteQuickReply(id: Long) = withContext(Dispatchers.IO) { quickReplyDao.deleteById(id) }
 
     /** 某角色下的所有会话（会话切换面板用），按最近活跃排序。 */
     fun observeConversations(characterId: Long): Flow<List<ConversationEntity>> =

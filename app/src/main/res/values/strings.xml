@@ -477,5 +477,27 @@
     <string name="chatlist_search_empty">没有匹配「%1$s」的会话或消息</string>
     <string name="chatlist_section_conversations">会话</string>
     <string name="chatlist_section_messages">消息</string>
+    <!-- 0.19.0 快速回复 -->
+    <string name="profile_quick_replies">快速回复</string>
+    <string name="profile_quick_replies_sub">预存常用片段，聊天一点即插入</string>
+    <string name="quick_replies_title">快速回复</string>
+    <string name="quick_replies_new">新建</string>
+    <string name="quick_replies_new_title">新建快速回复</string>
+    <string name="quick_reply_edit_title">编辑快速回复</string>
+    <string name="quick_replies_empty_title">还没有快速回复</string>
+    <string name="quick_replies_empty_body">把常用的旁白模板、OOC 指令或场景切换存成片段，聊天时一键插入</string>
+    <string name="quick_replies_empty_cta">新建快速回复</string>
+    <string name="quick_reply_title_field">标题（可选）</string>
+    <string name="quick_reply_content">内容</string>
+    <string name="quick_reply_content_required">内容不能为空</string>
+    <string name="quick_reply_sort">排序（小的在前）</string>
+    <string name="quick_reply_enabled">启用</string>
+    <string name="quick_reply_saved">已保存快速回复</string>
+    <string name="quick_reply_save_failed">保存快速回复失败</string>
+    <string name="quick_reply_deleted">已删除快速回复</string>
+    <string name="quick_reply_delete_failed">删除快速回复失败</string>
+    <string name="quick_reply_delete_title">删除快速回复</string>
+    <string name="quick_reply_delete_body">确定删除「%1$s」？此操作不可撤销。</string>
+    <string name="chat_quick_replies">快速回复</string>
+    <string name="chat_quick_replies_empty">还没有快速回复，先在「我的 → 快速回复」里添加</string>
 </resources>
-
