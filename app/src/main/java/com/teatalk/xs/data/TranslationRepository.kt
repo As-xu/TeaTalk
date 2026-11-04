@@ -91,9 +91,15 @@ class TranslationRepository(
                             "detail" to (error.message ?: ""),
                             "chunk" to index,
                         )
+                        // 离线/域名解析失败/超时都属于「网络不通」，要引导用户换网络或接口，
+                        // 不能退化成笼统的「翻译失败」，否则用户不知道是配置错还是断网。
+                        val offline = error is java.io.IOException
                         return@withContext TranslationResult.Failed(
-                            if (error.message?.startsWith("HTTP") == true) TranslationFailure.NETWORK
-                            else TranslationFailure.UNKNOWN,
+                            when {
+                                offline -> TranslationFailure.NETWORK
+                                error.message?.startsWith("HTTP") == true -> TranslationFailure.NETWORK
+                                else -> TranslationFailure.UNKNOWN
+                            },
                         )
                     }.trim()
                     if (part.isEmpty()) {

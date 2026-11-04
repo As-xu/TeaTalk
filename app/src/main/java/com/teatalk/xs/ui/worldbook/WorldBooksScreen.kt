@@ -60,6 +60,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.teatalk.core.worldinfo.WorldInfoEntry
 import com.teatalk.xs.R
+import com.teatalk.xs.data.TranslationFailure
+import com.teatalk.xs.data.toUiText
 import com.teatalk.xs.data.db.WorldBookEntity
 import com.teatalk.xs.ui.components.Hairline
 import com.teatalk.xs.ui.theme.TypeScale
@@ -77,6 +79,7 @@ fun WorldBooksScreen(
     val message by viewModel.message.collectAsState()
     val entryTranslations by viewModel.entryTranslations.collectAsState()
     val entryTranslating by viewModel.entryTranslating.collectAsState()
+    val entryErrors by viewModel.entryErrors.collectAsState()
     val translateMessage by viewModel.translateMessage.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
     var detailId by remember { mutableStateOf<Long?>(null) }
@@ -176,6 +179,7 @@ fun WorldBooksScreen(
             book = book,
             entries = remember(book.entriesJson) { viewModel.entriesOf(book) },
             translations = entryTranslations,
+            errors = entryErrors,
             translating = entryTranslating,
             onTranslateEntry = { entry -> viewModel.translateEntry(book.id, entry) },
             onShowOriginalEntry = { entry -> viewModel.showOriginalEntry(book.id, entry) },
@@ -220,6 +224,7 @@ private fun WorldBookDetailSheet(
     book: WorldBookEntity,
     entries: List<WorldInfoEntry>,
     translations: Map<String, String>,
+    errors: Map<String, TranslationFailure>,
     translating: Set<String>,
     onTranslateEntry: (WorldInfoEntry) -> Unit,
     onShowOriginalEntry: (WorldInfoEntry) -> Unit,
@@ -228,6 +233,7 @@ private fun WorldBookDetailSheet(
     onDismiss: () -> Unit,
 ) {
     val cs = MaterialTheme.colorScheme
+    val context = LocalContext.current
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState()) {
         Column(Modifier.fillMaxWidth().heightIn(max = 620.dp).padding(horizontal = 22.dp).padding(bottom = 28.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -254,6 +260,7 @@ private fun WorldBookDetailSheet(
                         val entryKey = "${book.id}:${entry.uid}"
                         val translated = translations[entryKey]
                         val isTranslating = entryKey in translating
+                        val error = errors[entryKey]
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(
                                 entry.comment.ifBlank { "#${entry.uid}" },
@@ -311,6 +318,14 @@ private fun WorldBookDetailSheet(
                                 color = cs.onSurfaceVariant,
                                 maxLines = 3,
                                 overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.padding(top = 4.dp),
+                            )
+                        }
+                        if (error != null) {
+                            Text(
+                                error.toUiText().resolve(context),
+                                fontSize = TypeScale.s12,
+                                color = cs.error,
                                 modifier = Modifier.padding(top = 4.dp),
                             )
                         }

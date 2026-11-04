@@ -12,6 +12,7 @@ import com.teatalk.xs.data.UiText
 import com.teatalk.xs.data.WorldBookImportOutcome
 import com.teatalk.xs.data.WorldBookRepository
 import com.teatalk.xs.data.TranslationRepository
+import com.teatalk.xs.data.TranslationFailure
 import com.teatalk.xs.data.TranslationResult
 import com.teatalk.xs.data.toUiText
 import com.teatalk.xs.data.db.WorldBookEntity
@@ -44,6 +45,10 @@ class WorldBooksViewModel(
     private val _entryTranslating = MutableStateFlow<Set<String>>(emptySet())
     val entryTranslating: StateFlow<Set<String>> = _entryTranslating
 
+    /** 条目翻译失败原因，key 同上；用于条目内联提示（snackbar 会被底部弹层遮住）。 */
+    private val _entryErrors = MutableStateFlow<Map<String, TranslationFailure>>(emptyMap())
+    val entryErrors: StateFlow<Map<String, TranslationFailure>> = _entryErrors
+
     private val _translateMessage = MutableStateFlow<UiText?>(null)
     val translateMessage: StateFlow<UiText?> = _translateMessage
 
@@ -52,11 +57,15 @@ class WorldBooksViewModel(
         val key = entryKey(bookId, entry.uid)
         if (entry.content.isBlank() || key in _entryTranslating.value) return
         if (!force && _entryTranslations.value.containsKey(key)) return
+        _entryErrors.value = _entryErrors.value - key
         _entryTranslating.value = _entryTranslating.value + key
         viewModelScope.launch {
             when (val result = translation.translate(entry.content, force = force)) {
                 is TranslationResult.Ok -> _entryTranslations.value = _entryTranslations.value + (key to result.text)
-                is TranslationResult.Failed -> _translateMessage.value = result.failure.toUiText()
+                is TranslationResult.Failed -> {
+                    _entryErrors.value = _entryErrors.value + (key to result.failure)
+                    _translateMessage.value = result.failure.toUiText()
+                }
             }
             _entryTranslating.value = _entryTranslating.value - key
         }
@@ -64,6 +73,7 @@ class WorldBooksViewModel(
 
     fun showOriginalEntry(bookId: Long, entry: WorldInfoEntry) {
         _entryTranslations.value = _entryTranslations.value - entryKey(bookId, entry.uid)
+        _entryErrors.value = _entryErrors.value - entryKey(bookId, entry.uid)
     }
 
     fun consumeTranslateMessage() {
