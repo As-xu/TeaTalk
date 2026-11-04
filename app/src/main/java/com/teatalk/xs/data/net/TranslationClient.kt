@@ -33,7 +33,7 @@ class TranslationClient(
         systemPrompt: String,
         userPrompt: String,
         temperature: Double = 0.2,
-        maxTokens: Int = 4096,
+        maxTokens: Int = 8192,
     ): Result<String> = withContext(Dispatchers.IO) {
         val url = baseUrl.trimEnd('/') + "/chat/completions"
         val host = Redact.url(url)

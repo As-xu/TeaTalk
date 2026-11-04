@@ -54,7 +54,7 @@ class WorldBooksViewModel(
         if (!force && _entryTranslations.value.containsKey(key)) return
         _entryTranslating.value = _entryTranslating.value + key
         viewModelScope.launch {
-            when (val result = translation.translate(entry.content)) {
+            when (val result = translation.translate(entry.content, force = force)) {
                 is TranslationResult.Ok -> _entryTranslations.value = _entryTranslations.value + (key to result.text)
                 is TranslationResult.Failed -> _translateMessage.value = result.failure.toUiText()
             }

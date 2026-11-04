@@ -53,3 +53,49 @@ object TranslationPrompt {
 
     fun user(text: String): String = "Translate this:\n\n$text"
 }
+
+/**
+ * 长文分块器。
+ *
+ * 角色卡的开场白动辄两三千字，一次丢给模型容易撞上 max_tokens 被截断；
+ * 截断后的译文既不可用、又会退化成空结果。这里按空行切段、再按需硬切，
+ * 保证每块都在 [MAX_CHARS] 以内，调用方按顺序翻译后拼回一段。
+ */
+object TranslationChunker {
+
+    const val MAX_CHARS = 1500
+
+    fun split(text: String, limit: Int = MAX_CHARS): List<String> {
+        val source = text.trim()
+        if (source.isEmpty()) return emptyList()
+        if (source.length <= limit) return listOf(source)
+        val chunks = mutableListOf<String>()
+        val buffer = StringBuilder()
+        fun flush() {
+            if (buffer.isNotEmpty()) {
+                val chunk = buffer.toString().trim()
+                if (chunk.isNotEmpty()) chunks += chunk
+                buffer.setLength(0)
+            }
+        }
+        source.split(PARAGRAPH).forEach { paragraph ->
+            val block = paragraph.trim()
+            if (block.isEmpty()) return@forEach
+            if (block.length > limit) {
+                flush()
+                block.chunked(limit).forEach { piece ->
+                    val trimmed = piece.trim()
+                    if (trimmed.isNotEmpty()) chunks += trimmed
+                }
+                return@forEach
+            }
+            if (buffer.length + block.length + 2 > limit) flush()
+            if (buffer.isNotEmpty()) buffer.append("\n\n")
+            buffer.append(block)
+        }
+        flush()
+        return chunks
+    }
+
+    private val PARAGRAPH = Regex("\\n\\s*\\n")
+}

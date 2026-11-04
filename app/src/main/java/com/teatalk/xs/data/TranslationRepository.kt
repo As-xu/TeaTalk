@@ -71,46 +71,58 @@ class TranslationRepository(
                     return@withContext TranslationResult.Failed(TranslationFailure.NO_MODEL)
                 }
                 val target = TranslationTarget.of(targetLang)
-                val outcome = client.complete(
-                    baseUrl = provider.baseUrl,
-                    apiKey = provider.apiKey,
-                    model = provider.model,
-                    systemPrompt = TranslationPrompt.system(target),
-                    userPrompt = TranslationPrompt.user(source),
-                )
-                outcome.fold(
-                    onSuccess = { translated ->
-                        val trimmed = translated.trim()
-                        if (trimmed.isEmpty()) {
-                            return@withContext TranslationResult.Failed(TranslationFailure.EMPTY_RESULT)
-                        }
-                        dao.upsert(
-                            TranslationEntity(
-                                hash = hash,
-                                targetLang = targetLang,
-                                text = trimmed,
-                                engine = provider.id,
-                                createdAt = System.currentTimeMillis(),
-                            ),
-                        )
-                        TeaTalkLog.i("Trans", "trans.ok", "lang" to targetLang, "chars" to source.length)
-                        TranslationResult.Ok(trimmed, cached = false, engine = provider.id)
-                    },
-                    onFailure = { error ->
+                val chunks = TranslationChunker.split(source)
+                TeaTalkLog.i("Trans", "trans.split", "chunks" to chunks.size, "chars" to source.length)
+                val systemPrompt = TranslationPrompt.system(target)
+                val merged = StringBuilder()
+                for ((index, chunk) in chunks.withIndex()) {
+                    val outcome = client.complete(
+                        baseUrl = provider.baseUrl,
+                        apiKey = provider.apiKey,
+                        model = provider.model,
+                        systemPrompt = systemPrompt,
+                        userPrompt = TranslationPrompt.user(chunk),
+                    )
+                    val part = outcome.getOrElse { error ->
                         TeaTalkLog.w(
                             "Trans",
                             "trans.fail",
                             "kind" to error.javaClass.simpleName,
                             "detail" to (error.message ?: ""),
+                            "chunk" to index,
                         )
-                        TranslationResult.Failed(
-                            when {
-                                error.message?.startsWith("HTTP") == true -> TranslationFailure.NETWORK
-                                else -> TranslationFailure.UNKNOWN
-                            },
+                        return@withContext TranslationResult.Failed(
+                            if (error.message?.startsWith("HTTP") == true) TranslationFailure.NETWORK
+                            else TranslationFailure.UNKNOWN,
                         )
-                    },
+                    }.trim()
+                    if (part.isEmpty()) {
+                        return@withContext TranslationResult.Failed(TranslationFailure.EMPTY_RESULT)
+                    }
+                    if (merged.isNotEmpty()) merged.append("\n\n")
+                    merged.append(part)
+                }
+                val finalText = merged.toString().trim()
+                if (finalText.isEmpty()) {
+                    return@withContext TranslationResult.Failed(TranslationFailure.EMPTY_RESULT)
+                }
+                dao.upsert(
+                    TranslationEntity(
+                        hash = hash,
+                        targetLang = targetLang,
+                        text = finalText,
+                        engine = provider.id,
+                        createdAt = System.currentTimeMillis(),
+                    ),
                 )
+                TeaTalkLog.i(
+                    "Trans",
+                    "trans.ok",
+                    "lang" to targetLang,
+                    "chars" to source.length,
+                    "chunks" to chunks.size,
+                )
+                TranslationResult.Ok(finalText, cached = false, engine = provider.id)
             }
         }
     }

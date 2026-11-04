@@ -79,6 +79,7 @@ import com.teatalk.xs.data.db.WorldBookEntity
 import com.teatalk.xs.data.WorldBookRepository
 import com.teatalk.xs.data.TranslationRepository
 import com.teatalk.xs.data.TranslationResult
+import com.teatalk.xs.data.TranslationFailure
 import com.teatalk.xs.data.UiText
 import com.teatalk.xs.data.toUiText
 import androidx.compose.material3.Surface
@@ -151,6 +152,10 @@ class CharacterDetailViewModel(
     private val _translateMessage = MutableStateFlow<UiText?>(null)
     val translateMessage: StateFlow<UiText?> = _translateMessage
 
+    /** 每段最近一次翻译失败的原因；成功后清掉，用于章节卡内提示。 */
+    private val _translateErrors = MutableStateFlow<Map<String, TranslationFailure>>(emptyMap())
+    val translateErrors: StateFlow<Map<String, TranslationFailure>> = _translateErrors
+
     /**
      * 翻译某段卡片文本；同一个 key 已有译文时直接返回（除非 [force]）。
      * 译文只放在内存里做展示，磁盘缓存由 TranslationRepository 负责。
@@ -159,11 +164,15 @@ class CharacterDetailViewModel(
         if (text.isBlank()) return
         if (key in _translating.value) return
         if (!force && _translations.value.containsKey(key)) return
+        _translateErrors.value = _translateErrors.value - key
         _translating.value = _translating.value + key
         viewModelScope.launch {
-            when (val result = translation.translate(text)) {
+            when (val result = translation.translate(text, force = force)) {
                 is TranslationResult.Ok -> _translations.value = _translations.value + (key to result.text)
-                is TranslationResult.Failed -> _translateMessage.value = result.failure.toUiText()
+                is TranslationResult.Failed -> {
+                    _translateErrors.value = _translateErrors.value + (key to result.failure)
+                    _translateMessage.value = result.failure.toUiText()
+                }
             }
             _translating.value = _translating.value - key
         }
@@ -172,6 +181,7 @@ class CharacterDetailViewModel(
     /** 「显示原文」：丢掉内存里的译文（磁盘缓存仍在，再点翻译会秒回）。 */
     fun showOriginal(key: String) {
         _translations.value = _translations.value - key
+        _translateErrors.value = _translateErrors.value - key
     }
 
     fun consumeTranslateMessage() {
@@ -252,6 +262,7 @@ fun CharacterDetailScreen(
     val translations by viewModel.translations.collectAsState()
     val translating by viewModel.translating.collectAsState()
     val translateMessage by viewModel.translateMessage.collectAsState()
+    val translateErrors by viewModel.translateErrors.collectAsState()
     val snackbar = remember { SnackbarHostState() }
     val worldBookSavedText = stringResource(R.string.detail_world_book_saved)
     // 展示的是「生效条目数」：卡内嵌 + 已绑定世界书的条目数之和。
@@ -402,6 +413,7 @@ fun CharacterDetailScreen(
                         translating = key in translating,
                         onTranslate = { viewModel.translateField(key, view.description) },
                         onShowOriginal = { viewModel.showOriginal(key) },
+                        error = translateErrors[key],
                     ) { BodyText(view.description) }
                 }
                 if (view.firstMes.isNotBlank()) {
@@ -412,6 +424,7 @@ fun CharacterDetailScreen(
                         translating = key in translating,
                         onTranslate = { viewModel.translateField(key, view.firstMes) },
                         onShowOriginal = { viewModel.showOriginal(key) },
+                        error = translateErrors[key],
                     ) { BodyText(view.firstMes) }
                 }
                 if (view.personality.isNotBlank() || view.scenario.isNotBlank()) {
@@ -429,6 +442,7 @@ fun CharacterDetailScreen(
                         translating = key in translating,
                         onTranslate = { viewModel.translateField(key, detailsText) },
                         onShowOriginal = { viewModel.showOriginal(key) },
+                        error = translateErrors[key],
                     ) {
                         if (view.personality.isNotBlank()) {
                             FieldLine(personalityLabel, view.personality)
@@ -446,6 +460,7 @@ fun CharacterDetailScreen(
                         translating = key in translating,
                         onTranslate = { viewModel.translateField(key, view.creatorNotes) },
                         onShowOriginal = { viewModel.showOriginal(key) },
+                        error = translateErrors[key],
                     ) { BodyText(view.creatorNotes) }
                 }
                 Spacer(Modifier.height(28.dp))
@@ -684,6 +699,7 @@ private fun SectionCard(
     translating: Boolean = false,
     onTranslate: (() -> Unit)? = null,
     onShowOriginal: (() -> Unit)? = null,
+    error: TranslationFailure? = null,
     content: @Composable () -> Unit,
 ) {
     val cs = MaterialTheme.colorScheme
@@ -734,6 +750,14 @@ private fun SectionCard(
                             .padding(vertical = 4.dp, horizontal = 2.dp),
                     )
                 }
+            }
+            if (error != null) {
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    error.toUiText().resolve(LocalContext.current),
+                    fontSize = TypeScale.s12,
+                    color = cs.error,
+                )
             }
             if (translated != null) {
                 Spacer(Modifier.height(4.dp))
