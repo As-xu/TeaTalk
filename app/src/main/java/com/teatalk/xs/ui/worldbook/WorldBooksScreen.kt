@@ -50,6 +50,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
@@ -74,6 +75,9 @@ fun WorldBooksScreen(
     val books by viewModel.books.collectAsState()
     val importing by viewModel.importing.collectAsState()
     val message by viewModel.message.collectAsState()
+    val entryTranslations by viewModel.entryTranslations.collectAsState()
+    val entryTranslating by viewModel.entryTranslating.collectAsState()
+    val translateMessage by viewModel.translateMessage.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
     var detailId by remember { mutableStateOf<Long?>(null) }
     var pendingDelete by remember { mutableStateOf<WorldBookEntity?>(null) }
@@ -90,6 +94,13 @@ fun WorldBooksScreen(
         val text = snackbarText ?: return@LaunchedEffect
         snackbarHostState.showSnackbar(text)
         viewModel.consumeMessage()
+    }
+
+    val context = LocalContext.current
+    LaunchedEffect(translateMessage) {
+        val msg = translateMessage ?: return@LaunchedEffect
+        snackbarHostState.showSnackbar(msg.resolve(context))
+        viewModel.consumeTranslateMessage()
     }
 
     val cs = MaterialTheme.colorScheme
@@ -164,6 +175,10 @@ fun WorldBooksScreen(
         WorldBookDetailSheet(
             book = book,
             entries = remember(book.entriesJson) { viewModel.entriesOf(book) },
+            translations = entryTranslations,
+            translating = entryTranslating,
+            onTranslateEntry = { entry -> viewModel.translateEntry(book.id, entry) },
+            onShowOriginalEntry = { entry -> viewModel.showOriginalEntry(book.id, entry) },
             onDelete = { detailId = null; pendingDelete = book },
             onEditEntry = { entry -> editing = book.id to entry },
             onDismiss = { detailId = null },
@@ -204,6 +219,10 @@ fun WorldBooksScreen(
 private fun WorldBookDetailSheet(
     book: WorldBookEntity,
     entries: List<WorldInfoEntry>,
+    translations: Map<String, String>,
+    translating: Set<String>,
+    onTranslateEntry: (WorldInfoEntry) -> Unit,
+    onShowOriginalEntry: (WorldInfoEntry) -> Unit,
     onDelete: () -> Unit,
     onEditEntry: (WorldInfoEntry) -> Unit,
     onDismiss: () -> Unit,
@@ -232,6 +251,9 @@ private fun WorldBookDetailSheet(
             Column(Modifier.verticalScroll(rememberScrollState())) {
                 entries.forEach { entry ->
                     Column(Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
+                        val entryKey = "${book.id}:${entry.uid}"
+                        val translated = translations[entryKey]
+                        val isTranslating = entryKey in translating
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(
                                 entry.comment.ifBlank { "#${entry.uid}" },
@@ -244,6 +266,18 @@ private fun WorldBookDetailSheet(
                                 Text(stringResource(R.string.worldbook_entry_disabled), fontSize = TypeScale.s11, color = cs.error)
                             }
                             Spacer(Modifier.weight(1f))
+                            Text(
+                                if (translated != null) stringResource(R.string.translate_show_original)
+                                else if (isTranslating) stringResource(R.string.translate_translating)
+                                else stringResource(R.string.translate_action),
+                                fontSize = TypeScale.s12,
+                                color = cs.primary,
+                                modifier = Modifier
+                                    .clickable(enabled = !isTranslating) {
+                                        if (translated != null) onShowOriginalEntry(entry) else onTranslateEntry(entry)
+                                    }
+                                    .padding(start = 8.dp),
+                            )
                             Text(
                                 stringResource(R.string.worldbook_entry_edit),
                                 fontSize = TypeScale.s12,
@@ -258,14 +292,28 @@ private fun WorldBookDetailSheet(
                             color = cs.onSurfaceVariant,
                             modifier = Modifier.padding(top = 2.dp),
                         )
-                        Text(
-                            entry.content,
-                            fontSize = TypeScale.s12_5,
-                            color = cs.onSurfaceVariant,
-                            maxLines = 3,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.padding(top = 4.dp),
-                        )
+                        if (translated != null) {
+                            Text(
+                                translated,
+                                fontSize = TypeScale.s12_5,
+                                color = cs.onSurfaceVariant,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(top = 4.dp)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(cs.surfaceContainerHighest)
+                                    .padding(8.dp),
+                            )
+                        } else {
+                            Text(
+                                entry.content,
+                                fontSize = TypeScale.s12_5,
+                                color = cs.onSurfaceVariant,
+                                maxLines = 3,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.padding(top = 4.dp),
+                            )
+                        }
                     }
                     Hairline()
                 }

@@ -11,6 +11,9 @@ import com.teatalk.xs.TeaTalkApp
 import com.teatalk.xs.data.UiText
 import com.teatalk.xs.data.WorldBookImportOutcome
 import com.teatalk.xs.data.WorldBookRepository
+import com.teatalk.xs.data.TranslationRepository
+import com.teatalk.xs.data.TranslationResult
+import com.teatalk.xs.data.toUiText
 import com.teatalk.xs.data.db.WorldBookEntity
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -21,6 +24,7 @@ import kotlinx.coroutines.launch
 
 class WorldBooksViewModel(
     private val repository: WorldBookRepository,
+    private val translation: TranslationRepository,
 ) : ViewModel() {
 
     val books: StateFlow<List<WorldBookEntity>?> = repository.observeAll()
@@ -31,6 +35,42 @@ class WorldBooksViewModel(
 
     private val _message = MutableStateFlow<UiText?>(null)
     val message: StateFlow<UiText?> = _message.asStateFlow()
+
+    /** 条目译文，key = "$bookId:$uid"。 */
+    private val _entryTranslations = MutableStateFlow<Map<String, String>>(emptyMap())
+    val entryTranslations: StateFlow<Map<String, String>> = _entryTranslations
+
+    /** 正在翻译的条目 key。 */
+    private val _entryTranslating = MutableStateFlow<Set<String>>(emptySet())
+    val entryTranslating: StateFlow<Set<String>> = _entryTranslating
+
+    private val _translateMessage = MutableStateFlow<UiText?>(null)
+    val translateMessage: StateFlow<UiText?> = _translateMessage
+
+    /** 翻译一个世界书条目的正文；只做展示，磁盘缓存交给 TranslationRepository。 */
+    fun translateEntry(bookId: Long, entry: WorldInfoEntry, force: Boolean = false) {
+        val key = entryKey(bookId, entry.uid)
+        if (entry.content.isBlank() || key in _entryTranslating.value) return
+        if (!force && _entryTranslations.value.containsKey(key)) return
+        _entryTranslating.value = _entryTranslating.value + key
+        viewModelScope.launch {
+            when (val result = translation.translate(entry.content)) {
+                is TranslationResult.Ok -> _entryTranslations.value = _entryTranslations.value + (key to result.text)
+                is TranslationResult.Failed -> _translateMessage.value = result.failure.toUiText()
+            }
+            _entryTranslating.value = _entryTranslating.value - key
+        }
+    }
+
+    fun showOriginalEntry(bookId: Long, entry: WorldInfoEntry) {
+        _entryTranslations.value = _entryTranslations.value - entryKey(bookId, entry.uid)
+    }
+
+    fun consumeTranslateMessage() {
+        _translateMessage.value = null
+    }
+
+    private fun entryKey(bookId: Long, uid: Int): String = "$bookId:$uid"
 
     /** 条目解析按需做（列表不解析，点开才解析全文）。 */
     fun entriesOf(book: WorldBookEntity): List<WorldInfoEntry> = repository.entriesOf(book)
@@ -72,7 +112,9 @@ class WorldBooksViewModel(
 
     companion object {
         fun factory(app: TeaTalkApp): ViewModelProvider.Factory = viewModelFactory {
-            initializer { WorldBooksViewModel(app.container.worldBookRepository) }
+            initializer {
+                WorldBooksViewModel(app.container.worldBookRepository, app.container.translationRepository)
+            }
         }
     }
 }

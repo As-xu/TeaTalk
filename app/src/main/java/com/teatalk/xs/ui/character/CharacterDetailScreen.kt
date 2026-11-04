@@ -77,6 +77,10 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import com.teatalk.xs.data.db.WorldBookEntity
 import com.teatalk.xs.data.WorldBookRepository
+import com.teatalk.xs.data.TranslationRepository
+import com.teatalk.xs.data.TranslationResult
+import com.teatalk.xs.data.UiText
+import com.teatalk.xs.data.toUiText
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
@@ -105,6 +109,7 @@ data class CharacterDetailState(
 class CharacterDetailViewModel(
     private val repository: CharacterRepository,
     private val worldBookRepository: WorldBookRepository,
+    private val translation: TranslationRepository,
     private val characterId: Long,
 ) : ViewModel() {
 
@@ -134,6 +139,44 @@ class CharacterDetailViewModel(
     private var worldBookMessageSeq = 0L
     private val _worldBookMessage = MutableStateFlow<Long?>(null)
     val worldBookMessage: StateFlow<Long?> = _worldBookMessage
+
+    /** 已翻译的卡片字段（key 见 [DetailTranslationKeys]）。 */
+    private val _translations = MutableStateFlow<Map<String, String>>(emptyMap())
+    val translations: StateFlow<Map<String, String>> = _translations
+
+    /** 正在翻译的字段 key 集合（按钮显示「翻译中…」）。 */
+    private val _translating = MutableStateFlow<Set<String>>(emptySet())
+    val translating: StateFlow<Set<String>> = _translating
+
+    private val _translateMessage = MutableStateFlow<UiText?>(null)
+    val translateMessage: StateFlow<UiText?> = _translateMessage
+
+    /**
+     * 翻译某段卡片文本；同一个 key 已有译文时直接返回（除非 [force]）。
+     * 译文只放在内存里做展示，磁盘缓存由 TranslationRepository 负责。
+     */
+    fun translateField(key: String, text: String, force: Boolean = false) {
+        if (text.isBlank()) return
+        if (key in _translating.value) return
+        if (!force && _translations.value.containsKey(key)) return
+        _translating.value = _translating.value + key
+        viewModelScope.launch {
+            when (val result = translation.translate(text)) {
+                is TranslationResult.Ok -> _translations.value = _translations.value + (key to result.text)
+                is TranslationResult.Failed -> _translateMessage.value = result.failure.toUiText()
+            }
+            _translating.value = _translating.value - key
+        }
+    }
+
+    /** 「显示原文」：丢掉内存里的译文（磁盘缓存仍在，再点翻译会秒回）。 */
+    fun showOriginal(key: String) {
+        _translations.value = _translations.value - key
+    }
+
+    fun consumeTranslateMessage() {
+        _translateMessage.value = null
+    }
 
     init {
         viewModelScope.launch {
@@ -180,7 +223,14 @@ class CharacterDetailViewModel(
 
     companion object {
         fun factory(app: TeaTalkApp, characterId: Long): ViewModelProvider.Factory = viewModelFactory {
-            initializer { CharacterDetailViewModel(app.container.characterRepository, app.container.worldBookRepository, characterId) }
+            initializer {
+                CharacterDetailViewModel(
+                    app.container.characterRepository,
+                    app.container.worldBookRepository,
+                    app.container.translationRepository,
+                    characterId,
+                )
+            }
         }
     }
 }
@@ -199,6 +249,9 @@ fun CharacterDetailScreen(
     val linkedIds by viewModel.linkedWorldBookIds.collectAsState()
     val draftIds by viewModel.draftWorldBookIds.collectAsState()
     val worldBookMessage by viewModel.worldBookMessage.collectAsState()
+    val translations by viewModel.translations.collectAsState()
+    val translating by viewModel.translating.collectAsState()
+    val translateMessage by viewModel.translateMessage.collectAsState()
     val snackbar = remember { SnackbarHostState() }
     val worldBookSavedText = stringResource(R.string.detail_world_book_saved)
     // 展示的是「生效条目数」：卡内嵌 + 已绑定世界书的条目数之和。
@@ -215,6 +268,12 @@ fun CharacterDetailScreen(
             snackbar.showSnackbar(worldBookSavedText)
             viewModel.consumeWorldBookMessage()
         }
+    }
+
+    LaunchedEffect(translateMessage) {
+        val msg = translateMessage ?: return@LaunchedEffect
+        snackbar.showSnackbar(msg.resolve(context))
+        viewModel.consumeTranslateMessage()
     }
 
     Box(Modifier.fillMaxSize()) {
@@ -336,23 +395,58 @@ fun CharacterDetailScreen(
         item {
             Column(Modifier.padding(horizontal = 20.dp).padding(top = 6.dp)) {
                 if (view.description.isNotBlank()) {
-                    SectionCard(stringResource(R.string.detail_section_desc)) { BodyText(view.description) }
+                    val key = DetailTranslationKeys.DESC
+                    SectionCard(
+                        title = stringResource(R.string.detail_section_desc),
+                        translated = translations[key],
+                        translating = key in translating,
+                        onTranslate = { viewModel.translateField(key, view.description) },
+                        onShowOriginal = { viewModel.showOriginal(key) },
+                    ) { BodyText(view.description) }
                 }
                 if (view.firstMes.isNotBlank()) {
-                    SectionCard(stringResource(R.string.detail_section_first_mes)) { BodyText(view.firstMes) }
+                    val key = DetailTranslationKeys.FIRST
+                    SectionCard(
+                        title = stringResource(R.string.detail_section_first_mes),
+                        translated = translations[key],
+                        translating = key in translating,
+                        onTranslate = { viewModel.translateField(key, view.firstMes) },
+                        onShowOriginal = { viewModel.showOriginal(key) },
+                    ) { BodyText(view.firstMes) }
                 }
                 if (view.personality.isNotBlank() || view.scenario.isNotBlank()) {
-                    SectionCard(stringResource(R.string.detail_section_details)) {
+                    val key = DetailTranslationKeys.DETAILS
+                    val personalityLabel = stringResource(R.string.detail_field_personality)
+                    val scenarioLabel = stringResource(R.string.detail_field_scenario)
+                    val detailsText = buildString {
+                        if (view.personality.isNotBlank()) append(personalityLabel).append("：").append(view.personality)
+                        if (view.personality.isNotBlank() && view.scenario.isNotBlank()) append("\n")
+                        if (view.scenario.isNotBlank()) append(scenarioLabel).append("：").append(view.scenario)
+                    }
+                    SectionCard(
+                        title = stringResource(R.string.detail_section_details),
+                        translated = translations[key],
+                        translating = key in translating,
+                        onTranslate = { viewModel.translateField(key, detailsText) },
+                        onShowOriginal = { viewModel.showOriginal(key) },
+                    ) {
                         if (view.personality.isNotBlank()) {
-                            FieldLine(stringResource(R.string.detail_field_personality), view.personality)
+                            FieldLine(personalityLabel, view.personality)
                         }
                         if (view.scenario.isNotBlank()) {
-                            FieldLine(stringResource(R.string.detail_field_scenario), view.scenario)
+                            FieldLine(scenarioLabel, view.scenario)
                         }
                     }
                 }
                 if (view.creatorNotes.isNotBlank()) {
-                    SectionCard(stringResource(R.string.detail_section_notes)) { BodyText(view.creatorNotes) }
+                    val key = DetailTranslationKeys.NOTES
+                    SectionCard(
+                        title = stringResource(R.string.detail_section_notes),
+                        translated = translations[key],
+                        translating = key in translating,
+                        onTranslate = { viewModel.translateField(key, view.creatorNotes) },
+                        onShowOriginal = { viewModel.showOriginal(key) },
+                    ) { BodyText(view.creatorNotes) }
                 }
                 Spacer(Modifier.height(28.dp))
             }
@@ -575,8 +669,23 @@ private fun OutlinedPill(
     }
 }
 
+/** 卡片详情里可翻译的段落 key。 */
+internal object DetailTranslationKeys {
+    const val DESC = "desc"
+    const val FIRST = "first"
+    const val DETAILS = "details"
+    const val NOTES = "notes"
+}
+
 @Composable
-private fun SectionCard(title: String, content: @Composable () -> Unit) {
+private fun SectionCard(
+    title: String,
+    translated: String? = null,
+    translating: Boolean = false,
+    onTranslate: (() -> Unit)? = null,
+    onShowOriginal: (() -> Unit)? = null,
+    content: @Composable () -> Unit,
+) {
     val cs = MaterialTheme.colorScheme
     Column(
         Modifier
@@ -593,6 +702,54 @@ private fun SectionCard(title: String, content: @Composable () -> Unit) {
         }
         Spacer(Modifier.height(8.dp))
         content()
+        if (onTranslate != null || translated != null) {
+            Spacer(Modifier.height(6.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (translated == null) {
+                    Text(
+                        if (translating) stringResource(R.string.translate_translating)
+                        else stringResource(R.string.translate_action),
+                        fontSize = TypeScale.s12,
+                        color = cs.primary,
+                        modifier = Modifier
+                            .clickable(enabled = !translating) { onTranslate?.invoke() }
+                            .padding(vertical = 4.dp, horizontal = 2.dp),
+                    )
+                } else {
+                    Text(
+                        stringResource(R.string.translate_show_original),
+                        fontSize = TypeScale.s12,
+                        color = cs.primary,
+                        modifier = Modifier
+                            .clickable { onShowOriginal?.invoke() }
+                            .padding(vertical = 4.dp, horizontal = 2.dp),
+                    )
+                    Spacer(Modifier.weight(1f))
+                    Text(
+                        stringResource(R.string.translate_again),
+                        fontSize = TypeScale.s12,
+                        color = cs.onSurfaceVariant,
+                        modifier = Modifier
+                            .clickable(enabled = !translating) { onTranslate?.invoke() }
+                            .padding(vertical = 4.dp, horizontal = 2.dp),
+                    )
+                }
+            }
+            if (translated != null) {
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    translated,
+                    fontSize = TypeScale.s12_5,
+                    lineHeight = 19.sp,
+                    color = cs.onSurfaceVariant,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(cs.surfaceContainerHighest)
+                        .padding(10.dp),
+                )
+            }
+        }
     }
 }
 
