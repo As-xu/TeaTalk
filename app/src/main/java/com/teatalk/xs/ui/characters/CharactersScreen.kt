@@ -4,6 +4,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
@@ -24,6 +25,7 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
@@ -48,6 +50,8 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
@@ -85,6 +89,10 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.outlined.Star
 import com.teatalk.xs.data.ManualCard
 
 private val CARD_MIME_TYPES = arrayOf("image/png", "image/jpeg", "application/json", "application/zip", "*/*")
@@ -119,6 +127,10 @@ fun CharactersScreen(
     var groupSelected by remember { mutableStateOf(setOf<Long>()) }
     var groupTitle by remember { mutableStateOf("") }
     var groupsMenuOpen by remember { mutableStateOf(false) }
+    // 0.22.0 批量选择：进入后卡片可勾选，底部出现批量操作条
+    var selecting by remember { mutableStateOf(false) }
+    var selection by remember { mutableStateOf(setOf<Long>()) }
+    var batchDeletePending by remember { mutableStateOf(false) }
 
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) viewModel.importCard(uri)
@@ -154,9 +166,30 @@ fun CharactersScreen(
                     .padding(start = 20.dp, end = 8.dp, top = 10.dp, bottom = 6.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(stringResource(R.string.characters_title), fontSize = TypeScale.s21, fontWeight = FontWeight.SemiBold, color = cs.onBackground)
+                Text(
+                    text = if (selecting) {
+                        stringResource(R.string.characters_batch_selected, selection.size)
+                    } else {
+                        stringResource(R.string.characters_title)
+                    },
+                    fontSize = TypeScale.s21,
+                    fontWeight = FontWeight.SemiBold,
+                    color = cs.onBackground,
+                )
                 Spacer(Modifier.weight(1f))
-                TextButton(onClick = { creating = true }) {
+                if (selecting) {
+                    TextButton(onClick = {
+                        val visible = cards.orEmpty().map { it.id }.toSet()
+                        selection = if (selection.size >= visible.size && visible.isNotEmpty()) emptySet() else visible
+                    }) {
+                        Text(stringResource(R.string.characters_batch_select_all), fontSize = TypeScale.s14)
+                    }
+                    TextButton(onClick = { selecting = false; selection = emptySet() }) {
+                        Text(stringResource(R.string.characters_batch_exit), fontSize = TypeScale.s14)
+                    }
+                }
+                if (!selecting) {
+                    TextButton(onClick = { creating = true }) {
                     Icon(Icons.Filled.Edit, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(Modifier.width(2.dp))
                     Text(
@@ -170,6 +203,15 @@ fun CharactersScreen(
                         Icon(Icons.Filled.MoreVert, contentDescription = null, modifier = Modifier.size(20.dp))
                     }
                     DropdownMenu(expanded = groupsMenuOpen, onDismissRequest = { groupsMenuOpen = false }) {
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.characters_batch_manage)) },
+                            onClick = {
+                                groupsMenuOpen = false
+                                menuTarget = null
+                                selection = emptySet()
+                                selecting = true
+                            },
+                        )
                         DropdownMenuItem(
                             text = { Text(stringResource(R.string.group_new)) },
                             onClick = {
@@ -189,6 +231,7 @@ fun CharactersScreen(
                         fontSize = TypeScale.s14,
                         fontWeight = FontWeight.Medium,
                     )
+                }
                 }
             }
 
@@ -266,14 +309,56 @@ fun CharactersScreen(
                     items(list, key = { it.id }) { character ->
                         CharacterCard(
                             character = character,
-                            onClick = { onOpen(character.id) },
-                            onLongClick = { menuTarget = character },
+                            selectable = selecting,
+                            selected = character.id in selection,
+                            onClick = {
+                                if (selecting) {
+                                    selection = if (character.id in selection) {
+                                        selection - character.id
+                                    } else {
+                                        selection + character.id
+                                    }
+                                } else {
+                                    onOpen(character.id)
+                                }
+                            },
+                            onLongClick = {
+                                if (!selecting) menuTarget = character
+                            },
                         )
                     }
                 }
             }
         }
+        if (selecting) {
+            BatchActionBar(
+                count = selection.size,
+                onFavorite = { viewModel.setFavoriteAll(selection, true) },
+                onUnfavorite = { viewModel.setFavoriteAll(selection, false) },
+                onDelete = { batchDeletePending = true },
+                modifier = Modifier.align(Alignment.BottomCenter),
+            )
+        }
         SnackbarHost(snackbarHostState, Modifier.align(Alignment.BottomCenter).padding(bottom = 16.dp))
+    }
+
+    if (batchDeletePending) {
+        AlertDialog(
+            onDismissRequest = { batchDeletePending = false },
+            title = { Text(stringResource(R.string.characters_batch_delete_title)) },
+            text = { Text(stringResource(R.string.characters_batch_delete_confirm, selection.size)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    batchDeletePending = false
+                    viewModel.deleteAll(selection)
+                    selecting = false
+                    selection = emptySet()
+                }) { Text(stringResource(R.string.delete), color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = {
+                TextButton(onClick = { batchDeletePending = false }) { Text(stringResource(R.string.cancel)) }
+            },
+        )
     }
 
     // 长按操作菜单
@@ -519,6 +604,8 @@ private fun CharacterCard(
     character: CharacterEntity,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
+    selectable: Boolean = false,
+    selected: Boolean = false,
 ) {
     val cs = MaterialTheme.colorScheme
     val context = LocalContext.current
@@ -567,6 +654,22 @@ private fun CharacterCard(
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.align(Alignment.BottomStart).padding(12.dp),
             )
+            if (selectable) {
+                Box(
+                    Modifier
+                        .align(Alignment.TopStart)
+                        .padding(8.dp)
+                        .size(22.dp)
+                        .clip(CircleShape)
+                        .background(if (selected) cs.primary else Color.Black.copy(alpha = 0.35f))
+                        .border(1.5.dp, Color.White.copy(alpha = 0.9f), CircleShape),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    if (selected) {
+                        Icon(Icons.Filled.Check, contentDescription = null, tint = cs.onPrimary, modifier = Modifier.size(14.dp))
+                    }
+                }
+            }
             Row(Modifier.align(Alignment.TopEnd).padding(10.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 if (character.pinned) PillTag(text = stringResource(R.string.characters_pinned_badge))
                 if (character.favorite) PillTag(text = "★", tinted = false)
@@ -773,3 +876,43 @@ private fun GroupCreateDialog(
     )
 }
 
+
+/** 0.22.0 批量操作条：收藏 / 取消收藏 / 删除（未选中时全部不可用）。 */
+@Composable
+private fun BatchActionBar(
+    count: Int,
+    onFavorite: () -> Unit,
+    onUnfavorite: () -> Unit,
+    onDelete: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val cs = MaterialTheme.colorScheme
+    val enabled = count > 0
+    NavigationBar(
+        modifier = modifier.fillMaxWidth(),
+        containerColor = cs.surfaceContainerHigh,
+        tonalElevation = 0.dp,
+    ) {
+        NavigationBarItem(
+            selected = false,
+            enabled = enabled,
+            onClick = onFavorite,
+            icon = { Icon(Icons.Filled.Star, contentDescription = null, modifier = Modifier.size(20.dp)) },
+            label = { Text(stringResource(R.string.characters_batch_favorite), fontSize = TypeScale.s11_5) },
+        )
+        NavigationBarItem(
+            selected = false,
+            enabled = enabled,
+            onClick = onUnfavorite,
+            icon = { Icon(Icons.Outlined.Star, contentDescription = null, modifier = Modifier.size(20.dp)) },
+            label = { Text(stringResource(R.string.characters_batch_unfavorite), fontSize = TypeScale.s11_5) },
+        )
+        NavigationBarItem(
+            selected = false,
+            enabled = enabled,
+            onClick = onDelete,
+            icon = { Icon(Icons.Filled.Delete, contentDescription = null, tint = cs.error, modifier = Modifier.size(20.dp)) },
+            label = { Text(stringResource(R.string.characters_batch_delete), fontSize = TypeScale.s11_5, color = cs.error) },
+        )
+    }
+}

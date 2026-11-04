@@ -533,4 +533,17 @@
     <string name="translate_input_title">翻译后发送</string>
     <string name="translate_send_translated">用译文发送</string>
     <string name="translate_target_en_hint">当前目标是英文，通常用于中文输入</string>
+
+    <string name="characters_batch_manage">批量管理</string>
+    <string name="characters_batch_selected">已选 %1$d</string>
+    <string name="characters_batch_select_all">全选</string>
+    <string name="characters_batch_exit">取消</string>
+    <string name="characters_batch_favorite">收藏</string>
+    <string name="characters_batch_unfavorite">取消收藏</string>
+    <string name="characters_batch_delete">删除</string>
+    <string name="characters_batch_favorited">已收藏 %1$d 张</string>
+    <string name="characters_batch_unfavorited">已取消收藏 %1$d 张</string>
+    <string name="characters_batch_deleted">已删除 %1$d 张</string>
+    <string name="characters_batch_delete_title">删除所选角色卡</string>
+    <string name="characters_batch_delete_confirm">将删除 %1$d 张角色卡及其聊天记录，无法撤销。</string>
 </resources>

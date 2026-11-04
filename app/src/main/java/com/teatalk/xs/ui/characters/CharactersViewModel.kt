@@ -158,6 +158,29 @@ class CharactersViewModel(
         }
     }
 
+    /** 0.22.0 批量：收藏 / 取消收藏。只对状态确实需要变的卡发写请求。 */
+    fun setFavoriteAll(ids: Set<Long>, favorite: Boolean) {
+        if (ids.isEmpty()) return
+        viewModelScope.launch {
+            val targets = cards.value.orEmpty().filter { it.id in ids && it.favorite != favorite }
+            targets.forEach { repository.setFavorite(it, favorite) }
+            _message.value = UiText.of(
+                if (favorite) R.string.characters_batch_favorited else R.string.characters_batch_unfavorited,
+                targets.size,
+            )
+        }
+    }
+
+    /** 0.22.0 批量：删除（连同聊天记录，与单卡删除保持同一语义）。 */
+    fun deleteAll(ids: Set<Long>) {
+        if (ids.isEmpty()) return
+        viewModelScope.launch {
+            val targets = cards.value.orEmpty().filter { it.id in ids }
+            targets.forEach { repository.delete(it) }
+            _message.value = UiText.of(R.string.characters_batch_deleted, targets.size)
+        }
+    }
+
     fun togglePinned(character: CharacterEntity) {
         viewModelScope.launch {
             val next = !character.pinned

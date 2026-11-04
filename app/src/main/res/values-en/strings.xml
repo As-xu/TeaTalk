@@ -528,4 +528,17 @@
     <string name="translate_input_title">Translate before sending</string>
     <string name="translate_send_translated">Send translated text</string>
     <string name="translate_target_en_hint">Target is English</string>
+
+    <string name="characters_batch_manage">Select multiple</string>
+    <string name="characters_batch_selected">%1$d selected</string>
+    <string name="characters_batch_select_all">All</string>
+    <string name="characters_batch_exit">Cancel</string>
+    <string name="characters_batch_favorite">Favorite</string>
+    <string name="characters_batch_unfavorite">Unfavorite</string>
+    <string name="characters_batch_delete">Delete</string>
+    <string name="characters_batch_favorited">Favorited %1$d cards</string>
+    <string name="characters_batch_unfavorited">Unfavorited %1$d cards</string>
+    <string name="characters_batch_deleted">Deleted %1$d cards</string>
+    <string name="characters_batch_delete_title">Delete selected cards</string>
+    <string name="characters_batch_delete_confirm">This deletes %1$d cards and their chats. This cannot be undone.</string>
 </resources>
