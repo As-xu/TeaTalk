@@ -24,6 +24,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Cloud
+import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Info
@@ -86,6 +87,7 @@ fun ProfileScreen(
     onOpenTranslation: () -> Unit = {},
     onOpenAbout: () -> Unit = {},
     onOpenWebDav: () -> Unit = {},
+    onOpenTts: () -> Unit = {},
     onOpenCharacters: () -> Unit = {},
     onShowComingSoon: (Int) -> Unit = {},
     currentLanguageTag: String? = null,
@@ -298,6 +300,12 @@ fun ProfileScreen(
                 R.string.profile_webdav,
                 R.string.profile_webdav_sub,
                 onOpenWebDav,
+            )
+            SettingRow(
+                Icons.Filled.VolumeUp,
+                R.string.profile_tts,
+                R.string.profile_tts_sub,
+                onOpenTts,
             )
             SettingRow(
                 Icons.Filled.Info,

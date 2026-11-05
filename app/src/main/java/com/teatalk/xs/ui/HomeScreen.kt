@@ -23,6 +23,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -58,6 +59,7 @@ import com.teatalk.xs.ui.chats.ChatListViewModel
 import com.teatalk.xs.ui.components.AppBottomBar
 import com.teatalk.xs.ui.components.TabItem
 import com.teatalk.xs.ui.profile.ProfileScreen
+import com.teatalk.xs.ui.tts.TtsSettingsScreen
 import com.teatalk.xs.ui.providers.ProvidersScreen
 import com.teatalk.xs.ui.providers.ProvidersViewModel
 import com.teatalk.xs.ui.about.AboutScreen
@@ -215,10 +217,32 @@ fun HomeScreen(
                         onOpenTranslation = { navController.navigate(Routes.TRANSLATION) },
                         onOpenAbout = { navController.navigate(Routes.ABOUT) },
                         onOpenWebDav = { navController.navigate(Routes.WEBDAV) },
+                        onOpenTts = { navController.navigate(Routes.TTS) },
                     )
                 }
                 composable(Routes.ABOUT) {
                     AboutScreen(onBack = { navController.popBackStack() })
+                }
+                composable(Routes.TTS) {
+                    val prefs = remember(app) { app.container.appPrefs }
+                    var rate by remember { mutableFloatStateOf(prefs.ttsRate) }
+                    var pitch by remember { mutableFloatStateOf(prefs.ttsPitch) }
+                    var autoRead by remember { mutableStateOf(prefs.ttsAutoRead) }
+                    TtsSettingsScreen(
+                        controller = app.container.ttsController,
+                        rate = rate,
+                        pitch = pitch,
+                        autoRead = autoRead,
+                        onRateChange = { rate = it },
+                        onRateCommit = { prefs.ttsRate = it },
+                        onPitchChange = { pitch = it },
+                        onPitchCommit = { prefs.ttsPitch = it },
+                        onAutoReadChange = {
+                            autoRead = it
+                            prefs.ttsAutoRead = it
+                        },
+                        onBack = { navController.popBackStack() },
+                    )
                 }
                 composable(Routes.WEBDAV) {
                     WebDavScreen(
@@ -323,6 +347,7 @@ private object Routes {
     const val TRANSLATION = "translation"
     const val PROVIDERS = "providers"
     const val WEBDAV = "webdav"
+    const val TTS = "tts"
         const val ABOUT = "about"
 }
 

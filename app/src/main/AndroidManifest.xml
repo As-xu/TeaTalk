@@ -3,7 +3,14 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
 
-    <application
+    <!-- 0.25.0: Android 11+ requires this query to discover installed TTS engines -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.TTS_SERVICE" />
+        </intent>
+    </queries>
+
+<application
         android:name=".TeaTalkApp"
         android:allowBackup="false"
         android:usesCleartextTraffic="true"

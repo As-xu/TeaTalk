@@ -595,4 +595,19 @@
     <string name="webdav_err_too_large">备份文件超过 256 MB，已停止下载</string>
     <string name="webdav_err_bad_zip">这不是 TeaTalk 的备份文件</string>
     <string name="webdav_err_download">下载备份失败</string>
+    <string name="profile_tts">朗读</string>
+    <string name="profile_tts_sub">语速、音高与自动朗读</string>
+    <string name="tts_title">朗读</string>
+    <string name="tts_note">回复会先去掉 Markdown 标记，再按句子逐段朗读。切换应用后系统可能中断朗读；回到 App 长按气泡可重新开始。</string>
+    <string name="tts_rate">语速</string>
+    <string name="tts_pitch">音高</string>
+    <string name="tts_auto_read">自动朗读新回复</string>
+    <string name="tts_auto_read_sub">生成完成后自动朗读，仅前台生效</string>
+    <string name="tts_preview">试听</string>
+    <string name="tts_stop">停止朗读</string>
+    <string name="tts_speak">朗读</string>
+    <string name="tts_preview_text">这是一段试听文本。语速和音高会在下一次朗读时生效。</string>
+    <string name="tts_progress">第 %1$d / %2$d 段</string>
+    <string name="tts_hint_system">使用系统自带语音引擎；音色与引擎在系统「文字转语音」设置里切换。</string>
+    <string name="tts_unavailable">朗读失败：系统语音引擎不可用，或缺少对应语言的语音包。</string>
 </resources>

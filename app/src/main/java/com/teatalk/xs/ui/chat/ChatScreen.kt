@@ -122,6 +122,7 @@ import com.teatalk.core.log.TeaTalkLog
 import com.teatalk.xs.log.PerfLog
 import com.teatalk.xs.TeaTalkApp
 import com.teatalk.xs.data.CharacterRepository
+import com.teatalk.xs.data.AppForeground
 import com.teatalk.xs.data.GroupReplySplitter
 import com.teatalk.xs.data.DeletedConversationStore
 import com.teatalk.xs.data.MessageVariants
@@ -134,6 +135,7 @@ import com.teatalk.xs.data.TranslationFailure
 import com.teatalk.xs.data.TranslationRepository
 import com.teatalk.xs.data.TranslationResult
 import com.teatalk.xs.data.model.AppPrefs
+import com.teatalk.xs.data.tts.TtsController
 import com.teatalk.xs.data.UiText
 import com.teatalk.xs.data.db.CharacterEntity
 import com.teatalk.xs.data.db.ConversationEntity
@@ -187,6 +189,7 @@ class ChatViewModel(
     private val engine: ChatEngine,
     private val translation: TranslationRepository,
     private val prefs: AppPrefs,
+    private val tts: TtsController,
     val conversationId: Long,
 ) : ViewModel() {
 
@@ -399,6 +402,35 @@ class ChatViewModel(
 
     private val _notice = MutableStateFlow<UiText?>(null)
     val notice: StateFlow<UiText?> = _notice.asStateFlow()
+
+    init {
+        // 必须放在 _notice 声明之后：viewModelScope 是 Main.immediate，
+        // 在 _notice 初始化前 collect 会立刻拿到首值并抛 NPE。
+        viewModelScope.launch {
+            tts.failed.collect { failed ->
+                if (failed) {
+                    _notice.value = UiText.of(R.string.tts_unavailable)
+                    tts.clearFailure()
+                }
+            }
+        }
+    }
+
+    // ---- 0.25.0 朗读 ----
+
+    /** 正在朗读的消息 id（null = 空闲）。 */
+    val speakingMessageId: StateFlow<Long?> = tts.state
+        .map { it.messageId }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    /** 朗读这条消息；正在读同一条时停止。 */
+    fun speak(messageId: Long, text: String) {
+        tts.speak(messageId, text)
+    }
+
+    fun stopSpeaking() {
+        tts.stop()
+    }
 
     /** 发送失败时要还给输入框的原文（NO_PROVIDER/NO_MODEL 等前置失败）。 */
     private val _restoreText = MutableStateFlow<String?>(null)
@@ -831,9 +863,18 @@ class ChatViewModel(
                 throw cancelled
             }
         }
+        if (status == MessageEntity.STATUS_COMPLETE && prefs.ttsAutoRead && AppForeground.isForeground) {
+            appended.firstOrNull()?.let { (id, text) -> tts.speak(id, text) }
+        }
         if (status == MessageEntity.STATUS_COMPLETE && prefs.autoTranslateReplies) {
             appended.forEach { (id, text) -> translateMessage(id, text) }
         }
+    }
+
+    override fun onCleared() {
+        // 离开会话页后没有「停止朗读」入口了，别让音频变成孤儿。
+        tts.stop()
+        super.onCleared()
     }
 
     private fun finishIfCurrent(gen: Int) {
@@ -856,6 +897,7 @@ class ChatViewModel(
                     engine = app.container.chatEngine,
                     translation = app.container.translationRepository,
                     prefs = app.container.appPrefs,
+                    tts = app.container.ttsController,
                     conversationId = conversationId,
                 )
             }
@@ -873,6 +915,7 @@ fun ChatScreen(
 ) {
     val character by viewModel.character.collectAsState()
     val conversation by viewModel.conversation.collectAsState()
+    val speakingMessageId by viewModel.speakingMessageId.collectAsState()
     val conversations by viewModel.conversations.collectAsState()
     val messages by viewModel.messages.collectAsState()
     val groupMembers by viewModel.groupMembers.collectAsState()
@@ -1170,6 +1213,9 @@ fun ChatScreen(
                                 onShowOriginal = { viewModel.hideTranslation(message.id) },
                                 onRetry = if (message.id == lastAssistantId) viewModel::retry else null,
                                 onDelete = if (message.id == lastAssistantId) ({ deleteTarget = message }) else null,
+                                speaking = speakingMessageId == message.id,
+                                onSpeak = { viewModel.speak(message.id, message.content) },
+                                onStopSpeak = viewModel::stopSpeaking,
                             )
                         }
                     }
@@ -1888,6 +1934,9 @@ private fun AssistantBubble(
     translating: Boolean = false,
     onTranslate: (() -> Unit)? = null,
     onShowOriginal: (() -> Unit)? = null,
+    speaking: Boolean = false,
+    onSpeak: (() -> Unit)? = null,
+    onStopSpeak: (() -> Unit)? = null,
 ) {
     val cs = MaterialTheme.colorScheme
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Start, verticalAlignment = Alignment.Top) {
@@ -1973,6 +2022,19 @@ private fun AssistantBubble(
                         text = { Text(stringResource(R.string.chat_action_retry)) },
                         onClick = { actionsOpen = false; retry() },
                     )
+                }
+                if (speaking) {
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.tts_stop)) },
+                        onClick = { actionsOpen = false; onStopSpeak?.invoke() },
+                    )
+                } else {
+                    onSpeak?.let { speak ->
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.tts_speak)) },
+                            onClick = { actionsOpen = false; speak() },
+                        )
+                    }
                 }
                 onDelete?.let { delete ->
                     DropdownMenuItem(

@@ -87,6 +87,29 @@ class AppPrefs(context: Context) {
             prefs.edit().putString(KEY_WEBDAV_DIR, value.trim().trim('/').ifBlank { DEFAULT_WEBDAV_DIR }).apply()
         }
 
+    // ---- 0.25.0 TTS 朗读 ----
+
+    /** 语速倍率（0.5–1.5，1.0 为系统默认）。 */
+    var ttsRate: Float
+        get() = prefs.getFloat(KEY_TTS_RATE, 1.0f).coerceIn(0.5f, 1.5f)
+        set(value) {
+            prefs.edit().putFloat(KEY_TTS_RATE, value.coerceIn(0.5f, 1.5f)).apply()
+        }
+
+    /** 音高（0.5–1.5）。 */
+    var ttsPitch: Float
+        get() = prefs.getFloat(KEY_TTS_PITCH, 1.0f).coerceIn(0.5f, 1.5f)
+        set(value) {
+            prefs.edit().putFloat(KEY_TTS_PITCH, value.coerceIn(0.5f, 1.5f)).apply()
+        }
+
+    /** 新回复自动朗读（默认关：多数人不想在地铁里被外放）。 */
+    var ttsAutoRead: Boolean
+        get() = prefs.getBoolean(KEY_TTS_AUTO_READ, false)
+        set(value) {
+            prefs.edit().putBoolean(KEY_TTS_AUTO_READ, value).apply()
+        }
+
     private companion object {
         const val KEY_ACTIVE_PROVIDER = "active_provider_id"
         const val KEY_USER_NAME = "user_name"
@@ -98,6 +121,9 @@ class AppPrefs(context: Context) {
         const val KEY_WEBDAV_URL = "webdav_url"
         const val KEY_WEBDAV_USER = "webdav_user"
         const val KEY_WEBDAV_DIR = "webdav_dir"
+        const val KEY_TTS_RATE = "tts_rate"
+        const val KEY_TTS_PITCH = "tts_pitch"
+        const val KEY_TTS_AUTO_READ = "tts_auto_read"
         const val DEFAULT_WEBDAV_DIR = "TeaTalk"
     }
 }

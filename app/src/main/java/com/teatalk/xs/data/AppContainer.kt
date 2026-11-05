@@ -118,6 +118,15 @@ class AppContainer(context: Context) {
         )
     }
 
+    /** 0.25.0：朗读（系统 TTS，单实例贯穿全应用）。 */
+    val ttsController: com.teatalk.xs.data.tts.TtsController by lazy {
+        com.teatalk.xs.data.tts.TtsController(
+            rate = { appPrefs.ttsRate },
+            pitch = { appPrefs.ttsPitch },
+            engines = { com.teatalk.xs.data.tts.SystemTts(appContext) },
+        )
+    }
+
     val chatEngine: ChatEngine by lazy {
         ChatEngine(
                 characterRepository,

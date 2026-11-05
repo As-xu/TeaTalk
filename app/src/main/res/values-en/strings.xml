@@ -590,4 +590,19 @@
     <string name="webdav_err_too_large">The backup is larger than 256 MB; download stopped</string>
     <string name="webdav_err_bad_zip">This is not a TeaTalk backup file</string>
     <string name="webdav_err_download">Could not download the backup</string>
+    <string name="profile_tts">Read aloud</string>
+    <string name="profile_tts_sub">Speed, pitch and auto-read</string>
+    <string name="tts_title">Read aloud</string>
+    <string name="tts_note">Replies are stripped of Markdown and read sentence by sentence. The system may interrupt playback when you switch apps; long-press the bubble to start again.</string>
+    <string name="tts_rate">Speed</string>
+    <string name="tts_pitch">Pitch</string>
+    <string name="tts_auto_read">Auto-read new replies</string>
+    <string name="tts_auto_read_sub">Reads each new reply after it finishes; foreground only</string>
+    <string name="tts_preview">Preview</string>
+    <string name="tts_stop">Stop</string>
+    <string name="tts_speak">Read aloud</string>
+    <string name="tts_preview_text">This is a preview. Speed and pitch apply to the next reading.</string>
+    <string name="tts_progress">Sentence %1$d of %2$d</string>
+    <string name="tts_hint_system">Uses the system speech engine; change voice and engine in the system text-to-speech settings.</string>
+    <string name="tts_unavailable">Read aloud failed: the system speech engine is unavailable or has no voice for this language installed.</string>
 </resources>
