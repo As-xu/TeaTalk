@@ -89,6 +89,9 @@
 </plurals>
 <!-- replaced by detail_world_book_summary -->
     <string name="detail_delete_character">Delete character</string>
+    <string name="detail_greeting_title">Choose a greeting</string>
+    <string name="detail_greeting_hint">Pick an opening for a new chat (new chats only; existing chats are unchanged).</string>
+    <string name="detail_greeting_item">Greeting %1$d</string>
     <string name="detail_start_chat">Start chat</string>
     <string name="list_separator">", "</string>
     <string name="detail_by_author">by %1$s · </string>

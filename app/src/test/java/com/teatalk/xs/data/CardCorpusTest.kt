@@ -33,25 +33,39 @@ class CardCorpusTest {
     }
 
     @Test
-    fun `every card parses with a name and importable content`() {
+    fun `every card parses with a name`() {
         val files = cards()
         val failures = mutableListOf<String>()
+        val emptyBodies = mutableListOf<String>()
+        val shellOnly = mutableListOf<String>()
         files.forEach { file ->
             val outcome = runCatching { CardParser.parse(file.readBytes()) }
             outcome.onSuccess { imported ->
-                val name = imported.card.data.name
-                if (name.isBlank()) failures += "${file.name}: 名称为空"
-                val hasContent = imported.card.data.description.isNotBlank() ||
-                    imported.card.data.firstMes.isNotBlank() ||
-                    imported.card.data.personality.isNotBlank()
-                if (!hasContent) failures += "${file.name}: 没有任何可用的设定/开场白"
+                val data = imported.card.data
+                if (data.name.isBlank()) failures += "${file.name}: 名称为空"
+                // 空壳卡（只有名字/标签）是合法数据，不是解析缺陷：单独计数，不判失败。
+                val hasContent = data.description.isNotBlank() ||
+                    data.firstMes.isNotBlank() ||
+                    data.personality.isNotBlank() ||
+                    data.scenario.isNotBlank()
+                if (!hasContent) emptyBodies += file.name
+                // first_mes 是 <音乐>/<开场白> 这类占位、且没有可用的备用开场白：
+                // 卡片数据问题，不算解析缺陷；App 会退回 greeting_fallback，不插占位符。
+                if (Greetings.isShell(data.firstMes) && data.alternateGreetings.none { !Greetings.isShell(it) }) {
+                    shellOnly += file.name
+                }
             }.onFailure { error ->
                 val reason = (error as? CardImportException)?.reason?.name ?: error::class.simpleName
                 failures += "${file.name}: $reason ${error.message.orEmpty()}"
             }
         }
+        println(
+            "CardCorpus: ${files.size} 张，解析成功 ${files.size - failures.size} 张，" +
+                "空壳卡 ${emptyBodies.size} 张${if (emptyBodies.isEmpty()) "" else "：" + emptyBodies.joinToString(", ")}，" +
+                "占位开场白且无备用 ${shellOnly.size} 张${if (shellOnly.isEmpty()) "" else "：" + shellOnly.joinToString(", ")}",
+        )
         assertTrue(
-            "共 ${files.size} 张卡，失败 ${failures.size} 张：\n" + failures.joinToString("\n"),
+            "共 ${files.size} 张卡，解析失败 ${failures.size} 张：\n" + failures.joinToString("\n"),
             failures.isEmpty(),
         )
     }

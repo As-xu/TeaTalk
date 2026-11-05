@@ -6,6 +6,8 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -47,6 +49,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -68,6 +71,7 @@ import coil.compose.AsyncImage
 import com.teatalk.xs.TeaTalkApp
 import com.teatalk.xs.data.CardView
 import com.teatalk.xs.data.CardViewParser
+import com.teatalk.xs.data.Greetings
 import com.teatalk.xs.data.CharacterRepository
 import com.teatalk.xs.data.PromptAssembler
 import com.teatalk.xs.data.model.AppPrefs
@@ -123,6 +127,11 @@ class CharacterDetailViewModel(
         }
         .flowOn(Dispatchers.Default) // 大卡 JSON 解析别占用主线程
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), CharacterDetailState())
+
+    /** 是否已有会话：有会话时「开始聊天」直接回到最近一条，不再弹开场白选择。 */
+    val hasConversation: StateFlow<Boolean?> = repository.observeConversations(characterId)
+        .map { it.isNotEmpty() }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     /** 世界书库（详情页绑定对话框的数据源）。 */
     val books: StateFlow<List<WorldBookEntity>?> = worldBookRepository.observeAll()
@@ -251,7 +260,7 @@ class CharacterDetailViewModel(
 fun CharacterDetailScreen(
     viewModel: CharacterDetailViewModel,
     onBack: () -> Unit,
-    onStartChat: () -> Unit,
+    onStartChat: (String?) -> Unit,
     onOpenWorldBooks: () -> Unit = {},
 ) {
     val state by viewModel.state.collectAsState()
@@ -259,6 +268,7 @@ fun CharacterDetailScreen(
     val linkedIds by viewModel.linkedWorldBookIds.collectAsState()
     val draftIds by viewModel.draftWorldBookIds.collectAsState()
     val worldBookMessage by viewModel.worldBookMessage.collectAsState()
+    val hasConversation by viewModel.hasConversation.collectAsState()
     val translations by viewModel.translations.collectAsState()
     val translating by viewModel.translating.collectAsState()
     val translateMessage by viewModel.translateMessage.collectAsState()
@@ -268,6 +278,7 @@ fun CharacterDetailScreen(
     // 展示的是「生效条目数」：卡内嵌 + 已绑定世界书的条目数之和。
     val linkedEntryCount = books.orEmpty().filter { it.id in linkedIds }.sumOf { it.entryCount }
     var confirmDelete by remember { mutableStateOf(false) }
+    var greetingChooser by rememberSaveable { mutableStateOf(false) }
     val character = state.character
     val view = state.view
     val cs = MaterialTheme.colorScheme
@@ -380,7 +391,14 @@ fun CharacterDetailScreen(
                         .height(46.dp)
                         .clip(RoundedCornerShape(23.dp))
                         .background(cs.primary)
-                        .clickable(onClick = onStartChat),
+                        .clickable(enabled = character != null && hasConversation != null) {
+                            val existing = hasConversation == true
+                            if (!existing && Greetings.needsChoice(view.firstMes, view.alternateGreetings)) {
+                                greetingChooser = true
+                            } else {
+                                onStartChat(null)
+                            }
+                        },
                     contentAlignment = Alignment.Center,
                 ) {
                     Text(
@@ -641,6 +659,57 @@ fun CharacterDetailScreen(
                 }) { Text(stringResource(R.string.delete)) }
             },
             dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text(stringResource(R.string.cancel)) } },
+        )
+    }
+
+    if (greetingChooser) {
+        val options = remember(view.firstMes, view.alternateGreetings) {
+            Greetings.options(view.firstMes, view.alternateGreetings)
+        }
+        val previews = remember(options) { options.map { Greetings.preview(it) } }
+        AlertDialog(
+            onDismissRequest = { greetingChooser = false },
+            title = { Text(stringResource(R.string.detail_greeting_title)) },
+            text = {
+                Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState())) {
+                    Text(
+                        stringResource(R.string.detail_greeting_hint),
+                        fontSize = TypeScale.s12,
+                        color = cs.onSurfaceVariant,
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    options.forEachIndexed { index, text ->
+                        Column(
+                            Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(12.dp))
+                                .clickable {
+                                    greetingChooser = false
+                                    onStartChat(text)
+                                }
+                                .padding(horizontal = 10.dp, vertical = 10.dp),
+                        ) {
+                            Text(
+                                stringResource(R.string.detail_greeting_item, index + 1),
+                                fontSize = TypeScale.s11_5,
+                                color = cs.primary,
+                            )
+                            Text(
+                                previews[index],
+                                fontSize = TypeScale.s13,
+                                color = cs.onSurface,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                        if (index != options.lastIndex) Hairline(insetStart = 10)
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = { greetingChooser = false }) { Text(stringResource(R.string.cancel)) }
+            },
         )
     }
 }

@@ -91,6 +91,9 @@
 </plurals>
 <!-- 旧「世界书（%1$d 条）」标题已由 detail_world_book_summary 取代 -->
     <string name="detail_delete_character">删除角色</string>
+    <string name="detail_greeting_title">选择开场白</string>
+    <string name="detail_greeting_hint">选一段开场白开始新会话（只影响新会话，已有聊天不受影响）。</string>
+    <string name="detail_greeting_item">开场白 %1$d</string>
     <string name="detail_start_chat">开始聊天</string>
     <string name="list_separator">、</string>
     <string name="detail_by_author">作者 %1$s · </string>

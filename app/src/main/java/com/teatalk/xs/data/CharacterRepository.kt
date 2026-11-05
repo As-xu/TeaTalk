@@ -225,15 +225,23 @@ class CharacterRepository(
     suspend fun hasAnyChat(): Boolean = withContext(Dispatchers.IO) { dao.anyMessageExists() }
 
     /**
-     * 「开始聊天」入口：有会话就回到最近一条，没有就建一条并插入开场白。
+     * 0.26.1「开始聊天」带开场白：有会话就回到最近一条；没有会话时用 [greeting] 建会话并插开场白。
      *
-     * @return 会话 id；角色不存在返回 null。
+     * 卡片常把真正的开场白放在 `alternate_greetings`，`first_mes` 只是占位模板，
+     * 所以由详情页让用户选一条再进来，避免把占位符当开场白。
      */
-    suspend fun ensureConversation(characterId: Long): Long? = withContext(Dispatchers.IO) {
+    suspend fun startConversation(characterId: Long, greeting: String? = null): Long? = withContext(Dispatchers.IO) {
         val character = dao.find(characterId) ?: return@withContext null
         val existing = conversations.latest(characterId)
-        val id = existing?.id ?: createConversationInternal(character)
-        TeaTalkLog.i("Chat", "conversation.ensure", "characterId" to characterId, "conversationId" to id, "created" to (existing == null))
+        val id = existing?.id ?: createConversationInternal(character, greeting = greeting)
+        TeaTalkLog.i(
+            "Chat",
+            "conversation.start",
+            "characterId" to characterId,
+            "conversationId" to id,
+            "created" to (existing == null),
+            "greetingChars" to (greeting?.length ?: 0),
+        )
         id
     }
 
@@ -245,13 +253,22 @@ class CharacterRepository(
         id
     }
 
-    private suspend fun createConversationInternal(character: CharacterEntity, title: String = ""): Long {
+    private suspend fun createConversationInternal(
+        character: CharacterEntity,
+        title: String = "",
+        greeting: String? = null,
+    ): Long {
         val now = System.currentTimeMillis()
         val id = conversations.insert(
             ConversationEntity(characterId = character.id, title = title, createdAt = now, updatedAt = now),
         )
-        val greeting = character.firstMes.ifBlank { appContext.getString(R.string.greeting_fallback) }
-        dao.insertGreetingIfEmpty(conversationId = id, characterId = character.id, content = greeting, createdAt = now)
+        val view = CardViewParser.parse(character.cardJson)
+        val fallback = appContext.getString(R.string.greeting_fallback)
+        val opening = greeting?.takeIf { it.isNotBlank() }
+            ?: Greetings.defaultOpening(view.firstMes, view.alternateGreetings)
+                ?.takeIf { !Greetings.isShell(it) }
+            ?: fallback
+        dao.insertGreetingIfEmpty(conversationId = id, characterId = character.id, content = opening, createdAt = now)
         return id
     }
 
@@ -553,10 +570,14 @@ class CharacterRepository(
         // 群聊没有开场白：群提示由 PromptAssembler 的群说明承担。
         if (conversation.kind == ConversationEntity.KIND_GROUP) return@withContext
         val character = dao.find(conversation.characterId) ?: return@withContext
+        val view = CardViewParser.parse(character.cardJson)
+        val opening = Greetings.defaultOpening(view.firstMes, view.alternateGreetings)
+            ?.takeIf { !Greetings.isShell(it) }
+            ?: appContext.getString(R.string.greeting_fallback)
         val inserted = dao.insertGreetingIfEmpty(
             conversationId = conversationId,
             characterId = character.id,
-            content = character.firstMes.ifBlank { appContext.getString(R.string.greeting_fallback) },
+            content = opening,
             createdAt = System.currentTimeMillis(),
         )
         TeaTalkLog.i("Chat", "greeting.ensure", "conversationId" to conversationId, "inserted" to inserted)

@@ -292,9 +292,9 @@ fun HomeScreen(
                             factory = CharacterDetailViewModel.factory(app, id),
                         ),
                         onBack = { navController.popBackStack() },
-                        onStartChat = {
+                        onStartChat = { greeting ->
                             scope.launch {
-                                val conversationId = repository.ensureConversation(id) ?: return@launch
+                                val conversationId = repository.startConversation(id, greeting) ?: return@launch
                                 navController.navigate("chat/$conversationId") { launchSingleTop = true }
                             }
                         },
