@@ -25,8 +25,10 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.SwapVert
 import androidx.compose.material.icons.outlined.Circle
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
@@ -67,6 +69,7 @@ import com.teatalk.xs.ui.theme.TypeScale
 fun ProvidersScreen(viewModel: ProvidersViewModel, onBack: () -> Unit) {
     val providers by viewModel.providers.collectAsState()
     val activeId by viewModel.activeId.collectAsState()
+    val fallbackIds by viewModel.fallbackIds.collectAsState()
     val busy by viewModel.busy.collectAsState()
     val message by viewModel.message.collectAsState()
     val dialogState by viewModel.dialog.collectAsState()
@@ -75,6 +78,8 @@ fun ProvidersScreen(viewModel: ProvidersViewModel, onBack: () -> Unit) {
     var editing by remember { mutableStateOf<ModelProviderEntity?>(null) }
     var adding by remember { mutableStateOf(false) }
     var pendingDelete by remember { mutableStateOf<ModelProviderEntity?>(null) }
+    var fallbackOpen by remember { mutableStateOf(false) }
+    var fallbackSelection by remember { mutableStateOf<List<String>>(emptyList()) }
 
     LaunchedEffect(message) {
         val m = message ?: return@LaunchedEffect
@@ -106,6 +111,18 @@ fun ProvidersScreen(viewModel: ProvidersViewModel, onBack: () -> Unit) {
                     fontWeight = FontWeight.SemiBold,
                     modifier = Modifier.weight(1f),
                 )
+                IconButton(
+                    onClick = {
+                        fallbackSelection = fallbackIds.filter { id -> providers.any { it.id == id } }
+                        fallbackOpen = true
+                    },
+                ) {
+                    Icon(
+                        Icons.Filled.SwapVert,
+                        contentDescription = stringResource(R.string.providers_fallback_title),
+                        modifier = Modifier.size(20.dp),
+                    )
+                }
                 if (busy) {
                     CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
                     Spacer(Modifier.width(8.dp))
@@ -168,11 +185,28 @@ fun ProvidersScreen(viewModel: ProvidersViewModel, onBack: () -> Unit) {
                         modifier = Modifier.padding(top = 8.dp),
                     )
                 }
+                item {
+                    Text(
+                        if (fallbackIds.isEmpty()) {
+                            stringResource(R.string.providers_fallback_hint)
+                        } else {
+                            stringResource(R.string.providers_fallback_summary, fallbackIds.size)
+                        },
+                        fontSize = TypeScale.s12,
+                        color = if (fallbackIds.isEmpty()) {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        } else {
+                            MaterialTheme.colorScheme.primary
+                        },
+                        modifier = Modifier.padding(bottom = 2.dp),
+                    )
+                }
                 items(items = providers, key = { it.id }) { provider ->
                     ProviderRow(
                         provider = provider,
                         active = provider.id == activeId,
                         maskedKey = viewModel.maskedKey(provider.id),
+                        fallbackIndex = fallbackIds.indexOf(provider.id).takeIf { it >= 0 }?.plus(1),
                         onClick = {
                             viewModel.resetDialog()
                             editing = provider
@@ -226,6 +260,70 @@ fun ProvidersScreen(viewModel: ProvidersViewModel, onBack: () -> Unit) {
             },
         )
     }
+
+    if (fallbackOpen) {
+        AlertDialog(
+            onDismissRequest = { fallbackOpen = false },
+            title = { Text(stringResource(R.string.providers_fallback_title)) },
+            text = {
+                Column {
+                    Text(
+                        stringResource(R.string.providers_fallback_explain),
+                        fontSize = TypeScale.s12,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    LazyColumn(Modifier.heightIn(max = 340.dp)) {
+                        // 主接口不参与勾选：顺序里它永远排第一，勾上只会让序号错位。
+                        items(items = providers.filter { it.id != activeId }, key = { it.id }) { provider ->
+                            val selected = provider.id in fallbackSelection
+                            Row(
+                                Modifier.fillMaxWidth().clickable {
+                                    fallbackSelection = if (selected) {
+                                        fallbackSelection - provider.id
+                                    } else {
+                                        fallbackSelection + provider.id
+                                    }
+                                },
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Checkbox(
+                                    checked = selected,
+                                    onCheckedChange = {
+                                        fallbackSelection = if (selected) {
+                                            fallbackSelection - provider.id
+                                        } else {
+                                            fallbackSelection + provider.id
+                                        }
+                                    },
+                                )
+                                Column(Modifier.weight(1f)) {
+                                    Text(provider.name, fontSize = TypeScale.s14)
+                                    Text(
+                                        provider.defaultModel.ifBlank { "-" },
+                                        fontSize = TypeScale.s11_5,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 1,
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    // 顺序取 provider 列表顺序，和界面上的「备用 N」一致，避免勾选顺序不可见。
+                    val ordered = providers.map { it.id }.filter { it in fallbackSelection }
+                    viewModel.saveFallback(ordered)
+                    fallbackOpen = false
+                }) { Text(stringResource(R.string.edit_save)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { fallbackOpen = false }) { Text(stringResource(R.string.cancel)) }
+            },
+        )
+    }
 }
 
 @Composable
@@ -233,6 +331,7 @@ private fun ProviderRow(
     provider: ModelProviderEntity,
     active: Boolean,
     maskedKey: String?,
+    fallbackIndex: Int?,
     onClick: () -> Unit,
     onSetActive: () -> Unit,
     onDelete: () -> Unit,
@@ -251,7 +350,23 @@ private fun ProviderRow(
             )
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
-                Text(provider.name, fontSize = TypeScale.s15, fontWeight = FontWeight.Medium)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(provider.name, fontSize = TypeScale.s15, fontWeight = FontWeight.Medium)
+                    if (fallbackIndex != null) {
+                        Spacer(Modifier.width(6.dp))
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+                        ) {
+                            Text(
+                                stringResource(R.string.providers_fallback_badge, fallbackIndex),
+                                fontSize = TypeScale.s11_5,
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                            )
+                        }
+                    }
+                }
                 Text(
                     provider.baseUrl,
                     fontSize = TypeScale.s12,

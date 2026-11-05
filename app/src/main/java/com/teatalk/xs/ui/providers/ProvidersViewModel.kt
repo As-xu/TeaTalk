@@ -9,6 +9,7 @@ import com.teatalk.xs.R
 import com.teatalk.xs.TeaTalkApp
 import com.teatalk.xs.data.UiText
 import com.teatalk.xs.data.db.ModelProviderEntity
+import com.teatalk.xs.data.model.AppPrefs
 import com.teatalk.xs.data.model.ProviderRepository
 import com.teatalk.xs.data.net.ModelListClient
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -33,6 +34,7 @@ data class ProvidersDialogState(
 class ProvidersViewModel(
     private val repository: ProviderRepository,
     private val client: ModelListClient,
+    private val prefs: AppPrefs,
 ) : ViewModel() {
 
     val providers: StateFlow<List<ModelProviderEntity>> = repository.providers.stateIn(
@@ -43,6 +45,10 @@ class ProvidersViewModel(
 
     private val _activeId = MutableStateFlow(repository.activeProviderId())
     val activeId: StateFlow<String?> = _activeId.asStateFlow()
+
+    /** 0.23.0：备用接口链（顺序即尝试顺序）。 */
+    private val _fallbackIds = MutableStateFlow(prefs.fallbackProviderIds)
+    val fallbackIds: StateFlow<List<String>> = _fallbackIds.asStateFlow()
 
     private val _busy = MutableStateFlow(false)
     val busy: StateFlow<Boolean> = _busy.asStateFlow()
@@ -132,7 +138,25 @@ class ProvidersViewModel(
         viewModelScope.launch {
             repository.delete(provider.id)
             _activeId.value = repository.activeProviderId()
+            // 备用链里删掉的项就地清理，避免列表持久化一个不存在的 id。
+            saveFallback(_fallbackIds.value - provider.id, notify = false)
             _message.value = UiText.providerDeleted(provider.name)
+        }
+    }
+
+    /** 0.23.0：保存备用接口链（顺序 = 尝试顺序，主接口不在其中）。 */
+    fun saveFallback(ids: List<String>, notify: Boolean = true) {
+        // 主接口不能进备用链：order() 会把它排在最前并去重，链里的主接口永远轮不到，
+        // 却会让「备用 N」序号和「已配置 N 个」计数虚高。VM 这层再兜一次，防 UI 漏过滤。
+        val primary = _activeId.value ?: repository.activeProviderId()
+        prefs.fallbackProviderIds = ids.filter { it != primary }
+        _fallbackIds.value = prefs.fallbackProviderIds
+        if (notify) {
+            _message.value = if (_fallbackIds.value.isEmpty()) {
+                UiText.of(R.string.providers_fallback_cleared)
+            } else {
+                UiText.of(R.string.providers_fallback_saved, _fallbackIds.value.size)
+            }
         }
     }
 
@@ -213,7 +237,7 @@ class ProvidersViewModel(
     companion object {
         fun factory(app: TeaTalkApp): ViewModelProvider.Factory = viewModelFactory {
             initializer {
-                ProvidersViewModel(app.container.providerRepository, app.container.modelListClient)
+                ProvidersViewModel(app.container.providerRepository, app.container.modelListClient, app.container.appPrefs)
             }
         }
     }

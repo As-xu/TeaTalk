@@ -41,6 +41,29 @@ class AppPrefs(context: Context) {
             prefs.edit().putBoolean(KEY_AUTO_TRANSLATE, value).apply()
         }
 
+    /**
+     * 备用接口链（0.23.0）：主接口 429/5xx/超时/断网时按这个顺序尝试。
+     *
+     * 存成逗号分隔的 id 列表而不是新表：只是「顺序偏好」，没有独立生命周期。
+     * 删除 provider 时由 ProvidersViewModel.delete 主动把该 id 从链里移除；
+     * 残留的失效 id 会被 ChatEngine.resolveChain 跳过（不会崩，只是白跑一次解析）。
+     */
+    var fallbackProviderIds: List<String>
+        get() = prefs.getString(KEY_FALLBACK_PROVIDERS, null)
+            ?.split(',')
+            ?.map { it.trim() }
+            ?.filter { it.isNotEmpty() }
+            ?.distinct()
+            ?: emptyList()
+        set(value) {
+            val clean = value.map { it.trim() }.filter { it.isNotEmpty() }.distinct()
+            if (clean.isEmpty()) {
+                prefs.edit().remove(KEY_FALLBACK_PROVIDERS).apply()
+            } else {
+                prefs.edit().putString(KEY_FALLBACK_PROVIDERS, clean.joinToString(",")).apply()
+            }
+        }
+
     private companion object {
         const val KEY_ACTIVE_PROVIDER = "active_provider_id"
         const val KEY_USER_NAME = "user_name"
@@ -48,5 +71,6 @@ class AppPrefs(context: Context) {
         const val KEY_TRANSLATION_PROVIDER = "translation_provider_id"
         const val KEY_TRANSLATION_TARGET = "translation_target_lang"
         const val KEY_AUTO_TRANSLATE = "auto_translate_replies"
+        const val KEY_FALLBACK_PROVIDERS = "fallback_provider_ids"
     }
 }

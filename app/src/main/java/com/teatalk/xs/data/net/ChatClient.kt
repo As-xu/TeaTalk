@@ -35,6 +35,13 @@ sealed interface ChatEvent {
 
     data class Delta(val text: String) : ChatEvent
 
+    /**
+     * 主接口失败、正在切到备用接口（0.23.0）。
+     *
+     * 只用于 UI 提示（snackbar「已切换到 xxx」）；错误语义仍由后续的 Started/Failed 承担。
+     */
+    data class Fallback(val fromProviderName: String, val toProviderName: String) : ChatEvent
+
     /** 正常结束；[truncated] 表示服务端因长度上限提前截断（finish_reason=length）。 */
     data class Completed(val truncated: Boolean = false) : ChatEvent
 

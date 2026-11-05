@@ -541,4 +541,13 @@
     <string name="characters_batch_deleted">Deleted %1$d cards</string>
     <string name="characters_batch_delete_title">Delete selected cards</string>
     <string name="characters_batch_delete_confirm">This deletes %1$d cards and their chats. This cannot be undone.</string>
+    <!-- 0.23.0 multi-endpoint fallback -->
+    <string name="chat_fallback_switched">%1$s is unavailable; switched to %2$s</string>
+    <string name="providers_fallback_title">Backup endpoints</string>
+    <string name="providers_fallback_explain">When the main endpoint is rate limited, times out, or fails, TeaTalk retries the backups below in order. It never switches after output has started.</string>
+    <string name="providers_fallback_hint">No backups configured: a main endpoint failure is shown directly</string>
+    <string name="providers_fallback_summary">%1$d backup endpoint(s), tried in list order</string>
+    <string name="providers_fallback_badge">Backup %1$d</string>
+    <string name="providers_fallback_saved">Saved %1$d backup endpoint(s)</string>
+    <string name="providers_fallback_cleared">Backup endpoints disabled</string>
 </resources>

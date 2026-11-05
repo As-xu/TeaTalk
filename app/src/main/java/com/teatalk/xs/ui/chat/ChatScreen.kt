@@ -466,6 +466,8 @@ class ChatViewModel(
         val gen = ++generation
         job = viewModelScope.launch {
             try {
+                // 设置页可能刚改过主接口：来源标签的基准跟着刷新。
+                _activeProviderId.value = engine.activeProvider()?.id
                 val blocked = engine.preflightError()
                 if (blocked != null) {
                     _error.value = UiText.chatError(blocked)
@@ -730,10 +732,21 @@ class ChatViewModel(
             if (gen != generation) return@collect
             when (event) {
                 is ChatEvent.Started -> {
+                    // 0.23.0：这里只记「本轮实际来源」（落库用）。activeProviderId 表示配置里的
+                    // 主接口，降级时若也跟着改成备用接口，备用生成的回复就永远不会显示来源标签，
+                    // 反而把主接口生成的旧消息标成「与当前接口不同」。
                     replyProvider = event
                     replySpeakerId = event.speakerId
                     replySpeakerName = event.speakerName
-                    _activeProviderId.value = event.providerId
+                }
+
+                is ChatEvent.Fallback -> {
+                    // 0.23.0：主接口失败自动切换，给一次轻提示；后续 Started 会更新气泡来源。
+                    _notice.value = UiText.of(
+                        R.string.chat_fallback_switched,
+                        event.fromProviderName,
+                        event.toProviderName,
+                    )
                 }
 
                 is ChatEvent.Delta -> {

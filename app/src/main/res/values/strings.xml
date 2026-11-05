@@ -546,4 +546,13 @@
     <string name="characters_batch_deleted">已删除 %1$d 张</string>
     <string name="characters_batch_delete_title">删除所选角色卡</string>
     <string name="characters_batch_delete_confirm">将删除 %1$d 张角色卡及其聊天记录，无法撤销。</string>
+    <!-- 0.23.0 多源降级 -->
+    <string name="chat_fallback_switched">%1$s 暂时不可用，已切换到 %2$s</string>
+    <string name="providers_fallback_title">备用接口</string>
+    <string name="providers_fallback_explain">主接口遇到限流、超时或服务端错误时，按列表顺序自动尝试备用接口。已经开始输出内容后不再切换。</string>
+    <string name="providers_fallback_hint">未配置备用接口：主接口失败时直接报错</string>
+    <string name="providers_fallback_summary">已配置 %1$d 个备用接口，按列表顺序尝试</string>
+    <string name="providers_fallback_badge">备用 %1$d</string>
+    <string name="providers_fallback_saved">已保存 %1$d 个备用接口</string>
+    <string name="providers_fallback_cleared">已关闭备用接口</string>
 </resources>

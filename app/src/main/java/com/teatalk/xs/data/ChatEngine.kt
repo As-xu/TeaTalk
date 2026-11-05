@@ -36,6 +36,8 @@ class ChatEngine(
     private val samplingPreset: () -> SamplingPreset? = { null },
     /** 个人资料名（替换 `{{user}}`）；M3 golden 对齐项。 */
     private val userName: () -> String = { "User" },
+    /** 0.23.0：备用接口 id 链（用户配置顺序）；空表示只用主接口。 */
+    private val fallbackProviderIds: () -> List<String> = { emptyList() },
 ) {
 
     /**
@@ -74,12 +76,37 @@ class ChatEngine(
     suspend fun activeProvider(): ActiveProvider? =
         (providers.resolve() as? ProviderResolution.Ok)?.provider
 
-    suspend fun preflightError(): ChatError? = when (val resolved = providers.resolve()) {
-        is ProviderResolution.Ok ->
-            if (resolved.provider.model.trim().isEmpty()) ChatError.NO_MODEL else null
-        ProviderResolution.NoProvider -> ChatError.NO_PROVIDER
-        is ProviderResolution.NoKey -> ChatError.NO_KEY
+    suspend fun preflightError(): ChatError? {
+        val chain = resolveChain()
+        // 只要链里有一个候选能给出模型名，就允许发送：主接口缺模型时备用接口仍可能成功。
+        if (chain.providers.any { it.model.trim().isNotEmpty() }) return null
+        if (chain.providers.isNotEmpty()) return ChatError.NO_MODEL
+        return chain.primaryError ?: ChatError.NO_PROVIDER
     }
+
+    /**
+     * 解析「主接口 + 备用接口」候选链（0.23.0）。
+     *
+     * 跳过的只是不可用的槽位（provider 被删、key 丢失）；顺序由 [FallbackPolicy.order] 保证。
+     * [primaryError] 记录第一个槽位失败的原因，用于整条链都不可用时的报错文案。
+     */
+    private suspend fun resolveChain(): Chain {
+        val ordered = FallbackPolicy.order(providers.activeProviderId(), fallbackProviderIds())
+        val usable = ArrayList<ActiveProvider>(ordered.size)
+        var primaryError: ChatError? = null
+        ordered.forEachIndexed { index, id ->
+            when (val resolved = providers.resolve(id)) {
+                is ProviderResolution.Ok -> usable.add(resolved.provider)
+                ProviderResolution.NoProvider ->
+                    if (index == 0) primaryError = ChatError.NO_PROVIDER
+                is ProviderResolution.NoKey ->
+                    if (index == 0) primaryError = ChatError.NO_KEY
+            }
+        }
+        return Chain(usable, primaryError)
+    }
+
+    private data class Chain(val providers: List<ActiveProvider>, val primaryError: ChatError?)
 
     /**
      * 生成一条回复（不落库）：调用方在结束后用 [CharacterRepository.appendAssistantReply]
@@ -125,27 +152,18 @@ class ChatEngine(
             return@flow
         }
 
-        val provider = when (val resolved = providers.resolve()) {
-            is ProviderResolution.Ok -> resolved.provider
-            ProviderResolution.NoProvider -> {
-                TeaTalkLog.w("Chat", "send.no_provider", "conversationId" to conversationId)
-                emit(ChatEvent.Failed(ChatError.NO_PROVIDER))
-                return@flow
+        // 0.23.0：先解析出「主接口 + 备用接口」的候选链；prompt 构建与 provider 无关，
+        // 所以只在候选全不可用时才在这里失败。
+        val chain = resolveChain()
+        val candidates = chain.providers
+        if (candidates.isEmpty()) {
+            val error = chain.primaryError ?: ChatError.NO_PROVIDER
+            when (error) {
+                ChatError.NO_PROVIDER -> TeaTalkLog.w("Chat", "send.no_provider", "conversationId" to conversationId)
+                ChatError.NO_KEY -> TeaTalkLog.w("Chat", "send.no_key")
+                else -> Unit
             }
-
-            is ProviderResolution.NoKey -> {
-                TeaTalkLog.w("Chat", "send.no_key", "provider" to resolved.provider.id)
-                emit(ChatEvent.Failed(ChatError.NO_KEY))
-                return@flow
-            }
-        }
-        providers.touch(provider.id)
-
-        // 不拿角色名兜底：模型名打错时服务端会 400/404，比「用角色名当模型」更容易发现。
-        val model = provider.model.trim()
-        if (model.isEmpty()) {
-            TeaTalkLog.w("Chat", "send.no_model", "provider" to provider.id)
-            emit(ChatEvent.Failed(ChatError.NO_MODEL))
+            emit(ChatEvent.Failed(error))
             return@flow
         }
 
@@ -180,15 +198,8 @@ class ChatEngine(
             }
         }
 
-        emit(
-            ChatEvent.Started(
-                providerId = provider.id,
-                providerName = provider.name,
-                model = model,
-                speakerId = groupSpeaker?.characterId,
-                speakerName = groupSpeaker?.name,
-            ),
-        )
+        // Started 在真正开始请求某个接口时发出（见下方降级循环）：降级后 UI 会收到第二次
+        // Started，用新接口名覆盖气泡上的来源标签。
 
         // 整张卡 JSON 解析 + system prompt 拼装都在后台线程：聊天路径此前在 Main 上做（审阅 P1）。
         val parsedGroup = if (isGroup) {
@@ -306,95 +317,158 @@ class ChatEngine(
             "sysChars" to messages.first().second.length,
         )
         // M3 步骤 2：把这次请求的可读快照放到内存里，供「查看本次请求」面板展示（不落盘、不导出）。
-        // 预设需在快照之前解析，面板才能显示本次请求的真实采样值。
+        // 预设与 provider 无关，只解析一次；provider 级采样参数在循环里逐个候选解析。
         val preset = samplingPreset()
-        // 优先级：ST 预设 > Provider 级配置 > 内置默认。两者都为空时保持客户端默认。
-        val effectiveTopP = preset?.topP ?: provider.topP
-        val effectiveMaxTokens = preset?.maxTokens ?: provider.maxTokens
-        val effectiveFreq = preset?.frequencyPenalty ?: provider.frequencyPenalty
-        val effectivePres = preset?.presencePenalty ?: provider.presencePenalty
-        val effectiveTemperature = preset?.temperature?.toDouble() ?: provider.temperature
-        val samplingSource = when {
-            preset != null -> "preset"
-            provider.topP != null || provider.maxTokens != null ||
-                provider.frequencyPenalty != null || provider.presencePenalty != null -> "provider"
-            else -> "built-in"
+        // 0.23.0：空模型的候选先剔除。它不会被请求，却会让「已切换到 X」和 chat.fallback to=
+        // 指向一个不存在的下一站（ProvidersViewModel 允许不填模型保存）。真正原因由末尾的 NO_MODEL 兜底。
+        candidates.filter { it.model.isBlank() }.forEach {
+            TeaTalkLog.w("Chat", "send.no_model", "provider" to it.id)
         }
-        val presetLabel = buildString {
-            append("temp ").append(effectiveTemperature)
-            effectiveTopP?.let { append(" · top_p ").append(it) }
-            effectiveMaxTokens?.let { append(" · max ").append(it) }
-            effectiveFreq?.let { append(" · freq ").append(it) }
-            effectivePres?.let { append(" · pres ").append(it) }
-            append(" · source ").append(samplingSource)
+        val usable = candidates.filter { it.model.isNotBlank() }
+        if (usable.isEmpty()) {
+            emit(ChatEvent.Failed(ChatError.NO_MODEL))
+            return@flow
         }
-        PromptDebugStore.publish(
-            conversationId = conversationId,
-            providerName = provider.name,
-            model = model,
-            sampling = presetLabel,
-            system = messages.first().second,
-            messages = messages.drop(1),
-            activated = activated,
-            worldChars = WorldInfoInjector.cost(activated),
-            characterName = primaryName,
-            userName = userName(),
-        )
+        var lastFailure: ChatEvent.Failed? = null
+        for ((index, provider) in usable.withIndex()) {
+            val remaining = usable.size - index - 1
+            // 不拿角色名兜底：模型名打错时服务端会 400/404，比「用角色名当模型」更容易发现。
+            val model = provider.model.trim()
+            providers.touch(provider.id)
+            // 优先级：ST 预设 > Provider 级配置 > 内置默认。两者都为空时保持客户端默认。
+            val effectiveTopP = preset?.topP ?: provider.topP
+            val effectiveMaxTokens = preset?.maxTokens ?: provider.maxTokens
+            val effectiveFreq = preset?.frequencyPenalty ?: provider.frequencyPenalty
+            val effectivePres = preset?.presencePenalty ?: provider.presencePenalty
+            val effectiveTemperature = preset?.temperature?.toDouble() ?: provider.temperature
+            val samplingSource = when {
+                preset != null -> "preset"
+                provider.topP != null || provider.maxTokens != null ||
+                    provider.frequencyPenalty != null || provider.presencePenalty != null -> "provider"
+                else -> "built-in"
+            }
+            val presetLabel = buildString {
+                append("temp ").append(effectiveTemperature)
+                effectiveTopP?.let { append(" · top_p ").append(it) }
+                effectiveMaxTokens?.let { append(" · max ").append(it) }
+                effectiveFreq?.let { append(" · freq ").append(it) }
+                effectivePres?.let { append(" · pres ").append(it) }
+                append(" · source ").append(samplingSource)
+                if (index > 0) append(" · fallback ").append(index)
+            }
+            PromptDebugStore.publish(
+                conversationId = conversationId,
+                providerName = provider.name,
+                model = model,
+                sampling = presetLabel,
+                system = messages.first().second,
+                messages = messages.drop(1),
+                activated = activated,
+                worldChars = WorldInfoInjector.cost(activated),
+                characterName = primaryName,
+                userName = userName(),
+            )
 
-        val builder = StringBuilder()
-        var firstTokenLogged = false
-        TeaTalkLog.i(
-            "Prompt",
-            "sampling.preset",
-            "present" to (preset != null),
-            "source" to samplingSource,
-            "temperature" to effectiveTemperature,
-            "topP" to (effectiveTopP ?: -1.0),
-            "maxTokens" to (effectiveMaxTokens ?: -1),
-            "freqPenalty" to (effectiveFreq ?: -1.0),
-            "presPenalty" to (effectivePres ?: -1.0),
-        )
-        client.stream(
-            baseUrl = provider.baseUrl,
-            apiKey = provider.apiKey,
-            model = model,
-            messages = messages,
-            // 预设优先于接口自带的 temperature（用户显式导入的意图更强）。
-            temperature = effectiveTemperature,
-            topP = effectiveTopP?.toDouble(),
-            maxTokens = effectiveMaxTokens,
-            frequencyPenalty = effectiveFreq?.toDouble(),
-            presencePenalty = effectivePres?.toDouble(),
-        ).collect { event ->
-            when (event) {
-                is ChatEvent.Started -> emit(event)
+            TeaTalkLog.i(
+                "Prompt",
+                "sampling.preset",
+                "present" to (preset != null),
+                "source" to samplingSource,
+                "temperature" to effectiveTemperature,
+                "topP" to (effectiveTopP ?: -1.0),
+                "maxTokens" to (effectiveMaxTokens ?: -1),
+                "freqPenalty" to (effectiveFreq ?: -1.0),
+                "presPenalty" to (effectivePres ?: -1.0),
+                "provider" to provider.id,
+                "attempt" to index,
+            )
+            emit(
+                ChatEvent.Started(
+                    providerId = provider.id,
+                    providerName = provider.name,
+                    model = model,
+                    speakerId = groupSpeaker?.characterId,
+                    speakerName = groupSpeaker?.name,
+                ),
+            )
 
-                is ChatEvent.Delta -> {
-                    if (!firstTokenLogged) {
-                        firstTokenLogged = true
-                        TeaTalkLog.i("Chat", "stream.first_token", "chars" to event.text.length)
+            val builder = StringBuilder()
+            var firstTokenLogged = false
+            var completed: ChatEvent.Completed? = null
+            var failure: ChatEvent.Failed? = null
+            client.stream(
+                baseUrl = provider.baseUrl,
+                apiKey = provider.apiKey,
+                model = model,
+                messages = messages,
+                // 预设优先于接口自带的 temperature（用户显式导入的意图更强）。
+                temperature = effectiveTemperature,
+                topP = effectiveTopP?.toDouble(),
+                maxTokens = effectiveMaxTokens,
+                frequencyPenalty = effectiveFreq?.toDouble(),
+                presencePenalty = effectivePres?.toDouble(),
+            ).collect { event ->
+                when (event) {
+                    is ChatEvent.Delta -> {
+                        if (!firstTokenLogged) {
+                            firstTokenLogged = true
+                            TeaTalkLog.i("Chat", "stream.first_token", "chars" to event.text.length)
+                        }
+                        builder.append(event.text)
+                        emit(event)
                     }
-                    builder.append(event.text)
-                    emit(event)
-                }
 
-                is ChatEvent.Completed -> {
-                    val reply = builder.toString().trim()
-                    TeaTalkLog.i(
-                        "Chat",
-                        "stream.done",
-                        "chars" to reply.length,
-                        "truncated" to event.truncated,
-                    )
-                    emit(event)
-                }
+                    is ChatEvent.Completed -> completed = event
 
-                is ChatEvent.Failed -> {
-                    TeaTalkLog.w("Chat", "send.fail", "error" to event.error.label)
-                    emit(event)
+                    is ChatEvent.Failed -> {
+                        TeaTalkLog.w(
+                            "Chat",
+                            "send.fail",
+                            "error" to event.error.label,
+                            "provider" to provider.id,
+                            "attempt" to index,
+                        )
+                        failure = event
+                    }
+
+                    // Started/Fallback 由本引擎发出，client 不会产生。
+                    else -> Unit
                 }
             }
+
+            val done = completed
+            if (done != null) {
+                val reply = builder.toString().trim()
+                TeaTalkLog.i(
+                    "Chat",
+                    "stream.done",
+                    "chars" to reply.length,
+                    "truncated" to done.truncated,
+                    "provider" to provider.id,
+                )
+                emit(done)
+                return@flow
+            }
+
+            val failed = failure ?: ChatEvent.Failed(ChatError.BAD_RESPONSE, "no terminal event")
+            lastFailure = failed
+            // 已经吐过字就不再切换：两条回复会拼成一条，比直接失败更糟。
+            if (FallbackPolicy.shouldContinue(failed.error, builder.isNotEmpty(), remaining)) {
+                TeaTalkLog.w(
+                    "Chat",
+                    "chat.fallback",
+                    "from" to provider.name,
+                    "to" to usable[index + 1].name,
+                    "reason" to failed.error.label,
+                    "attempt" to index,
+                )
+                emit(ChatEvent.Fallback(provider.name, usable[index + 1].name))
+                continue
+            }
+            emit(failed)
+            return@flow
         }
+        emit(lastFailure ?: ChatEvent.Failed(ChatError.NO_PROVIDER))
     }
 
     companion object {

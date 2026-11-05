@@ -120,6 +120,7 @@ class AppContainer(context: Context) {
                 chatClient,
                 samplingPreset = { com.teatalk.xs.data.model.SamplingPresetStore.read(appContext) },
                 userName = { appPrefs.userName },
+                fallbackProviderIds = { appPrefs.fallbackProviderIds },
             )
     }
 }
