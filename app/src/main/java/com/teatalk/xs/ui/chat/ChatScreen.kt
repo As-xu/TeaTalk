@@ -123,6 +123,7 @@ import com.teatalk.xs.log.PerfLog
 import com.teatalk.xs.TeaTalkApp
 import com.teatalk.xs.data.CharacterRepository
 import com.teatalk.xs.data.AppForeground
+import com.teatalk.xs.data.GenerationKeepAlive
 import com.teatalk.xs.data.GroupReplySplitter
 import com.teatalk.xs.data.DeletedConversationStore
 import com.teatalk.xs.data.MessageVariants
@@ -190,6 +191,7 @@ class ChatViewModel(
     private val translation: TranslationRepository,
     private val prefs: AppPrefs,
     private val tts: TtsController,
+    private val keepAlive: GenerationKeepAlive,
     val conversationId: Long,
 ) : ViewModel() {
 
@@ -757,6 +759,16 @@ class ChatViewModel(
     }
 
     private suspend fun collectStream(flow: Flow<ChatEvent>, gen: Int) {
+        // 0.26.0：生成期间挂前台服务，切后台也不会被系统回收掉流式连接。
+        keepAlive.begin()
+        try {
+            collectEvents(flow, gen)
+        } finally {
+            keepAlive.end()
+        }
+    }
+
+    private suspend fun collectEvents(flow: Flow<ChatEvent>, gen: Int) {
         // 流式节流：token 可能每几十毫秒来一个，逐 token 触发重组会让 Markdown 反复全量解析（O(n²) 字符拷贝）。
         // 这里最多每 50ms 刷一次 UI，收尾时用 commitOnce 的完整文本，显示不受影响。
         var lastUiEmit = 0L
@@ -898,6 +910,7 @@ class ChatViewModel(
                     translation = app.container.translationRepository,
                     prefs = app.container.appPrefs,
                     tts = app.container.ttsController,
+                    keepAlive = app.container.generationKeepAlive,
                     conversationId = conversationId,
                 )
             }

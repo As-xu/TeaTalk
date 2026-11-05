@@ -4,4 +4,6 @@
     <cache-path name="diagnostics" path="logs/" />
     <!-- M4-1：聊天导出文件只放在 cache/export/，同样只暴露该子目录 -->
     <cache-path name="chat_export" path="export/" />
+    <!-- 0.26.0：更新包只放在 cache/updates/，安装器只能读到下载好的 apk -->
+    <cache-path name="updates" path="updates/" />
 </paths>

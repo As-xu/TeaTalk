@@ -22,12 +22,14 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -46,10 +48,12 @@ import com.teatalk.xs.BuildConfig
 import com.teatalk.xs.R
 import com.teatalk.xs.TeaTalkApp
 import com.teatalk.xs.data.db.TeaTalkDatabase
+import com.teatalk.xs.data.update.UpdateManager
 import com.teatalk.xs.log.CrashLogStore
 import com.teatalk.xs.log.Diagnostics
 import com.teatalk.xs.ui.components.Hairline
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import com.teatalk.xs.ui.theme.TypeScale
 
 /** 关于 + 诊断日志（设置 → 我的 → 关于 TeaTalk）。 */
@@ -63,6 +67,11 @@ fun AboutScreen(onBack: () -> Unit) {
 
     var crashFiles by remember { mutableStateOf(CrashLogStore.files(context)) }
     var showCrashes by remember { mutableStateOf(false) }
+
+    // 0.26.0：更新检查的状态机放在 container 里，跨页面保留下载中的状态。
+    val updateManager = remember { container.updateManager }
+    val updateState by updateManager.state.collectAsState()
+    var showUpdate by remember { mutableStateOf(false) }
 
     // 打开期间每 2 秒刷新一次缓冲快照（演示/排查用，量小无压力）
     LaunchedEffect(Unit) {
@@ -100,6 +109,22 @@ fun AboutScreen(onBack: () -> Unit) {
             }
             item {
                 Spacer(Modifier.height(8.dp))
+                Column(
+                    Modifier
+                        .padding(horizontal = 16.dp)
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(cs.surface)
+                        .padding(horizontal = 16.dp, vertical = 4.dp),
+                ) {
+                    ActionRow(
+                        title = stringResource(R.string.about_check_update),
+                        subtitle = stringResource(R.string.about_check_update_sub),
+                    ) {
+                        showUpdate = true
+                        updateManager.check(force = true)
+                    }
+                }
+                Spacer(Modifier.height(10.dp))
                 Column(
                     Modifier
                         .padding(horizontal = 16.dp)
@@ -227,6 +252,114 @@ fun AboutScreen(onBack: () -> Unit) {
                     ) { Text(stringResource(R.string.crash_clear)) }
                     TextButton(onClick = { showCrashes = false }) { Text(stringResource(R.string.crash_close)) }
                 }
+            },
+        )
+    }
+
+    if (showUpdate) {
+        val state = updateState
+        val dismiss = {
+            when (state) {
+                is UpdateManager.State.Downloading -> updateManager.cancelDownload()
+                else -> {
+                    showUpdate = false
+                    updateManager.reset()
+                }
+            }
+            Unit
+        }
+        AlertDialog(
+            onDismissRequest = dismiss,
+            title = { Text(stringResource(R.string.about_check_update)) },
+            text = {
+                Column {
+                    when (state) {
+                        is UpdateManager.State.Idle, is UpdateManager.State.Checking -> Text(
+                            stringResource(R.string.update_checking),
+                            fontSize = TypeScale.s13,
+                            color = cs.onSurfaceVariant,
+                        )
+
+                        is UpdateManager.State.UpToDate -> Text(
+                            stringResource(R.string.update_up_to_date),
+                            fontSize = TypeScale.s13,
+                            color = cs.onSurfaceVariant,
+                        )
+
+                        is UpdateManager.State.Available -> Text(
+                            stringResource(
+                                R.string.update_available,
+                                state.release.version,
+                                BuildConfig.VERSION_NAME,
+                            ),
+                            fontSize = TypeScale.s13,
+                            color = cs.onSurface,
+                        )
+
+                        is UpdateManager.State.Downloading -> {
+                            LinearProgressIndicator(
+                                progress = { state.percent / 100f },
+                                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                            )
+                            Text(
+                                stringResource(R.string.update_downloading, state.percent),
+                                fontSize = TypeScale.s12,
+                                color = cs.onSurfaceVariant,
+                                modifier = Modifier.padding(top = 8.dp),
+                            )
+                        }
+
+                        is UpdateManager.State.Ready -> Column {
+                            Text(
+                                stringResource(R.string.update_ready, state.version),
+                                fontSize = TypeScale.s13,
+                                color = cs.onSurface,
+                            )
+                            Text(
+                                stringResource(R.string.update_install_hint),
+                                fontSize = TypeScale.s12,
+                                color = cs.onSurfaceVariant,
+                                modifier = Modifier.padding(top = 8.dp),
+                            )
+                        }
+
+                        is UpdateManager.State.Failed -> Column {
+                            Text(
+                                stringResource(R.string.update_failed, state.message),
+                                fontSize = TypeScale.s13,
+                                color = cs.error,
+                            )
+                            Text(
+                                stringResource(R.string.update_install_hint),
+                                fontSize = TypeScale.s12,
+                                color = cs.onSurfaceVariant,
+                                modifier = Modifier.padding(top = 8.dp),
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                when (state) {
+                    is UpdateManager.State.Available -> TextButton(
+                        onClick = { updateManager.download() },
+                    ) { Text(stringResource(R.string.update_download)) }
+
+                    is UpdateManager.State.Ready -> TextButton(
+                        onClick = { updateManager.install() },
+                    ) { Text(stringResource(R.string.update_install)) }
+
+                    is UpdateManager.State.Downloading -> TextButton(onClick = dismiss) {
+                        Text(stringResource(R.string.cancel))
+                    }
+
+                    else -> TextButton(onClick = dismiss) { Text(stringResource(R.string.update_close)) }
+                }
+            },
+            dismissButton = if (state is UpdateManager.State.Available) {
+                { TextButton(onClick = dismiss) { Text(stringResource(R.string.update_close)) } }
+            } else {
+                null
             },
         )
     }

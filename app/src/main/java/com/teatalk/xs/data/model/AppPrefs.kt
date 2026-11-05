@@ -110,6 +110,45 @@ class AppPrefs(context: Context) {
             prefs.edit().putBoolean(KEY_TTS_AUTO_READ, value).apply()
         }
 
+    // ---- 0.26.0 首启知情同意 / 内容开关 ----
+
+    /** 首启知情同意是否已确认（同意页只出现一次）。 */
+    var consentAccepted: Boolean
+        get() = prefs.getBoolean(KEY_CONSENT_ACCEPTED, false)
+        set(value) {
+            prefs.edit().putBoolean(KEY_CONSENT_ACCEPTED, value).apply()
+        }
+
+    /** 是否已经问过通知权限（只问一次，拒绝后不再打扰）。 */
+    var notificationAsked: Boolean
+        get() = prefs.getBoolean(KEY_NOTIFICATION_ASKED, false)
+        set(value) {
+            prefs.edit().putBoolean(KEY_NOTIFICATION_ASKED, value).apply()
+        }
+
+    /** 是否显示 NSFW 角色；默认开，关闭后列表里隐藏带 `nsfw` 标签的角色。 */
+    var nsfwAllowed: Boolean
+        get() = prefs.getBoolean(KEY_NSFW_ALLOWED, true)
+        set(value) {
+            prefs.edit().putBoolean(KEY_NSFW_ALLOWED, value).apply()
+        }
+
+    // ---- 0.26.0 更新检查 ----
+
+    /** 自定义更新源（GitHub API 地址或本地测试 feed）；空 = 默认仓库。 */
+    var updateFeedUrl: String
+        get() = prefs.getString(KEY_UPDATE_FEED, null).orEmpty()
+        set(value) {
+            prefs.edit().putString(KEY_UPDATE_FEED, value.trim()).apply()
+        }
+
+    /** 上次检查更新的时间（毫秒），用于 24 小时节流。 */
+    var lastUpdateCheckAt: Long
+        get() = prefs.getLong(KEY_UPDATE_CHECK_AT, 0L)
+        set(value) {
+            prefs.edit().putLong(KEY_UPDATE_CHECK_AT, value).apply()
+        }
+
     private companion object {
         const val KEY_ACTIVE_PROVIDER = "active_provider_id"
         const val KEY_USER_NAME = "user_name"
@@ -124,6 +163,11 @@ class AppPrefs(context: Context) {
         const val KEY_TTS_RATE = "tts_rate"
         const val KEY_TTS_PITCH = "tts_pitch"
         const val KEY_TTS_AUTO_READ = "tts_auto_read"
+        const val KEY_CONSENT_ACCEPTED = "consent_accepted"
+        const val KEY_NOTIFICATION_ASKED = "notification_asked"
+        const val KEY_NSFW_ALLOWED = "nsfw_allowed"
+        const val KEY_UPDATE_FEED = "update_feed_url"
+        const val KEY_UPDATE_CHECK_AT = "update_last_check"
         const val DEFAULT_WEBDAV_DIR = "TeaTalk"
     }
 }

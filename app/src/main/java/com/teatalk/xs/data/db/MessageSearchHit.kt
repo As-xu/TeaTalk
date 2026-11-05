@@ -13,4 +13,6 @@ data class MessageSearchHit(
     val characterAvatar: String?,
     val content: String,
     val createdAt: Long,
+    /** 会话或其成员角色带 nsfw 标签（成人内容关闭时过滤掉）。 */
+    val hasNsfw: Boolean = false,
 )

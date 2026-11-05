@@ -32,10 +32,12 @@ import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.SystemUpdateAlt
 import androidx.compose.material.icons.filled.UploadFile
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -98,6 +100,8 @@ fun ProfileScreen(
     val context = LocalContext.current
     // M3：个人资料名（替换 prompt/开场白里的 {{user}}）
     val prefs = remember(context) { AppPrefs(context) }
+    val app = remember(context) { context.applicationContext as com.teatalk.xs.TeaTalkApp }
+    var nsfwAllowed by remember { mutableStateOf(prefs.nsfwAllowed) }
     var userName by remember { mutableStateOf(prefs.userName) }
     var showPersonaDialog by remember { mutableStateOf(false) }
     // M3 步骤 4：ST 预设（采样参数）
@@ -306,6 +310,14 @@ fun ProfileScreen(
                 R.string.profile_tts,
                 R.string.profile_tts_sub,
                 onOpenTts,
+            )
+            // 0.26.0：成人内容开关（首启同意页里的选择可以随时改）
+            NsfwToggleRow(
+                checked = nsfwAllowed,
+                onChange = { allow ->
+                    nsfwAllowed = allow
+                    app.container.appPrefs.nsfwAllowed = allow
+                },
             )
             SettingRow(
                 Icons.Filled.Info,
@@ -542,6 +554,35 @@ private fun SettingsGroup(content: @Composable () -> Unit) {
             .background(MaterialTheme.colorScheme.surface),
     ) {
         content()
+    }
+}
+
+@Composable
+private fun NsfwToggleRow(checked: Boolean, onChange: (Boolean) -> Unit) {
+    val cs = MaterialTheme.colorScheme
+    Row(
+        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            Modifier.size(30.dp).clip(RoundedCornerShape(9.dp)).background(cs.surfaceContainerHigh),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(Icons.Filled.Visibility, contentDescription = null, tint = cs.primary, modifier = Modifier.size(17.dp))
+        }
+        Spacer(Modifier.size(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text(stringResource(R.string.consent_nsfw), fontSize = TypeScale.s14_5, color = cs.onBackground)
+            Spacer(Modifier.height(2.dp))
+            Text(
+                stringResource(R.string.profile_nsfw_sub),
+                fontSize = TypeScale.s11_5,
+                color = cs.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        Switch(checked = checked, onCheckedChange = onChange)
     }
 }
 

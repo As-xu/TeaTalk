@@ -128,7 +128,13 @@ interface ConversationDao {
         SELECT c.*, ch.name AS characterName, ch.avatarPath AS characterAvatar,
             (SELECT COUNT(*) FROM conversation_members cm WHERE cm.conversationId = c.id) AS memberCount,
             (SELECT m.content FROM messages m WHERE m.conversationId = c.id ORDER BY m.createdAt DESC, m.id DESC LIMIT 1) AS lastContent,
-            (SELECT m.createdAt FROM messages m WHERE m.conversationId = c.id ORDER BY m.createdAt DESC, m.id DESC LIMIT 1) AS lastAt
+            (SELECT m.createdAt FROM messages m WHERE m.conversationId = c.id ORDER BY m.createdAt DESC, m.id DESC LIMIT 1) AS lastAt,
+            (lower(ch.tagsJson) LIKE '%"nsfw"%'
+                OR EXISTS (
+                    SELECT 1 FROM conversation_members cm
+                    JOIN characters cmch ON cmch.id = cm.characterId
+                    WHERE cm.conversationId = c.id AND lower(cmch.tagsJson) LIKE '%"nsfw"%'
+                )) AS hasNsfw
         FROM conversations c
         INNER JOIN characters ch ON ch.id = c.characterId
         ORDER BY lastAt DESC, c.updatedAt DESC, c.id DESC
@@ -141,14 +147,24 @@ interface ConversationDao {
         """
         SELECT m.conversationId AS conversationId, m.id AS messageId,
             c.title AS conversationTitle, ch.name AS characterName,
-            ch.avatarPath AS characterAvatar, m.content AS content, m.createdAt AS createdAt
+            ch.avatarPath AS characterAvatar, m.content AS content, m.createdAt AS createdAt,
+            (lower(ch.tagsJson) LIKE '%"nsfw"%' OR EXISTS (
+                SELECT 1 FROM conversation_members cm
+                JOIN characters cmch ON cmch.id = cm.characterId
+                WHERE cm.conversationId = c.id AND lower(cmch.tagsJson) LIKE '%"nsfw"%'
+            )) AS hasNsfw
         FROM messages m
         INNER JOIN conversations c ON c.id = m.conversationId
         INNER JOIN characters ch ON ch.id = c.characterId
         WHERE m.content LIKE '%' || :query || '%'
+            AND (:allowNsfw OR NOT (lower(ch.tagsJson) LIKE '%"nsfw"%' OR EXISTS (
+                SELECT 1 FROM conversation_members cm
+                JOIN characters cmch ON cmch.id = cm.characterId
+                WHERE cm.conversationId = c.id AND lower(cmch.tagsJson) LIKE '%"nsfw"%'
+            )))
         ORDER BY m.createdAt DESC, m.id DESC
         LIMIT :limit
         """
     )
-    suspend fun searchMessages(query: String, limit: Int): List<MessageSearchHit>
+    suspend fun searchMessages(query: String, limit: Int, allowNsfw: Boolean): List<MessageSearchHit>
 }

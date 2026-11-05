@@ -15,4 +15,6 @@ data class ConversationWithLastMessage(
     val lastContent: String?,
     val lastAt: Long?,
     val memberCount: Int = 0,
+    /** 0.26.0：会话主角色或群成员带 `nsfw` 标签，用于「成人内容」开关隐藏。 */
+    val hasNsfw: Boolean = false,
 )

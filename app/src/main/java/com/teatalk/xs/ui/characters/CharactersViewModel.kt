@@ -30,6 +30,8 @@ enum class CharacterFilter { RECENT, ALL, FAVORITES }
 
 class CharactersViewModel(
     private val repository: CharacterRepository,
+    /** 0.26.0：关掉成人内容后，带 `nsfw` 标签的角色不出现在列表里。 */
+    private val allowNsfw: () -> Boolean = { true },
 ) : ViewModel() {
 
     /** null = 还在从磁盘读第一批数据（不渲染空态，避免"还没有角色卡"闪一下）。 */
@@ -49,6 +51,8 @@ class CharactersViewModel(
     val tags: StateFlow<List<String>> = characters
         .map { list ->
             list.orEmpty()
+                // 关掉成人内容时，标签行也不该出现 nsfw（否则等于提示"有东西被藏了"）。
+                .filter { allowNsfw() || NSFW_TAG !in parseTags(it.tagsJson).map(String::lowercase) }
                 .flatMap { parseTags(it.tagsJson) }
                 .groupingBy { it }
                 .eachCount()
@@ -62,7 +66,7 @@ class CharactersViewModel(
     /** 搜索 + 筛选 + 标签三个条件组合后的列表（null 仍表示加载中）。 */
     val cards: StateFlow<List<CharacterEntity>?> =
         combine(characters, _query, _filter, _selectedTag) { list, query, filter, tag ->
-            list?.let { applyFilters(it, query, filter, tag) }
+            list?.let { applyFilters(it, query, filter, tag, allowNsfw()) }
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     private val _importing = MutableStateFlow(false)
@@ -206,7 +210,12 @@ class CharactersViewModel(
 
     companion object {
         fun factory(app: TeaTalkApp): ViewModelProvider.Factory = viewModelFactory {
-            initializer { CharactersViewModel(app.container.characterRepository) }
+            initializer {
+                CharactersViewModel(
+                    repository = app.container.characterRepository,
+                    allowNsfw = { app.container.appPrefs.nsfwAllowed },
+                )
+            }
         }
     }
 }
@@ -217,9 +226,14 @@ internal fun applyFilters(
     query: String,
     filter: CharacterFilter,
     tag: String?,
+    allowNsfw: Boolean = true,
 ): List<CharacterEntity> {
     val keyword = query.trim()
     val filtered = all.asSequence()
+        .filter { character ->
+            // 成人内容开关关闭时直接隐藏，而不是打码：用户要的是「看不见」。
+            allowNsfw || NSFW_TAG !in parseTags(character.tagsJson).map { it.lowercase() }
+        }
         .filter { character ->
             when (filter) {
                 CharacterFilter.FAVORITES -> character.favorite
@@ -245,6 +259,9 @@ internal fun applyFilters(
     // 置顶置前，保持上面各分段的相对顺序
     return ordered.sortedByDescending { it.pinned }
 }
+
+/** 成人内容约定的标签名（导入 ST 卡时原样保留）。 */
+internal const val NSFW_TAG = "nsfw"
 
 /** `tagsJson` → 标签列表（坏数据返回空表，不炸 UI）。 */
 internal fun parseTags(tagsJson: String): List<String> = runCatching {

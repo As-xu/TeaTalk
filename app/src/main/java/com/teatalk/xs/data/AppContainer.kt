@@ -118,6 +118,14 @@ class AppContainer(context: Context) {
         )
     }
 
+    /** 0.26.0：生成期间的保活前台服务（引用计数）。 */
+    val generationKeepAlive: GenerationKeepAlive by lazy { GenerationKeepAlive(appContext) }
+
+    /** 0.26.0：GitHub Releases 更新检查与安装。 */
+    val updateManager: com.teatalk.xs.data.update.UpdateManager by lazy {
+        com.teatalk.xs.data.update.UpdateManager(appContext, appPrefs)
+    }
+
     /** 0.25.0：朗读（系统 TTS，单实例贯穿全应用）。 */
     val ttsController: com.teatalk.xs.data.tts.TtsController by lazy {
         com.teatalk.xs.data.tts.TtsController(

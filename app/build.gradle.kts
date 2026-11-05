@@ -13,8 +13,8 @@ android {
         applicationId = "com.teatalk.xs"
         minSdk = 28
         targetSdk = 34
-        versionCode = 51
-        versionName = "0.25.0"
+        versionCode = 52
+        versionName = "0.26.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -49,6 +49,22 @@ android {
     buildFeatures {
         compose = true
         buildConfig = true
+    }
+
+    defaultConfig {
+        // 只有显式 `-Pteatalk.feedOverride=true` 构建才会接受 adb 传入的
+        // update_feed 覆盖，避免普通 debug 包被同机其它 App 改写更新源。
+        buildConfigField(
+            "boolean",
+            "FEED_OVERRIDE",
+            providers.gradleProperty("teatalk.feedOverride").getOrElse("false"),
+        )
+    }
+
+    // Gradle CLI 的 -D 不会转发给单测 worker，这里显式透传（真实卡回归用）。
+    tasks.withType<Test>().configureEach {
+        System.getProperty("teatalk.cards.dir")?.let { systemProperty("teatalk.cards.dir", it) }
+        System.getenv("TEATALK_CARDS_DIR")?.let { systemProperty("teatalk.cards.dir", it) }
     }
 }
 

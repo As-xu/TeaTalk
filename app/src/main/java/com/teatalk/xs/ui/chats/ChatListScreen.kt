@@ -75,14 +75,20 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import com.teatalk.xs.ui.theme.TypeScale
 
-class ChatListViewModel(private val repository: CharacterRepository) : ViewModel() {
+class ChatListViewModel(
+    private val repository: CharacterRepository,
+    /** 0.26.0：成人内容开关关闭时，隐藏带 nsfw 标签的会话。 */
+    private val allowNsfw: () -> Boolean = { true },
+) : ViewModel() {
     val chats: StateFlow<List<ConversationWithLastMessage>?> = repository.observeChats()
+        .map { list -> if (allowNsfw()) list.filterNot { it.hasNsfw } else list }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     val deleted: StateFlow<CharacterRepository.DeletedConversation?> = DeletedConversationStore.deleted
@@ -118,7 +124,7 @@ class ChatListViewModel(private val repository: CharacterRepository) : ViewModel
         }
         searchJob = viewModelScope.launch {
             delay(200)
-            _searchHits.value = repository.searchMessages(trimmed, limit = 40)
+            _searchHits.value = repository.searchMessages(trimmed, limit = 40, allowNsfw = allowNsfw())
         }
     }
 
@@ -135,7 +141,12 @@ class ChatListViewModel(private val repository: CharacterRepository) : ViewModel
 
     companion object {
         fun factory(app: TeaTalkApp): ViewModelProvider.Factory = viewModelFactory {
-            initializer { ChatListViewModel(app.container.characterRepository) }
+            initializer {
+                ChatListViewModel(
+                    repository = app.container.characterRepository,
+                    allowNsfw = { app.container.appPrefs.nsfwAllowed },
+                )
+            }
         }
     }
 }

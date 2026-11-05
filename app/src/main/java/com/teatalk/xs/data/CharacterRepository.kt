@@ -100,8 +100,12 @@ class CharacterRepository(
     fun observeChats(): Flow<List<ConversationWithLastMessage>> = conversations.observeChats()
 
     /** 全库消息搜索（V1：聊天记录搜索）。 */
-    suspend fun searchMessages(query: String, limit: Int = 50): List<MessageSearchHit> =
-        withContext(Dispatchers.IO) { conversations.searchMessages(query.trim(), limit) }
+    suspend fun searchMessages(
+        query: String,
+        limit: Int = 50,
+        allowNsfw: Boolean = true,
+    ): List<MessageSearchHit> =
+        withContext(Dispatchers.IO) { conversations.searchMessages(query.trim(), limit, allowNsfw) }
 
     // ---- V1 正则/变量 ----
 
