@@ -102,6 +102,14 @@ interface ConversationDao {
     @Insert
     suspend fun insertMessagesExact(messages: List<MessageEntity>)
 
+    /** 备份恢复：会话与消息同成同败，按备份里的原始 id 写回会话。 */
+    @Transaction
+    suspend fun insertExactWithMessages(conversation: ConversationEntity, messages: List<MessageEntity>): Long {
+        val id = insertExact(conversation)
+        if (messages.isNotEmpty()) insertMessagesExact(messages.map { it.copy(id = 0, conversationId = id) })
+        return id
+    }
+
     /** 会话与消息必须同成同败：失败时不能留下一条空会话。 */
     @Transaction
     suspend fun insertWithMessages(conversation: ConversationEntity, messages: List<MessageEntity>): Long {

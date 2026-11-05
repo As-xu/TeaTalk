@@ -91,6 +91,11 @@ class AppContainer(context: Context) {
 
     val secretStore: SecretStore by lazy { SecretStore(appContext) }
 
+    /** 0.24.0：WebDAV 云备份（复用本地 zip 的导出/恢复实现）。 */
+    val webDavBackup: WebDavBackup by lazy {
+        WebDavBackup(appContext, backupRepository, appPrefs, secretStore)
+    }
+
     val providerRepository: ProviderRepository by lazy {
         ProviderRepository(database.modelProviderDao(), secretStore, appPrefs)
     }

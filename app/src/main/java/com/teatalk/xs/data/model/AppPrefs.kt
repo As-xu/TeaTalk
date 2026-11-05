@@ -64,6 +64,29 @@ class AppPrefs(context: Context) {
             }
         }
 
+    // ---- 0.24.0 WebDAV 备份（密码不在这里，走 SecretStore）----
+
+    /** WebDAV 根地址，如 `https://dav.jianguoyun.com/dav/`。 */
+    var webDavUrl: String
+        get() = prefs.getString(KEY_WEBDAV_URL, null).orEmpty()
+        set(value) {
+            prefs.edit().putString(KEY_WEBDAV_URL, value.trim()).apply()
+        }
+
+    /** WebDAV 用户名（坚果云是邮箱）。 */
+    var webDavUser: String
+        get() = prefs.getString(KEY_WEBDAV_USER, null).orEmpty()
+        set(value) {
+            prefs.edit().putString(KEY_WEBDAV_USER, value.trim()).apply()
+        }
+
+    /** 远端目录，默认 `TeaTalk`（相对 WebDAV 根）。 */
+    var webDavDir: String
+        get() = prefs.getString(KEY_WEBDAV_DIR, null)?.takeIf { it.isNotBlank() } ?: DEFAULT_WEBDAV_DIR
+        set(value) {
+            prefs.edit().putString(KEY_WEBDAV_DIR, value.trim().trim('/').ifBlank { DEFAULT_WEBDAV_DIR }).apply()
+        }
+
     private companion object {
         const val KEY_ACTIVE_PROVIDER = "active_provider_id"
         const val KEY_USER_NAME = "user_name"
@@ -72,5 +95,9 @@ class AppPrefs(context: Context) {
         const val KEY_TRANSLATION_TARGET = "translation_target_lang"
         const val KEY_AUTO_TRANSLATE = "auto_translate_replies"
         const val KEY_FALLBACK_PROVIDERS = "fallback_provider_ids"
+        const val KEY_WEBDAV_URL = "webdav_url"
+        const val KEY_WEBDAV_USER = "webdav_user"
+        const val KEY_WEBDAV_DIR = "webdav_dir"
+        const val DEFAULT_WEBDAV_DIR = "TeaTalk"
     }
 }

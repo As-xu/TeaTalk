@@ -61,6 +61,8 @@ import com.teatalk.xs.ui.profile.ProfileScreen
 import com.teatalk.xs.ui.providers.ProvidersScreen
 import com.teatalk.xs.ui.providers.ProvidersViewModel
 import com.teatalk.xs.ui.about.AboutScreen
+import com.teatalk.xs.ui.backup.WebDavScreen
+import com.teatalk.xs.ui.backup.WebDavViewModel
 import com.teatalk.xs.ui.worldbook.WorldBooksScreen
 import com.teatalk.xs.ui.worldbook.WorldBooksViewModel
 import com.teatalk.xs.ui.quick.QuickRepliesScreen
@@ -212,10 +214,17 @@ fun HomeScreen(
                         onOpenQuickReplies = { navController.navigate(Routes.QUICK_REPLIES) },
                         onOpenTranslation = { navController.navigate(Routes.TRANSLATION) },
                         onOpenAbout = { navController.navigate(Routes.ABOUT) },
+                        onOpenWebDav = { navController.navigate(Routes.WEBDAV) },
                     )
                 }
                 composable(Routes.ABOUT) {
                     AboutScreen(onBack = { navController.popBackStack() })
+                }
+                composable(Routes.WEBDAV) {
+                    WebDavScreen(
+                        viewModel = viewModel(factory = WebDavViewModel.factory(app)),
+                        onBack = { navController.popBackStack() },
+                    )
                 }
                 composable(Routes.PROVIDERS) {
                     ProvidersScreen(
@@ -313,6 +322,7 @@ private object Routes {
 
     const val TRANSLATION = "translation"
     const val PROVIDERS = "providers"
+    const val WEBDAV = "webdav"
         const val ABOUT = "about"
 }
 

@@ -159,6 +159,16 @@ class BackupRepository(
         bytes.toByteArray()
     }
 
+    /** 快速校验：是不是本应用的备份包（只读 manifest，不落库）。 */
+    suspend fun canRestore(bytes: ByteArray): Boolean = withContext(Dispatchers.IO) {
+        val entries = unzip(bytes) ?: return@withContext false
+        val manifestBytes = entries[MANIFEST_ENTRY] ?: return@withContext false
+        val manifest = runCatching {
+            json.parseToJsonElement(String(manifestBytes, Charsets.UTF_8)).jsonObject
+        }.getOrNull() ?: return@withContext false
+        manifest["format"]?.jsonPrimitive?.contentOrNull == FORMAT
+    }
+
     suspend fun restore(bytes: ByteArray): Summary? = withContext(Dispatchers.IO) {
         val entries = unzip(bytes) ?: return@withContext null
         val manifestBytes = entries[MANIFEST_ENTRY] ?: return@withContext null
@@ -279,12 +289,11 @@ class BackupRepository(
                 createdAt = obj["createdAt"]?.jsonPrimitive?.longOrNull ?: System.currentTimeMillis(),
                 updatedAt = obj["updatedAt"]?.jsonPrimitive?.longOrNull ?: System.currentTimeMillis(),
             )
-            val conversationId = conversationDao.insertExact(conversation)
             val messages = obj["messages"]?.jsonArray.orEmpty().map { m ->
                 val mo = m.jsonObject
                 MessageEntity(
                     characterId = characterId,
-                    conversationId = conversationId,
+                    conversationId = 0L,
                     role = mo["role"]?.jsonPrimitive?.contentOrNull ?: MessageEntity.STATUS_COMPLETE,
                     content = mo["content"]?.jsonPrimitive?.contentOrNull ?: "",
                     createdAt = mo["createdAt"]?.jsonPrimitive?.longOrNull ?: System.currentTimeMillis(),
@@ -297,7 +306,9 @@ class BackupRepository(
                     model = mo["model"]?.jsonPrimitive?.contentOrNull,
                 )
             }
-            if (messages.isNotEmpty()) characterDao.insertMessagesExact(messages)
+            // 会话与消息必须同成同败：失败时不能留下一条空会话，否则重试会被「已存在」跳过。
+            if (messages.isEmpty()) conversationDao.insertExact(conversation)
+            else conversationDao.insertExactWithMessages(conversation, messages)
             summary.chats++
             summary.messages += messages.size
         }

@@ -44,10 +44,26 @@ class SecretStore(context: Context) {
         prefs.edit().remove(keyName(providerId)).apply()
     }
 
+    // 0.24.0：通用命名密钥（WebDAV 密码等）。与 provider key 分命名空间，删除接口不会误伤。
+    fun putNamed(name: String, value: String) {
+        prefs.edit().putString(nameKey(name), value).apply()
+        TeaTalkLog.i("Net", "secret.put_named", "name" to name, "len" to value.length)
+    }
+
+    fun getNamed(name: String): String? = prefs.getString(nameKey(name), null)
+
+    fun hasNamed(name: String): Boolean = !getNamed(name).isNullOrBlank()
+
+    fun removeNamed(name: String) {
+        prefs.edit().remove(nameKey(name)).apply()
+    }
+
     /** UI 展示用：`****c35e`；短 key（<12 位）只显示 `****`，避免在屏幕上暴露大半个 key。 */
     fun masked(providerId: String): String? = get(providerId)
         ?.takeIf { it.isNotBlank() }
         ?.let { if (it.length < 12) "****" else "****" + it.takeLast(4) }
 
     private fun keyName(providerId: String) = "provider_key_$providerId"
+
+    private fun nameKey(name: String) = "named_secret_$name"
 }
